@@ -1,0 +1,57 @@
+# Binaries
+/xsh
+/xsh.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build artifacts
+/dist/
+/build/
+/release/
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace files
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS files
+Thumbs.db
+
+# Dependencies (should be vendored or downloaded)
+/vendor/
+
+# Cache
+*.cache
+.cache/
+
+# Config and credentials (user-specific)
+/config/
+auth.json
+*.cookie
+
+# Logs
+*.log
+
+# Temporary files
+/tmp/
+temp/
+
+# Environment files
+.env
+.env.local
+.env.*.local
