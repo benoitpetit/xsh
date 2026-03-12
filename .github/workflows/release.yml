@@ -103,10 +103,10 @@ jobs:
           files: ./artifacts/**/*
           draft: false
           prerelease: true
-          tag_name: prod-latest
-          name: "Production Build (Latest)"
+          tag_name: latest
+          name: "Latest Build"
           body: |
-            This is the latest production build from the `prod` branch.
+            This is the latest build from the `prod` branch.
             
             ## Binaries
             - `xsh-linux-amd64` - Linux x86_64
