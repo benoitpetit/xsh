@@ -7,7 +7,7 @@
 A fast, feature-complete command-line interface for Twitter/X, written in Go.  
 No API keys required — authenticates directly via browser cookies.
 
-![xshwall](xshwall.png)
+![xshwall](xsh_wall.png)
 
 ---
 
