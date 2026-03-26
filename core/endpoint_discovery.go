@@ -33,12 +33,12 @@ const (
 
 var (
 	// Regex patterns for extracting data from HTML/JS
-	bundleHrefPattern   = regexp.MustCompile(`href="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
-	bundleSrcPattern    = regexp.MustCompile(`src="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
-	chunkMapPattern     = regexp.MustCompile(`"\+(\{[^}]+\})\[e\]\+"a\.js"`)
-	operationPattern    = regexp.MustCompile(`queryId:\s*"([A-Za-z0-9_-]+)".*?operationName:\s*"([A-Za-z]+)"`)
+	bundleHrefPattern      = regexp.MustCompile(`href="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
+	bundleSrcPattern       = regexp.MustCompile(`src="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
+	chunkMapPattern        = regexp.MustCompile(`"\+(\{[^}]+\})\[e\]\+"a\.js"`)
+	operationPattern       = regexp.MustCompile(`queryId:\s*"([A-Za-z0-9_-]+)".*?operationName:\s*"([A-Za-z]+)"`)
 	featureSwitchesPattern = regexp.MustCompile(`featureSwitches:\s*(\[[^\]]*\])`)
-	
+
 	// Memory cache for in-session performance
 	memoryCache     *EndpointCache
 	memoryCacheMu   sync.RWMutex
@@ -96,7 +96,7 @@ func createDiscoveryHTTPClient() *http.Client {
 	if proxy == "" {
 		proxy = os.Getenv("TWITTER_PROXY")
 	}
-	
+
 	client, err := newUTLSHTTPClient(proxy)
 	if err != nil {
 		// Fallback to standard client if uTLS fails
@@ -110,7 +110,7 @@ func createDiscoveryHTTPClient() *http.Client {
 			},
 		}
 	}
-	
+
 	return client
 }
 
@@ -213,13 +213,13 @@ func (ed *EndpointDiscovery) fetchHomepage(ctx context.Context) (string, string,
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	if ed.verbose {
 		log.Printf("[EndpointDiscovery] Response body size: %d bytes", len(body))
 	}
 
 	html := string(body)
-	
+
 	// Create fingerprint from first 1KB to detect changes
 	fingerprint := utils.HashString(html[:min(len(html), 1024)])
 
@@ -290,7 +290,7 @@ func (ed *EndpointDiscovery) extractOperationsConcurrent(ctx context.Context, bu
 		wg.Add(1)
 		go func(bundleURL string) {
 			defer wg.Done()
-			
+
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
@@ -447,7 +447,7 @@ func extractJSONObject(text string, start int) string {
 
 	for i := start; i < len(text); i++ {
 		ch := text[i]
-		
+
 		if escape {
 			escape = false
 			continue
@@ -463,9 +463,10 @@ func extractJSONObject(text string, start int) string {
 		if inString {
 			continue
 		}
-		if ch == '{' {
+		switch ch {
+		case '{':
 			depth++
-		} else if ch == '}' {
+		case '}':
 			depth--
 			if depth == 0 {
 				return text[start : i+1]
@@ -524,7 +525,7 @@ func (ec *EndpointCache) GetEndpoint(operation string) (string, bool) {
 // GetOpFeatures returns feature switches for an operation
 func (ec *EndpointCache) GetOpFeatures(operation string) map[string]bool {
 	result := make(map[string]bool)
-	
+
 	keys, ok := ec.OpFeatures[operation]
 	if !ok {
 		return result
@@ -575,7 +576,7 @@ func (ed *EndpointDiscovery) LoadCache() (*EndpointCache, error) {
 func (ed *EndpointDiscovery) UpdateMemoryCache(cache *EndpointCache) {
 	memoryCacheMu.Lock()
 	defer memoryCacheMu.Unlock()
-	
+
 	mc := GetMemoryCache()
 	mc.Endpoints = cache.Endpoints
 	mc.Features = cache.Features
@@ -589,7 +590,7 @@ func (ed *EndpointDiscovery) UpdateMemoryCache(cache *EndpointCache) {
 func (ed *EndpointDiscovery) GetMemoryCache() *EndpointCache {
 	memoryCacheMu.RLock()
 	defer memoryCacheMu.RUnlock()
-	
+
 	mc := GetMemoryCache()
 	if mc.Timestamp.IsZero() {
 		return nil
@@ -705,7 +706,7 @@ func CheckEndpointHealth(ctx context.Context, client *XClient) (bool, []string) 
 	}
 
 	var issues []string
-	
+
 	// Check if cache is getting stale
 	if cache.IsStale() {
 		issues = append(issues, "Endpoint cache is getting stale, consider refreshing")

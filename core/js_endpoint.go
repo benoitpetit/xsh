@@ -26,9 +26,9 @@ const (
 
 // EndpointData holds discovered endpoints and features
 type EndpointData struct {
-	Endpoints   map[string]string
-	Features    map[string]bool
-	OpFeatures  map[string][]string
+	Endpoints  map[string]string
+	Features   map[string]bool
+	OpFeatures map[string][]string
 }
 
 // JSEndpointDiscovery discovers endpoints by parsing X.com JS bundles
@@ -170,24 +170,24 @@ func (jsd *JSEndpointDiscovery) fetchHomepage() (string, error) {
 // extractFeaturesFromHTML extracts feature flags from window.__INITIAL_STATE__
 func (jsd *JSEndpointDiscovery) extractFeaturesFromHTML(html string) map[string]bool {
 	features := make(map[string]bool)
-	
+
 	marker := "window.__INITIAL_STATE__="
 	idx := strings.Index(html, marker)
 	if idx == -1 {
 		return features
 	}
-	
+
 	jsonStart := idx + len(marker)
 	jsonStr := jsd.extractJSONObject(html, jsonStart)
 	if jsonStr == "" {
 		return features
 	}
-	
+
 	var state map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &state); err != nil {
 		return features
 	}
-	
+
 	// Navigate to featureSwitch.defaultConfig
 	if fs, ok := state["featureSwitch"].(map[string]interface{}); ok {
 		var config map[string]interface{}
@@ -196,7 +196,7 @@ func (jsd *JSEndpointDiscovery) extractFeaturesFromHTML(html string) map[string]
 		} else if cfg, ok := fs["features"].(map[string]interface{}); ok {
 			config = cfg
 		}
-		
+
 		for key, val := range config {
 			if v, ok := val.(map[string]interface{}); ok {
 				if val, ok := v["value"].(bool); ok {
@@ -207,7 +207,7 @@ func (jsd *JSEndpointDiscovery) extractFeaturesFromHTML(html string) map[string]
 			}
 		}
 	}
-	
+
 	return features
 }
 
@@ -238,9 +238,10 @@ func (jsd *JSEndpointDiscovery) extractJSONObject(text string, start int) string
 		if inString {
 			continue
 		}
-		if ch == '{' {
+		switch ch {
+		case '{':
 			depth++
-		} else if ch == '}' {
+		case '}':
 			depth--
 			if depth == 0 {
 				return text[start : i+1]
@@ -374,7 +375,6 @@ func (jsd *JSEndpointDiscovery) extractOperations(jsContent string) (map[string]
 
 	return ops, opFeatures
 }
-
 
 func (jsd *JSEndpointDiscovery) shortURL(url string) string {
 	parts := strings.Split(url, "/")

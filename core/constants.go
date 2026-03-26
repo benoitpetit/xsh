@@ -81,7 +81,7 @@ var GraphQLEndpoints = map[string]string{
 	
 	// Write operations - Follow
 	"FollowUser":                 "iNZ4xPly3JveJqEshzJdLA/FollowUser",
-	"UnfollowUser":               "TwitterArchiveUnfollow/TwitterArchiveUnfollow",
+	"UnfollowUser":               "tTT1x7v4h9zLVzT1/BA/UnfollowUser",
 	
 	// Other operations
 	"Viewer":                     "zWQLM9HIVahRSUvzUH4lDw/Viewer",

@@ -60,8 +60,8 @@ type TimelineResponse struct {
 	HasMore      bool     `json:"has_more"`
 }
 
-// getString safely gets a string from a map
-func getString(m map[string]interface{}, key string) string {
+// GetString safely gets a string from a map
+func GetString(m map[string]interface{}, key string) string {
 	if v, ok := m[key].(string); ok {
 		return v
 	}
@@ -79,16 +79,16 @@ func extractUserFromAnywhere(data map[string]interface{}) (handle, name, id stri
 		}
 		
 		// Check if this map has user info
-		if h := getString(m, "screen_name"); h != "" && handle == "" {
+		if h := GetString(m, "screen_name"); h != "" && handle == "" {
 			handle = h
 		}
-		if n := getString(m, "name"); n != "" && name == "" {
+		if n := GetString(m, "name"); n != "" && name == "" {
 			name = n
 		}
-		if i := getString(m, "rest_id"); i != "" && id == "" {
+		if i := GetString(m, "rest_id"); i != "" && id == "" {
 			id = i
 		}
-		if i := getString(m, "id_str"); i != "" && id == "" {
+		if i := GetString(m, "id_str"); i != "" && id == "" {
 			id = i
 		}
 		
@@ -130,7 +130,7 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 
 	restID, _ := tweetData["rest_id"].(string)
 	if restID == "" {
-		restID = getString(legacy, "id_str")
+		restID = GetString(legacy, "id_str")
 	}
 
 	if restID == "" {
@@ -148,8 +148,8 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 				authorID, _ = userResult["rest_id"].(string)
 				authorVerified, _ = userResult["is_blue_verified"].(bool)
 				if legacyUser, ok := userResult["legacy"].(map[string]interface{}); ok {
-					authorName = getString(legacyUser, "name")
-					authorHandle = getString(legacyUser, "screen_name")
+					authorName = GetString(legacyUser, "name")
+					authorHandle = GetString(legacyUser, "screen_name")
 				}
 			}
 		}
@@ -166,10 +166,10 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 					authorVerified = verified
 				}
 				if legacyUser, ok := userResult["legacy"].(map[string]interface{}); ok {
-					if name := getString(legacyUser, "name"); name != "" {
+					if name := GetString(legacyUser, "name"); name != "" {
 						authorName = name
 					}
-					if handle := getString(legacyUser, "screen_name"); handle != "" {
+					if handle := GetString(legacyUser, "screen_name"); handle != "" {
 						authorHandle = handle
 					}
 				}
@@ -179,7 +179,7 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 
 	// Path 3: Try to extract from legacy user_id_str
 	if authorHandle == "" {
-		if userID := getString(legacy, "user_id_str"); userID != "" {
+		if userID := GetString(legacy, "user_id_str"); userID != "" {
 			authorID = userID
 		}
 	}
@@ -187,8 +187,8 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 	// Path 4: Sometimes user info is in result directly (not nested in core)
 	if authorHandle == "" {
 		if user, ok := tweetData["user"].(map[string]interface{}); ok {
-			authorName = getString(user, "name")
-			authorHandle = getString(user, "screen_name")
+			authorName = GetString(user, "name")
+			authorHandle = GetString(user, "screen_name")
 			if id, ok := user["id_str"].(string); ok {
 				authorID = id
 			}
@@ -197,10 +197,10 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 
 	// Path 5: Try from result.legacy directly (some endpoints return user info in legacy)
 	if authorHandle == "" {
-		if name := getString(legacy, "name"); name != "" {
+		if name := GetString(legacy, "name"); name != "" {
 			authorName = name
 		}
-		if handle := getString(legacy, "screen_name"); handle != "" {
+		if handle := GetString(legacy, "screen_name"); handle != "" {
 			authorHandle = handle
 		}
 	}
@@ -315,9 +315,9 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 	}
 
 	// Get full text
-	text := getString(legacy, "full_text")
+	text := GetString(legacy, "full_text")
 	if text == "" {
-		text = getString(legacy, "text")
+		text = GetString(legacy, "text")
 	}
 
 	// Expand URLs in text (replace t.co with real URLs)
@@ -325,8 +325,8 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 		if urls, ok := entities["urls"].([]interface{}); ok {
 			for _, u := range urls {
 				if urlObj, ok := u.(map[string]interface{}); ok {
-					shortURL := getString(urlObj, "url")
-					expandedURL := getString(urlObj, "expanded_url")
+					shortURL := GetString(urlObj, "url")
+					expandedURL := GetString(urlObj, "expanded_url")
 					if shortURL != "" && expandedURL != "" {
 						text = strings.ReplaceAll(text, shortURL, expandedURL)
 					}
@@ -354,11 +354,11 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 		Engagement:     engagement,
 		Media:          mediaList,
 		QuotedTweet:    quoted,
-		ReplyToID:      getString(legacy, "in_reply_to_status_id_str"),
-		ReplyToHandle:  getString(legacy, "in_reply_to_screen_name"),
-		ConversationID: getString(legacy, "conversation_id_str"),
-		Language:       getString(legacy, "lang"),
-		Source:         getString(tweetData, "source"),
+		ReplyToID:      GetString(legacy, "in_reply_to_status_id_str"),
+		ReplyToHandle:  GetString(legacy, "in_reply_to_screen_name"),
+		ConversationID: GetString(legacy, "conversation_id_str"),
+		Language:       GetString(legacy, "lang"),
+		Source:         GetString(tweetData, "source"),
 		IsRetweet:      false,
 	}
 }

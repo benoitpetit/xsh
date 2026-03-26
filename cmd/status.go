@@ -26,8 +26,8 @@ var statusCmd = &cobra.Command{
 		// Collect status information
 		status := collectSystemStatus(checkNow)
 
-		if showJSON || isJSONMode() {
-			outputJSON(status)
+		if showJSON || isJSONMode() || isYAMLMode() {
+			output(status, func() {})
 			return
 		}
 

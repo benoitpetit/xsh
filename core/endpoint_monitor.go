@@ -56,7 +56,7 @@ func NewEndpointMonitor(client *XClient, verbose bool) (*EndpointMonitor, error)
 func (em *EndpointMonitor) Start() {
 	em.wg.Add(1)
 	go em.monitorLoop()
-	
+
 	if em.verbose {
 		log.Println("[EndpointMonitor] Started background monitoring")
 	}
@@ -66,7 +66,7 @@ func (em *EndpointMonitor) Start() {
 func (em *EndpointMonitor) Stop() {
 	close(em.stopChan)
 	em.wg.Wait()
-	
+
 	if em.verbose {
 		log.Println("[EndpointMonitor] Stopped background monitoring")
 	}
@@ -170,7 +170,7 @@ func (em *EndpointMonitor) testCriticalEndpoints(ctx context.Context, cache *End
 		wg.Add(1)
 		go func(operation string) {
 			defer wg.Done()
-			
+
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -196,19 +196,19 @@ func (em *EndpointMonitor) testCriticalEndpoints(ctx context.Context, cache *End
 }
 
 // testEndpoint performs a lightweight test of an endpoint
-func (em *EndpointMonitor) testEndpoint(ctx context.Context, endpoint string) error {
+func (em *EndpointMonitor) testEndpoint(_ context.Context, endpoint string) error {
 	// We can't easily test without auth, but we can check if the URL format looks valid
 	// and make a request to see if we get 404 (obsolete) vs 401/403 (auth required)
-	
+
 	_ = GraphQLBase + "/" + endpoint
-	
+
 	// This is a placeholder - in practice, we'd need to make an actual request
 	// For now, we just validate the endpoint format
 	parts := strings.Split(endpoint, "/")
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid endpoint format")
 	}
-	
+
 	return nil
 }
 
@@ -220,7 +220,7 @@ func (em *EndpointMonitor) AutoUpdate(ctx context.Context) error {
 
 	// Invalidate and refresh
 	em.discovery.InvalidateCache()
-	
+
 	_, err := em.discovery.DiscoverEndpoints(ctx)
 	if err != nil {
 		return fmt.Errorf("discovery failed: %w", err)
@@ -318,19 +318,19 @@ func GetEndpointStatus() ([]EndpointStatusDetail, error) {
 	}
 
 	var details []EndpointStatusDetail
-	
+
 	for op, endpoint := range cache.Endpoints {
 		detail := EndpointStatusDetail{
 			Operation: op,
 			Endpoint:  endpoint,
 			Source:    "static",
 		}
-		
+
 		if cache.OpFeatures[op] != nil {
 			detail.HasFeatures = true
 			detail.FeatureCount = len(cache.OpFeatures[op])
 		}
-		
+
 		details = append(details, detail)
 	}
 

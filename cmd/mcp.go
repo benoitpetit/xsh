@@ -41,6 +41,7 @@ func runMCPServer() error {
 	registerReadTools(s)
 	registerWriteTools(s)
 	registerInfoTools(s)
+	registerExtendedTools(s) // Register all extended tools
 
 	// Start server with stdio transport
 	return server.ServeStdio(s)

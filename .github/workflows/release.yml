@@ -5,7 +5,7 @@ on:
     branches:
       - prod
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -14,6 +14,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core
     strategy:
       matrix:
         include:
@@ -46,7 +49,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: "1.25"
 
       - name: Build
         env:
@@ -55,21 +58,29 @@ jobs:
         run: |
           output="xsh-${{ matrix.suffix }}"
           go build -ldflags="-s -w -X github.com/benoitpetit/xsh/cmd.Version=${{ github.ref_name }}" -o "$output" main.go
-          
-          # Compress binary
+
+          # Also create compressed archive as alternative
           if [[ "${{ matrix.goos }}" == "windows" ]]; then
             zip "$output.zip" "$output"
-            echo "ASSET=$output.zip" >> $GITHUB_ENV
+            mv "$output" ../
+            mv "$output.zip" ../
           else
             tar czf "$output.tar.gz" "$output"
-            echo "ASSET=$output.tar.gz" >> $GITHUB_ENV
+            mv "$output" ../
+            mv "$output.tar.gz" ../
           fi
 
-      - name: Upload Artifact
+      - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xsh-${{ matrix.suffix }}
-          path: ${{ env.ASSET }}
+          name: xsh-binary-${{ matrix.suffix }}
+          path: ./xsh-${{ matrix.suffix }}
+
+      - name: Upload Archive Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xsh-archive-${{ matrix.suffix }}
+          path: ./xsh-${{ matrix.suffix }}.*
 
   release:
     needs: build
@@ -80,17 +91,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Artifacts
+      - name: Download Binary Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ./artifacts
-          pattern: xsh-*
+          path: ./artifacts/binaries
+          pattern: xsh-binary-*
+          merge-multiple: true
+
+      - name: Download Archive Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts/archives
+          pattern: xsh-archive-*
+          merge-multiple: true
+
+      - name: Organize Artifacts
+        run: |
+          mkdir -p ./release-assets
+          # Move binaries (primary)
+          cp ./artifacts/binaries/xsh-* ./release-assets/ 2>/dev/null || true
+          # Move archives (alternative)
+          cp ./artifacts/archives/xsh-* ./release-assets/ 2>/dev/null || true
+          ls -la ./release-assets/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ./artifacts/**/*
+          files: ./release-assets/*
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -100,21 +128,28 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/prod'
         with:
-          files: ./artifacts/**/*
+          files: ./release-assets/*
           draft: false
           prerelease: true
           tag_name: latest
           name: "Latest Build"
           body: |
             This is the latest build from the `prod` branch.
-            
-            ## Binaries
+
+            ## Quick Download (Recommended)
+            Direct binaries - download, make executable, and run:
             - `xsh-linux-amd64` - Linux x86_64
             - `xsh-linux-arm64` - Linux ARM64
             - `xsh-windows-amd64.exe` - Windows x86_64
             - `xsh-windows-arm64.exe` - Windows ARM64
             - `xsh-darwin-amd64` - macOS Intel
             - `xsh-darwin-arm64` - macOS Apple Silicon (M1/M2/M3)
+
+            ## Alternative (Archived)
+            For users who prefer compressed archives:
+            - `xsh-linux-amd64.tar.gz`, `xsh-linux-arm64.tar.gz`
+            - `xsh-darwin-amd64.tar.gz`, `xsh-darwin-arm64.tar.gz`
+            - `xsh-windows-amd64.exe.zip`, `xsh-windows-arm64.exe.zip`
 
       - name: Summary
         run: |
