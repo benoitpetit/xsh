@@ -42,8 +42,8 @@ Use --location for city/country or --woeid for specific location ID.`,
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(trends)
+		if isJSONMode() || isYAMLMode() {
+			output(trends, func() {})
 			return
 		}
 

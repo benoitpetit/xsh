@@ -146,10 +146,6 @@ func TestFilterConfig(t *testing.T) {
 func TestDefaultFilterConfig(t *testing.T) {
 	cfg := utils.DefaultFilterConfig()
 
-	if cfg == nil {
-		t.Fatal("DefaultFilterConfig() returned nil")
-	}
-
 	if cfg.LikesWeight != 1.0 {
 		t.Errorf("LikesWeight = %f, want 1.0", cfg.LikesWeight)
 	}

@@ -90,10 +90,10 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 
 	return &User{
 		ID:               restID,
-		Name:             getString(legacy, "name"),
-		Handle:           getString(legacy, "screen_name"),
-		Bio:              getString(legacy, "description"),
-		Location:         getString(legacy, "location"),
+		Name:             GetString(legacy, "name"),
+		Handle:           GetString(legacy, "screen_name"),
+		Bio:              GetString(legacy, "description"),
+		Location:         GetString(legacy, "location"),
 		Website:          website,
 		Verified:         isBlueVerified,
 		FollowersCount:   followersCount,
@@ -102,7 +102,7 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 		ListedCount:      listedCount,
 		CreatedAt:        createdAt,
 		ProfileImageURL:  profileImageURL,
-		ProfileBannerURL: getString(legacy, "profile_banner_url"),
+		ProfileBannerURL: GetString(legacy, "profile_banner_url"),
 		PinnedTweetID:    pinnedTweetID,
 	}
 }
