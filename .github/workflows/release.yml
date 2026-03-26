@@ -58,6 +58,8 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          # Disable CGO for cross-compilation (all non-linux/amd64 targets)
+          CGO_ENABLED: ${{ (matrix.goos == 'linux' && matrix.goarch == 'amd64') && '1' || '0' }}
         run: |
           output="xsh-${{ matrix.suffix }}"
           go build -ldflags="-s -w -X github.com/benoitpetit/xsh/cmd.Version=${{ github.ref_name }}" -o "$output" main.go

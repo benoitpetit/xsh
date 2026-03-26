@@ -1,3 +1,6 @@
+//go:build cgo
+// +build cgo
+
 // Package browser provides automatic cookie extraction from browsers.
 package browser
 
@@ -13,8 +16,8 @@ import (
 	"runtime"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/benoitpetit/xsh/core"
+	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -152,11 +155,11 @@ func (c *ChromeCookieExtractor) ExtractCookiesVerbose(verbose bool) (*core.AuthC
 
 	// Query for Twitter/X cookies
 	query := `
-		SELECT host_key, name, value, encrypted_value, path 
-		FROM cookies 
-		WHERE host_key LIKE '%twitter.com' 
+		SELECT host_key, name, value, encrypted_value, path
+		FROM cookies
+		WHERE host_key LIKE '%twitter.com'
 		   OR host_key LIKE '%.twitter.com'
-		   OR host_key LIKE '%x.com' 
+		   OR host_key LIKE '%x.com'
 		   OR host_key LIKE '%.x.com'
 	`
 
@@ -339,7 +342,7 @@ func decryptChromeCookieLinux(encrypted []byte, verbose bool) (string, error) {
 
 	// Get keys
 	v10Key := pbkdf2.Key([]byte("peanuts"), salt, 1, 16, sha1.New)
-	
+
 	var keys [][]byte
 	keys = append(keys, v10Key)
 
@@ -358,7 +361,7 @@ func decryptChromeCookieLinux(encrypted []byte, verbose bool) (string, error) {
 			fmt.Printf("[DEBUG] Could not get password from libsecret: %v\n", err)
 			fmt.Println("[DEBUG] You may need to install: python3-secretstorage or libsecret")
 		}
-		
+
 		// Also try empty key (bug in some Chrome versions)
 		emptyKey := pbkdf2.Key([]byte{}, salt, 1, 16, sha1.New)
 		keys = append(keys, emptyKey)
@@ -487,7 +490,7 @@ except Exception as e:
 			if err == nil && len(output) > 0 {
 				return strings.TrimSpace(string(output)), nil
 			}
-			
+
 			// Try alternate label formats
 			cmd = exec.Command(path, "lookup", "application", "chrome")
 			output, err = cmd.Output()
@@ -505,12 +508,12 @@ try:
     bus = dbus.SessionBus()
     service = bus.get_object('org.freedesktop.secrets', '/org/freedesktop/secrets')
     interface = dbus.Interface(service, 'org.freedesktop.secrets.Service')
-    
+
     # Unlock default collection
     default_path = interface.ReadAlias('default')
     collection = bus.get_object('org.freedesktop.secrets', default_path)
     coll_interface = dbus.Interface(collection, 'org.freedesktop.secrets.Collection')
-    
+
     for item_path in coll_interface.SearchItems({'application': 'chrome'}):
         item = bus.get_object('org.freedesktop.secrets', item_path)
         item_interface = dbus.Interface(item, 'org.freedesktop.DBus.Properties')
