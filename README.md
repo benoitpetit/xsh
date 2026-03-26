@@ -697,11 +697,9 @@ core/
 
 ---
 
-## Documentation
+## About
 
-- [WHITEPAPER.md](WHITEPAPER.md) — Architecture and technical design
-- [CHANGELOG.md](CHANGELOG.md) — Version history
-- [CONTRIBUTING.md](CONTRIBUTING.md) — Contribution guidelines
+**xsh** is a complete rewrite in Go of the original [clix](https://github.com/spideystreet/clix) Python project. This is not a fork — it is a ground-up reimplementation with a focus on performance, reliability, and modern Go practices.
 
 ---
 
