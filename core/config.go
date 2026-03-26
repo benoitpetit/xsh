@@ -17,20 +17,25 @@ type DisplayConfig struct {
 	MaxWidth       int    `toml:"max_width"`
 }
 
+// NetworkConfig contains network settings
+type NetworkConfig struct {
+	Proxy string `toml:"proxy,omitempty"`
+}
+
 // RequestConfig contains request settings
 type RequestConfig struct {
 	Delay      float64 `toml:"delay"`
-	Proxy      string  `toml:"proxy,omitempty"`
 	Timeout    int     `toml:"timeout"`
 	MaxRetries int     `toml:"max_retries"`
 }
 
 // Config is the root configuration
 type Config struct {
-	DefaultCount   int              `toml:"default_count"`
-	DefaultAccount string           `toml:"default_account,omitempty"`
-	Display        DisplayConfig    `toml:"display"`
-	Request        RequestConfig    `toml:"request"`
+	DefaultCount   int                `toml:"default_count"`
+	DefaultAccount string             `toml:"default_account,omitempty"`
+	Display        DisplayConfig      `toml:"display"`
+	Request        RequestConfig      `toml:"request"`
+	Network        NetworkConfig      `toml:"network"`
 	Filter         utils.FilterConfig `toml:"filter"`
 }
 
@@ -49,7 +54,10 @@ func DefaultConfig() *Config {
 			Timeout:    30,
 			MaxRetries: 3,
 		},
-		Filter: *utils.DefaultFilterConfig(),
+		Network: NetworkConfig{
+			Proxy: "",
+		},
+		Filter: utils.DefaultFilterConfig(),
 	}
 }
 

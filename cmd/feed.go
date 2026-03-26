@@ -16,6 +16,7 @@ var (
 	feedType      string
 	feedCount     int
 	feedPages     int
+	feedCursor    string
 	feedFilter    string
 	feedTopN      int
 	feedThreshold float64
@@ -36,7 +37,7 @@ var feedCmd = &cobra.Command{
 		defer client.Close()
 
 		allTweets := []*models.Tweet{}
-		cursor := ""
+		cursor := feedCursor
 
 		// Like Python: fetch count tweets per page, for pages iterations
 		for i := 0; i < feedPages; i++ {
@@ -53,6 +54,11 @@ var feedCmd = &cobra.Command{
 			}
 		}
 
+		// Print cursor for next page if available
+		if cursor != "" && !isJSONMode() {
+			fmt.Fprintf(os.Stderr, "\n%s Next cursor: %s\n", display.PrintWarning("Pagination:"), cursor)
+		}
+
 		// Truncate to exact count requested (API may return more than requested)
 		totalRequested := feedCount * feedPages
 		if len(allTweets) > totalRequested {
@@ -65,7 +71,9 @@ var feedCmd = &cobra.Command{
 			allTweets = utils.FilterTweets(allTweets, feedFilter, feedThreshold, feedTopN, &cfg.Filter)
 		}
 
-		if isJSONMode() {
+		if isYAMLMode() {
+			outputYAML(allTweets)
+		} else if isJSONMode() {
 			outputJSON(allTweets)
 		} else {
 			fmt.Println(display.FormatTweetList(allTweets))
@@ -79,6 +87,7 @@ func init() {
 	feedCmd.Flags().StringVarP(&feedType, "type", "t", "for-you", "Timeline type: for-you, following")
 	feedCmd.Flags().IntVarP(&feedCount, "count", "n", 20, "Number of tweets per page")
 	feedCmd.Flags().IntVarP(&feedPages, "pages", "p", 1, "Number of pages to fetch")
+	feedCmd.Flags().StringVar(&feedCursor, "cursor", "", "Pagination cursor from previous response")
 	feedCmd.Flags().StringVar(&feedFilter, "filter", "", "Filter: all, top, score")
 	feedCmd.Flags().IntVar(&feedTopN, "top", 10, "Top N for filter mode")
 	feedCmd.Flags().Float64Var(&feedThreshold, "threshold", 0.0, "Score threshold")

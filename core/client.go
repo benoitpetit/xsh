@@ -44,12 +44,18 @@ type RateLimitError struct {
 	APIError
 }
 
+// StaleEndpointError is raised when a GraphQL endpoint returns 404 (stale operation ID)
+type StaleEndpointError struct {
+	APIError
+}
+
 // XClient is the HTTP client for Twitter/X GraphQL API
 type XClient struct {
-	credentials *AuthCredentials
-	account     string
-	proxy       string
-	client      *http.Client
+	credentials          *AuthCredentials
+	account              string
+	proxy                string
+	client               *http.Client
+	authRefreshAttempted bool
 }
 
 // NewXClient creates a new XClient with randomized Chrome fingerprint
@@ -57,11 +63,11 @@ func NewXClient(credentials *AuthCredentials, account, proxy string) (*XClient, 
 	// Select a random Chrome version for this session
 	chromeVersion := selectRandomChromeVersion()
 	SyncChromeVersion(chromeVersion)
-	
+
 	if Verbose {
 		logVerbose("Using Chrome version for TLS: %s", chromeVersion)
 	}
-	
+
 	return &XClient{
 		credentials: credentials,
 		account:     account,
@@ -79,6 +85,48 @@ func (c *XClient) getCredentials() (*AuthCredentials, error) {
 		c.credentials = creds
 	}
 	return c.credentials, nil
+}
+
+// TryRefreshCredentials attempts to refresh credentials from browser cookies on auth failure.
+// Returns true if credentials were successfully refreshed.
+// Bhavior for auto-refresh on 401/403.
+func (c *XClient) TryRefreshCredentials() bool {
+	if c.authRefreshAttempted {
+		return false
+	}
+	c.authRefreshAttempted = true
+
+	logVerbose("Auth failed, attempting to refresh cookies from browser")
+
+	// Use the browser extraction function (registered by browser package)
+	creds, browserName, err := tryBrowserExtraction()
+	if err != nil || creds == nil || !creds.IsValid() {
+		logVerbose("Browser cookie refresh failed: %v", err)
+		return false
+	}
+
+	// Save refreshed credentials
+	account := c.account
+	if account == "" {
+		account = "default"
+	}
+	creds.AccountName = account
+
+	if err := SaveAuth(creds, account); err != nil {
+		logVerbose("Failed to save refreshed credentials: %v", err)
+		return false
+	}
+
+	// Reset session to avoid X rejecting the tainted TLS connection
+	if c.client != nil {
+		c.client.CloseIdleConnections()
+		c.client = nil
+	}
+
+	// Update credentials in memory
+	c.credentials = creds
+	logVerbose("Credentials refreshed from %s browser", browserName)
+	return true
 }
 
 // getHTTPClient returns or creates the HTTP client with uTLS fingerprinting
@@ -115,12 +163,12 @@ func (c *XClient) getHeadersForOperation(operation string, referer string) (map[
 	if referer == "" {
 		referer = BaseURL + "/home"
 	}
-	
+
 	headers, err := c.getHeadersWithReferer(referer)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Write operations: remove x-client-transaction-id (invalid value causes 404)
 	if isWriteOperation(operation) {
 		delete(headers, "x-client-transaction-id")
@@ -128,23 +176,23 @@ func (c *XClient) getHeadersForOperation(operation string, referer string) (map[
 		// Search operations: add x-client-transaction-id (required)
 		headers["x-client-transaction-id"] = generateTransactionID()
 	}
-	
+
 	return headers, nil
 }
 
 // needsTransactionID returns true for operations that require x-client-transaction-id
 func needsTransactionID(operation string) bool {
 	ops := map[string]bool{
-		"SearchTimeline":          true,
-		"HomeTimeline":            true,
-		"HomeLatestTimeline":      true,
-		"UserTweets":              true,
-		"UserTweetsAndReplies":    true,
-		"TweetDetail":             true,
-		"UserByScreenName":        true,
-		"Followers":               true,
-		"Following":               true,
-		"BookmarkSearchTimeline":  true,
+		"SearchTimeline":         true,
+		"HomeTimeline":           true,
+		"HomeLatestTimeline":     true,
+		"UserTweets":             true,
+		"UserTweetsAndReplies":   true,
+		"TweetDetail":            true,
+		"UserByScreenName":       true,
+		"Followers":              true,
+		"Following":              true,
+		"BookmarkSearchTimeline": true,
 	}
 	return ops[operation]
 }
@@ -158,63 +206,66 @@ func (c *XClient) getHeadersWithReferer(referer string) (map[string]string, erro
 
 	// Build dynamic headers matching the current Chrome target
 	headers := map[string]string{
-		"accept":                    "*/*",
-		"accept-language":           GetAcceptLanguage(),
-		"authorization":             "Bearer " + BearerToken,
-		"content-type":              "application/json",
-		"origin":                    BaseURL,
-		"referer":                   referer,
-		"sec-ch-ua":                 GetSecChUa(),
-		"sec-ch-ua-mobile":          "?0",
-		"sec-ch-ua-platform":        getSecChUaPlatform(),
-		"sec-ch-ua-arch":            getSecChUaArch(),
-		"sec-ch-ua-bitness":         "\"64\"",
+		"accept":                      "*/*",
+		"accept-language":             GetAcceptLanguage(),
+		"authorization":               "Bearer " + BearerToken,
+		"content-type":                "application/json",
+		"origin":                      BaseURL,
+		"referer":                     referer,
+		"sec-ch-ua":                   GetSecChUa(),
+		"sec-ch-ua-mobile":            "?0",
+		"sec-ch-ua-platform":          getSecChUaPlatform(),
+		"sec-ch-ua-arch":              getSecChUaArch(),
+		"sec-ch-ua-bitness":           "\"64\"",
 		"sec-ch-ua-full-version-list": GetSecChUaFullVersionList(),
-		"sec-ch-ua-model":           "\"\"",
-		"sec-ch-ua-platform-version": getSecChUaPlatformVersion(),
-		"sec-fetch-dest":            "empty",
-		"sec-fetch-mode":            "cors",
-		"sec-fetch-site":            "same-origin",
-		"user-agent":                GetUserAgent(),
-		"x-csrf-token":              creds.Ct0,
-		"x-twitter-active-user":     "yes",
-		"x-twitter-auth-type":       "OAuth2Session",
-		"x-twitter-client-language": "en",
+		"sec-ch-ua-model":             "\"\"",
+		"sec-ch-ua-platform-version":  getSecChUaPlatformVersion(),
+		"sec-fetch-dest":              "empty",
+		"sec-fetch-mode":              "cors",
+		"sec-fetch-site":              "same-origin",
+		"user-agent":                  GetUserAgent(),
+		"x-csrf-token":                creds.Ct0,
+		"x-twitter-active-user":       "yes",
+		"x-twitter-auth-type":         "OAuth2Session",
+		"x-twitter-client-language":   "en",
 		// x-client-transaction-id may be required for search endpoints
-		"x-client-transaction-id":   generateTransactionID(),
+		"x-client-transaction-id": generateTransactionID(),
 	}
-	
+
 	return headers, nil
 }
 
-// generateTransactionID generates a dummy transaction ID for x-client-transaction-id header
-// This is a placeholder - the real implementation would need to reverse-engineer X.com's algorithm
+// generateTransactionID generates a transaction ID using the global generator
 func generateTransactionID() string {
-	// Return a random string that looks like a transaction ID
-	// Format observed: base64-like string with 90+ characters
-	return "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	tg := GetTransactionGenerator()
+	return tg.Generate("GET", "/")
+}
+
+// IsWriteOperation returns true for write operations
+func IsWriteOperation(operation string) bool {
+	return isWriteOperation(operation)
 }
 
 // isWriteOperation returns true for operations that don't need features in the request body
 // These are typically POST operations like CreateBookmark, FavoriteTweet, etc.
 func isWriteOperation(operation string) bool {
 	writeOps := map[string]bool{
-		"CreateBookmark":    true,
-		"DeleteBookmark":    true,
-		"FavoriteTweet":     true,
-		"UnfavoriteTweet":   true,
-		"CreateRetweet":     true,
-		"DeleteRetweet":     true,
-		"CreateTweet":       true,
-		"CreateNoteTweet":   true,
-		"DeleteTweet":       true,
-		"FollowUser":        true,
-		"UnfollowUser":      true,
-		"CreateList":        true,
-		"UpdateList":        true,
-		"DeleteList":        true,
-		"ListAddMember":     true,
-		"ListRemoveMember":  true,
+		"CreateBookmark":   true,
+		"DeleteBookmark":   true,
+		"FavoriteTweet":    true,
+		"UnfavoriteTweet":  true,
+		"CreateRetweet":    true,
+		"DeleteRetweet":    true,
+		"CreateTweet":      true,
+		"CreateNoteTweet":  true,
+		"DeleteTweet":      true,
+		"FollowUser":       true,
+		"UnfollowUser":     true,
+		"CreateList":       true,
+		"UpdateList":       true,
+		"DeleteList":       true,
+		"ListAddMember":    true,
+		"ListRemoveMember": true,
 	}
 	return writeOps[operation]
 }
@@ -250,7 +301,7 @@ func (c *XClient) getCookies() (map[string]string, error) {
 func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error) {
 	var headers map[string]string
 	var err error
-	
+
 	if operation != "" {
 		// Use operation-specific headers (removes x-client-transaction-id for write ops)
 		headers, err = c.getHeadersForOperation(operation, referer)
@@ -384,6 +435,21 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 			}
 			return result, nil
 		case 401:
+			// Try to refresh credentials from browser on first 401
+			if attempt == 0 {
+				if refreshed := c.TryRefreshCredentials(); refreshed {
+					// Update headers and cookies with refreshed credentials
+					headers, err = c.getHeaders()
+					if err != nil {
+						return nil, err
+					}
+					cookies, err = c.getCookies()
+					if err != nil {
+						return nil, err
+					}
+					continue
+				}
+			}
 			return nil, &AuthError{Message: "Authentication failed. Cookies may be expired."}
 		case 429:
 			if attempt < maxRetries-1 {
@@ -391,7 +457,24 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 			}
 			return nil, &RateLimitError{APIError: APIError{Message: "Rate limited by Twitter/X", StatusCode: 429}}
 		case 403:
+			// Try to refresh credentials from browser on first 403
+			if attempt == 0 {
+				if refreshed := c.TryRefreshCredentials(); refreshed {
+					// Update headers and cookies with refreshed credentials
+					headers, err = c.getHeaders()
+					if err != nil {
+						return nil, err
+					}
+					cookies, err = c.getCookies()
+					if err != nil {
+						return nil, err
+					}
+					continue
+				}
+			}
 			return nil, &APIError{Message: "Forbidden — account may be suspended or action not allowed", StatusCode: 403}
+		case 404:
+			return nil, &StaleEndpointError{APIError: APIError{Message: "GraphQL endpoint not found (HTTP 404) — operation IDs may be stale", StatusCode: 404}}
 		default:
 			msg := string(respBody)
 			if len(msg) > 500 {
@@ -453,7 +536,7 @@ func (c *XClient) graphqlRequest(
 		}
 
 		urlStr := GraphQLBase + "/" + endpoint
-		
+
 		if Verbose {
 			logVerbose("GraphQL %s %s (attempt %d)", method, urlStr, attempt+1)
 		}
@@ -474,7 +557,7 @@ func (c *XClient) graphqlRequest(
 			if idx := strings.Index(endpoint, "/"); idx != -1 {
 				queryID = endpoint[:idx]
 			}
-			
+
 			// For write operations, don't send features (like the working curl command)
 			// For read operations, send features
 			var jsonData map[string]interface{}
@@ -491,7 +574,7 @@ func (c *XClient) graphqlRequest(
 				}
 			}
 			result, err = c.requestWithOperation("POST", urlStr, nil, jsonData, 3, referer, operation)
-			
+
 			if Verbose {
 				jsonBytes, _ := json.Marshal(jsonData)
 				logVerbose("POST body: %s", string(jsonBytes))
@@ -506,7 +589,7 @@ func (c *XClient) graphqlRequest(
 					logVerbose("HTTP 404 for '%s' — operation IDs may be stale, "+
 						"refreshing endpoints from X.com and retrying...", operation)
 					InvalidateCache()
-					
+
 					// Trigger endpoint discovery to fetch fresh endpoints
 					discovery, discErr := NewEndpointDiscovery(Verbose)
 					if discErr == nil {
@@ -560,7 +643,7 @@ func (c *XClient) getOpFeatures(operation string) map[string]bool {
 	opFeaturesList := GetDynamicOpFeatures(operation)
 	features := make(map[string]bool)
 
-	if opFeaturesList != nil && len(opFeaturesList) > 0 {
+	if len(opFeaturesList) > 0 {
 		cachedFeatures := GetDynamicFeatures()
 		for _, feat := range opFeaturesList {
 			if val, ok := cachedFeatures[feat]; ok {
@@ -587,4 +670,285 @@ func (c *XClient) Close() {
 	}
 }
 
+// RestPost makes a POST request to the REST API v1.1 (used for media upload, social actions)
+func (c *XClient) RestPost(urlStr string, data map[string]string) (map[string]interface{}, error) {
+	return c.RestPostWithOptions(urlStr, data, nil, 30)
+}
 
+// RestPostWithOptions makes a REST POST request with full control
+func (c *XClient) RestPostWithOptions(urlStr string, data map[string]string, jsonBody map[string]interface{}, timeout int) (map[string]interface{}, error) {
+	creds, err := c.getCredentials()
+	if err != nil {
+		return nil, err
+	}
+
+	// Build headers
+	headers := map[string]string{
+		"authorization":             "Bearer " + BearerToken,
+		"x-csrf-token":              creds.Ct0,
+		"x-twitter-auth-type":       "OAuth2Session",
+		"x-twitter-active-user":     "yes",
+		"x-twitter-client-language": "en",
+		"user-agent":                GetUserAgent(),
+		"origin":                    BaseURL,
+		"referer":                   BaseURL + "/home",
+	}
+
+	var body io.Reader
+	if jsonBody != nil {
+		headers["content-type"] = "application/json"
+		jsonData, err := json.Marshal(jsonBody)
+		if err != nil {
+			return nil, err
+		}
+		body = bytes.NewReader(jsonData)
+	} else if data != nil {
+		headers["content-type"] = "application/x-www-form-urlencoded"
+		formData := url.Values{}
+		for k, v := range data {
+			formData.Set(k, v)
+		}
+		body = strings.NewReader(formData.Encode())
+	}
+
+	// Cross-origin uploads (e.g. upload.twitter.com from x.com)
+	if strings.Contains(urlStr, "upload.twitter.com") {
+		headers["sec-fetch-site"] = "same-site"
+	}
+
+	// Build cookies
+	cookies := creds.GetSanitizedCookies()
+
+	// Create request
+	req, err := http.NewRequest("POST", urlStr, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set headers
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	// Set cookies
+	var cookieParts []string
+	for k, v := range cookies {
+		cookieParts = append(cookieParts, fmt.Sprintf("%s=%s", k, v))
+	}
+	if len(cookieParts) > 0 {
+		req.Header.Set("Cookie", strings.Join(cookieParts, "; "))
+	}
+
+	// Execute
+	client, err := c.getHTTPClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle response
+	switch resp.StatusCode {
+	case 200, 201, 202, 204:
+		if len(respBody) > 0 {
+			var result map[string]interface{}
+			if err := json.Unmarshal(respBody, &result); err != nil {
+				return nil, err
+			}
+			return result, nil
+		}
+		return map[string]interface{}{}, nil
+	case 401:
+		return nil, &AuthError{Message: "Authentication failed. Cookies may be expired."}
+	case 429:
+		return nil, &RateLimitError{APIError: APIError{Message: "Rate limited by Twitter/X", StatusCode: 429}}
+	case 403:
+		return nil, &APIError{Message: "Forbidden - account may be suspended or action not allowed", StatusCode: 403}
+	default:
+		msg := string(respBody)
+		if len(msg) > 500 {
+			msg = msg[:500]
+		}
+		return nil, &APIError{Message: fmt.Sprintf("REST API error: HTTP %d", resp.StatusCode), StatusCode: resp.StatusCode, ResponseData: msg}
+	}
+}
+
+// GraphQLPostRaw makes a GraphQL POST request with a hardcoded query ID
+func (c *XClient) GraphQLPostRaw(queryID, operationName string, variables map[string]interface{}) (map[string]interface{}, error) {
+	urlStr := GraphQLBase + "/" + queryID + "/" + operationName
+
+	jsonData := map[string]interface{}{
+		"variables": variables,
+		"queryId":   queryID,
+	}
+
+	return c.restPostGraphQL(urlStr, jsonData)
+}
+
+// GraphQLGetRaw makes a GraphQL GET request with a hardcoded query ID
+func (c *XClient) GraphQLGetRaw(queryID, operationName string, variables map[string]interface{}) (map[string]interface{}, error) {
+	urlStr := GraphQLBase + "/" + queryID + "/" + operationName
+
+	// Build query params
+	params := map[string]string{}
+	if variables != nil {
+		varsJSON, _ := json.Marshal(variables)
+		params["variables"] = string(varsJSON)
+	}
+
+	return c.restGetGraphQL(urlStr, params)
+}
+
+// restPostGraphQL makes a POST request for GraphQL operations
+func (c *XClient) restPostGraphQL(urlStr string, jsonData map[string]interface{}) (map[string]interface{}, error) {
+	creds, err := c.getCredentials()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := json.Marshal(jsonData)
+	if err != nil {
+		return nil, err
+	}
+
+	headers := map[string]string{
+		"authorization":         "Bearer " + BearerToken,
+		"x-csrf-token":          creds.Ct0,
+		"x-twitter-auth-type":   "OAuth2Session",
+		"x-twitter-active-user": "yes",
+		"content-type":          "application/json",
+		"user-agent":            GetUserAgent(),
+		"origin":                BaseURL,
+		"referer":               BaseURL + "/home",
+	}
+
+	cookies := creds.GetSanitizedCookies()
+
+	req, err := http.NewRequest("POST", urlStr, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	var cookieParts []string
+	for k, v := range cookies {
+		cookieParts = append(cookieParts, fmt.Sprintf("%s=%s", k, v))
+	}
+	if len(cookieParts) > 0 {
+		req.Header.Set("Cookie", strings.Join(cookieParts, "; "))
+	}
+
+	client, err := c.getHTTPClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, &APIError{Message: fmt.Sprintf("HTTP %d", resp.StatusCode), StatusCode: resp.StatusCode}
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// restGetGraphQL makes a GET request for GraphQL operations
+func (c *XClient) restGetGraphQL(urlStr string, params map[string]string) (map[string]interface{}, error) {
+	creds, err := c.getCredentials()
+	if err != nil {
+		return nil, err
+	}
+
+	// Build query string
+	if len(params) > 0 {
+		u, _ := url.Parse(urlStr)
+		q := u.Query()
+		for k, v := range params {
+			q.Set(k, v)
+		}
+		u.RawQuery = q.Encode()
+		urlStr = u.String()
+	}
+
+	headers := map[string]string{
+		"authorization":         "Bearer " + BearerToken,
+		"x-csrf-token":          creds.Ct0,
+		"x-twitter-auth-type":   "OAuth2Session",
+		"x-twitter-active-user": "yes",
+		"user-agent":            GetUserAgent(),
+		"origin":                BaseURL,
+		"referer":               BaseURL + "/home",
+	}
+
+	cookies := creds.GetSanitizedCookies()
+
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	var cookieParts []string
+	for k, v := range cookies {
+		cookieParts = append(cookieParts, fmt.Sprintf("%s=%s", k, v))
+	}
+	if len(cookieParts) > 0 {
+		req.Header.Set("Cookie", strings.Join(cookieParts, "; "))
+	}
+
+	client, err := c.getHTTPClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, &APIError{Message: fmt.Sprintf("HTTP %d", resp.StatusCode), StatusCode: resp.StatusCode}
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}

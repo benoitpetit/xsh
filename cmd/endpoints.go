@@ -30,11 +30,11 @@ var endpointsListCmd = &cobra.Command{
 		endpoints := manager.ListEndpoints()
 		stats := manager.GetStats()
 
-		if isJSONMode() {
-			outputJSON(map[string]interface{}{
+		if isJSONMode() || isYAMLMode() {
+			output(map[string]interface{}{
 				"endpoints": endpoints,
 				"stats":     stats,
-			})
+			}, func() {})
 			return
 		}
 
@@ -86,14 +86,14 @@ var endpointsCheckCmd = &cobra.Command{
 		isDynamic, status := manager.CheckEndpoint(operation)
 		opFeatures := manager.GetOpFeatures(operation)
 
-		if isJSONMode() {
-			outputJSON(map[string]interface{}{
-				"operation":   operation,
-				"endpoint":    endpoint,
-				"is_dynamic":  isDynamic,
-				"status":      status,
-				"features":    opFeatures,
-			})
+		if isJSONMode() || isYAMLMode() {
+			output(map[string]interface{}{
+				"operation":  operation,
+				"endpoint":   endpoint,
+				"is_dynamic": isDynamic,
+				"status":     status,
+				"features":   opFeatures,
+			}, func() {})
 			return
 		}
 
@@ -148,13 +148,13 @@ The process may take 10-30 seconds depending on network speed.`,
 		manager := core.GetEndpointManager()
 		stats := manager.GetStats()
 
-		if isJSONMode() {
-			outputJSON(map[string]interface{}{
-				"success":     true,
-				"duration":    duration.String(),
-				"endpoints":   stats.TotalCount,
-				"features":    stats.FeatureCount,
-			})
+		if isJSONMode() || isYAMLMode() {
+			output(map[string]interface{}{
+				"success":   true,
+				"duration":  duration.String(),
+				"endpoints": stats.TotalCount,
+				"features":  stats.FeatureCount,
+			}, func() {})
 			return
 		}
 
@@ -195,12 +195,12 @@ var endpointsStatusCmd = &cobra.Command{
 			}
 		}
 
-		if isJSONMode() {
-			outputJSON(map[string]interface{}{
+		if isJSONMode() || isYAMLMode() {
+			output(map[string]interface{}{
 				"health":       healthStatus,
 				"can_discover": canDiscover,
 				"stats":        stats,
-			})
+			}, func() {})
 			return
 		}
 
@@ -233,12 +233,12 @@ var endpointsUpdateCmd = &cobra.Command{
 		manager := core.GetEndpointManager()
 		manager.UpdateEndpoint(operation, endpoint)
 
-		if isJSONMode() {
-			outputJSON(map[string]interface{}{
+		if isJSONMode() || isYAMLMode() {
+			output(map[string]interface{}{
 				"updated":   true,
 				"operation": operation,
 				"endpoint":  endpoint,
-			})
+			}, func() {})
 			return
 		}
 
@@ -265,8 +265,8 @@ var endpointsResetCmd = &cobra.Command{
 
 		core.InvalidateCache()
 
-		if isJSONMode() {
-			outputJSON(map[string]string{"status": "reset"})
+		if isJSONMode() || isYAMLMode() {
+			output(map[string]string{"status": "reset"}, func() {})
 			return
 		}
 

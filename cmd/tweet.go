@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	tweetThread bool
-	tweetCount  int
+	tweetThread    bool
+	tweetCount     int
+	exportArticle  string
 )
 
 // tweetCmd represents the tweet command (parent for tweet operations)
@@ -39,7 +40,11 @@ Examples:
 var tweetViewCmd = &cobra.Command{
 	Use:   "view [id]",
 	Short: "View a tweet and its thread",
-	Args:  cobra.ExactArgs(1),
+	Long: `View a tweet and its thread. 
+	
+For tweets containing articles (long-form content), use --export to save as Markdown:
+  xsh tweet view <id> --export article.md`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.PrintError(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
@@ -67,24 +72,59 @@ var tweetViewCmd = &cobra.Command{
 			return
 		}
 
+		// Get focal tweet
+		var focal *models.Tweet
+		for _, t := range tweets {
+			if t.ID == args[0] {
+				focal = t
+				break
+			}
+		}
+		if focal == nil {
+			focal = tweets[0]
+		}
+
+		// Check for article and handle export
+		if exportArticle != "" {
+			articleData, err := core.GetArticle(client, args[0])
+			if err != nil || articleData == nil {
+				fmt.Println(display.PrintWarning("No article found in this tweet"))
+				os.Exit(core.ExitError)
+				return
+			}
+
+			if err := core.ExportArticleToFile(articleData, focal, exportArticle); err != nil {
+				fmt.Println(display.PrintError(fmt.Sprintf("Failed to export article: %v", err)))
+				os.Exit(core.ExitError)
+				return
+			}
+
+			fmt.Println(display.PrintSuccess(fmt.Sprintf("Article exported to %s", exportArticle)))
+			return
+		}
+
+		// Check if this is an article tweet (for display purposes)
+		articleData, _ := core.GetArticle(client, args[0])
+
 		if isJSONMode() {
 			outputJSON(tweets)
+		} else if isYAMLMode() {
+			outputYAML(tweets)
 		} else if tweetThread {
 			// Show thread as tree structure
 			fmt.Println(display.FormatThread(tweets, args[0]))
+		} else if articleData != nil {
+			// Display article
+			metadata := utils.ExtractArticleMetadata(articleData)
+			contentMD := utils.ArticleToMarkdown(articleData)
+			fmt.Println(display.FormatArticle(
+				models.GetString(metadata, "title"),
+				focal.AuthorHandle,
+				contentMD,
+				focal.Engagement,
+			))
 		} else {
 			// Default: show only the focal tweet in simple style
-			var focal *models.Tweet
-			for _, t := range tweets {
-				if t.ID == args[0] {
-					focal = t
-					break
-				}
-			}
-			if focal == nil {
-				focal = tweets[0]
-			}
-			// Show single tweet in simple format (like thread but single item)
 			fmt.Println(display.FormatSingleTweet(focal))
 		}
 	},
@@ -95,8 +135,16 @@ var tweetPostCmd = &cobra.Command{
 	Use:   "post [text]",
 	Short: "Post a new tweet",
 	Args:  cobra.ExactArgs(1),
+	Long: `Post a new tweet, optionally with images (up to 4).
+
+Examples:
+  xsh tweet post "Hello world!"
+  xsh tweet post "Check this out" --image photo.jpg
+  xsh tweet post "My photos" -i img1.jpg -i img2.jpg -i img3.jpg
+  xsh tweet post "Replying" --reply-to 1234567890
+  xsh tweet post "Quoting" --quote https://x.com/user/status/1234567890`,
 	Run: func(cmd *cobra.Command, args []string) {
-		text, valid := utils.ValidateTweetText(args[0], 280)
+		text, valid := utils.ValidateTweetTextWithLimit(args[0], 280)
 		if !valid {
 			fmt.Println(display.PrintError("Tweet text is empty or exceeds 280 characters"))
 			os.Exit(core.ExitError)
@@ -113,6 +161,7 @@ var tweetPostCmd = &cobra.Command{
 
 		replyTo, _ := cmd.Flags().GetString("reply-to")
 		quote, _ := cmd.Flags().GetString("quote")
+		images, _ := cmd.Flags().GetStringArray("image")
 
 		if replyTo != "" && !utils.ValidateTweetID(replyTo) {
 			fmt.Println(display.PrintError(fmt.Sprintf("Invalid reply-to tweet ID: %s", replyTo)))
@@ -120,31 +169,72 @@ var tweetPostCmd = &cobra.Command{
 			return
 		}
 
-		result, err := core.CreateTweet(client, text, replyTo, quote, nil)
+		// Validate max images
+		if len(images) > 4 {
+			fmt.Println(display.PrintError(fmt.Sprintf("Too many images: %d (max 4)", len(images))))
+			os.Exit(core.ExitError)
+			return
+		}
+
+		// Upload media if provided
+		var mediaIDs []string
+		if len(images) > 0 {
+			if verbose {
+				fmt.Printf("Uploading %d image(s)...\n", len(images))
+			}
+			for _, imgPath := range images {
+				mediaID, err := core.UploadMediaFile(client, imgPath)
+				if err != nil {
+					fmt.Println(display.PrintError(fmt.Sprintf("Failed to upload image %s: %v", imgPath, err)))
+					os.Exit(core.ExitError)
+					return
+				}
+				mediaIDs = append(mediaIDs, mediaID)
+				if verbose {
+					fmt.Printf("  Uploaded: %s -> %s\n", imgPath, mediaID[:8]+"...")
+				}
+			}
+		}
+
+		result, err := core.CreateTweet(client, text, replyTo, quote, mediaIDs)
 		if err != nil {
 			fmt.Println(display.PrintError(fmt.Sprintf("Failed to post tweet: %v", err)))
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(result)
-		} else {
+		outputData := result
+		if len(mediaIDs) > 0 {
+			outputData["media_ids"] = mediaIDs
+		}
+		output(outputData, func() {
 			tweetID := extractTweetIDFromResult(result)
 			if tweetID != "" {
-				fmt.Println(display.PrintSuccess(fmt.Sprintf("Tweet posted! ID: %s", tweetID)))
+				suffix := ""
+				if len(mediaIDs) > 0 {
+					suffix = fmt.Sprintf(" with %d image(s)", len(mediaIDs))
+				}
+				fmt.Println(display.PrintSuccess(fmt.Sprintf("Tweet posted%s! ID: %s", suffix, tweetID)))
 				fmt.Printf("  URL: https://x.com/i/web/status/%s\n", tweetID)
 			} else {
 				// Check if it's a "likely success" response (empty ID but no error)
 				if note, ok := result["_note"].(string); ok && note != "" {
-					fmt.Println(display.PrintSuccess("Tweet posted successfully!"))
+					suffix := ""
+					if len(mediaIDs) > 0 {
+						suffix = fmt.Sprintf(" with %d image(s)", len(mediaIDs))
+					}
+					fmt.Println(display.PrintSuccess(fmt.Sprintf("Tweet posted%s successfully!", suffix)))
 					if verbose {
 						fmt.Printf("  Note: %s\n", note)
 					}
 				} else {
-					fmt.Println(display.PrintSuccess("Tweet posted!"))
+					suffix := ""
+					if len(mediaIDs) > 0 {
+						suffix = fmt.Sprintf(" with %d image(s)", len(mediaIDs))
+					}
+					fmt.Println(display.PrintSuccess(fmt.Sprintf("Tweet posted%s!", suffix)))
 				}
 			}
-		}
+		})
 	},
 }
 
@@ -185,11 +275,9 @@ var tweetDeleteCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(result)
-		} else {
+		output(result, func() {
 			fmt.Println(display.PrintSuccess(fmt.Sprintf("Deleted tweet %s", args[0])))
-		}
+		})
 	},
 }
 
@@ -219,11 +307,9 @@ var tweetLikeCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(result)
-		} else {
+		output(result, func() {
 			fmt.Println(display.PrintSuccess(fmt.Sprintf("Liked tweet %s", args[0])))
-		}
+		})
 	},
 }
 
@@ -253,11 +339,9 @@ var tweetUnlikeCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(result)
-		} else {
+		output(result, func() {
 			fmt.Println(display.PrintSuccess(fmt.Sprintf("Unliked tweet %s", args[0])))
-		}
+		})
 	},
 }
 
@@ -287,11 +371,9 @@ var tweetRetweetCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(result)
-		} else {
+		output(result, func() {
 			fmt.Println(display.PrintSuccess(fmt.Sprintf("Retweeted %s", args[0])))
-		}
+		})
 	},
 }
 
@@ -321,11 +403,9 @@ var tweetUnretweetCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(result)
-		} else {
+		output(result, func() {
 			fmt.Println(display.PrintSuccess(fmt.Sprintf("Unretweeted %s", args[0])))
-		}
+		})
 	},
 }
 
@@ -348,11 +428,9 @@ var tweetBookmarkCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(result)
-		} else {
+		output(result, func() {
 			fmt.Println(display.PrintSuccess(fmt.Sprintf("Bookmarked tweet %s", args[0])))
-		}
+		})
 	},
 }
 
@@ -375,11 +453,9 @@ var tweetUnbookmarkCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(result)
-		} else {
+		output(result, func() {
 			fmt.Println(display.PrintSuccess(fmt.Sprintf("Unbookmarked tweet %s", args[0])))
-		}
+		})
 	},
 }
 
@@ -402,11 +478,9 @@ var bookmarksCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(response.Tweets)
-		} else {
+		output(response.Tweets, func() {
 			fmt.Println(display.FormatTweetList(response.Tweets))
-		}
+		})
 	},
 }
 
@@ -455,8 +529,10 @@ func init() {
 
 	tweetViewCmd.Flags().BoolVar(&tweetThread, "thread", false, "Show tweet with all replies as a thread tree")
 	tweetViewCmd.Flags().IntVarP(&tweetCount, "count", "n", 20, "Number of tweets/comments to fetch (max 100)")
+	tweetViewCmd.Flags().StringVarP(&exportArticle, "export", "o", "", "Export article to Markdown file (for tweets containing long-form articles)")
 	tweetPostCmd.Flags().String("reply-to", "", "Tweet ID to reply to")
 	tweetPostCmd.Flags().String("quote", "", "Tweet URL to quote")
+	tweetPostCmd.Flags().StringArrayP("image", "i", nil, "Image to attach (can be used multiple times, max 4)")
 	tweetDeleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 	bookmarksCmd.Flags().IntP("count", "n", 20, "Number of tweets")
 }

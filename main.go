@@ -102,9 +102,10 @@ func shouldRunStartupCheck() bool {
 	}
 	
 	// Check if it's a command that needs API
-	apiCommands := []string{"feed", "search", "user", "tweet", "post", "delete", 
-		"like", "unlike", "retweet", "unretweet", "bookmark", "unbookmark", 
-		"bookmarks", "followers", "following", "likes", "tweets"}
+	apiCommands := []string{"feed", "search", "user", "tweet",
+		"unlike", "unretweet", "unbookmark",
+		"bookmarks", "tweets", "follow", "unfollow", "block", "unblock", "mute", "unmute",
+		"lists", "dm", "schedule", "scheduled", "unschedule", "jobs", "trends", "download"}
 	
 	for _, arg := range os.Args[1:] {
 		for _, cmd := range apiCommands {

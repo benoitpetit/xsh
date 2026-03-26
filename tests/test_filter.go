@@ -23,7 +23,7 @@ func TestScoreTweet(t *testing.T) {
 	}
 
 	cfg := utils.DefaultFilterConfig()
-	score := utils.ScoreTweet(tweet, cfg)
+	score := utils.ScoreTweet(tweet, &cfg)
 
 	// Calcul attendu:
 	// likes: 100 * 1.0 = 100
@@ -73,7 +73,7 @@ func TestScoreTweetZeroViews(t *testing.T) {
 	}
 
 	cfg := utils.DefaultFilterConfig()
-	score := utils.ScoreTweet(tweet, cfg)
+	score := utils.ScoreTweet(tweet, &cfg)
 
 	// Avec 0 vues, views_log devrait être 0
 	expectedScore := 100.0 // Juste les likes

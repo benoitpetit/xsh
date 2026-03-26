@@ -2,13 +2,16 @@
 package display
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display/frame"
 	"github.com/benoitpetit/xsh/models"
+	"github.com/benoitpetit/xsh/utils"
 )
 
 // Style definitions
@@ -523,6 +526,318 @@ func FormatSingleTweet(tweet *models.Tweet) string {
 	// Tweet ID (styled in gray)
 	idStyle := lipgloss.NewStyle().Foreground(colorGray)
 	b.WriteString("   " + idStyle.Render("🆔 "+tweet.ID) + "\n")
+
+	return b.String()
+}
+
+// Add these functions at the end of formatter.go
+
+// FormatUsers displays a list of users
+func FormatUsers(users []*models.User) string {
+	return FormatUserList(users)
+}
+
+// FormatTweets displays a list of tweets
+func FormatTweets(tweets []*models.Tweet) string {
+	return FormatTweetList(tweets)
+}
+
+// FormatDMInbox displays the DM inbox
+func FormatDMInbox(conversations []models.DMConversation) string {
+	if len(conversations) == 0 {
+		return lipgloss.NewStyle().Foreground(colorGray).Render("No conversations found.")
+	}
+
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
+	b.WriteString(headerStyle.Render(fmt.Sprintf("DM Inbox · %d conversations", len(conversations))))
+	b.WriteString("\n\n")
+
+	for i, conv := range conversations {
+		// Indicator for unread
+		indicator := "  "
+		if conv.Unread {
+			indicator = "● "
+		}
+
+		// Format participants
+		var participantNames []string
+		for _, p := range conv.Participants {
+			participantNames = append(participantNames, "@"+p.Handle)
+		}
+		participants := strings.Join(participantNames, ", ")
+
+		// Format last message
+		lastMsg := conv.LastMessage
+		if len(lastMsg) > 50 {
+			lastMsg = lastMsg[:47] + "..."
+		}
+
+		line := fmt.Sprintf("%s%s: %s", indicator, participants, lastMsg)
+		if conv.LastMessageTime != "" {
+			line += fmt.Sprintf(" (%s)", conv.LastMessageTime)
+		}
+
+		b.WriteString(line)
+		if i < len(conversations)-1 {
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+// FormatScheduledTweets displays scheduled tweets
+func FormatScheduledTweets(tweets []core.ScheduledTweet) string {
+	if len(tweets) == 0 {
+		return lipgloss.NewStyle().Foreground(colorGray).Render("No scheduled tweets.")
+	}
+
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
+	b.WriteString(headerStyle.Render(fmt.Sprintf("Scheduled Tweets · %d", len(tweets))))
+	b.WriteString("\n\n")
+
+	for i, tweet := range tweets {
+		// Format time
+		scheduledTime := time.Unix(tweet.ExecuteAt, 0)
+		timeStr := scheduledTime.Format("2006-01-02 15:04")
+
+		// Format text
+		text := tweet.Text
+		if len(text) > 60 {
+			text = text[:57] + "..."
+		}
+
+		status := tweet.State
+		if status == "" {
+			status = "scheduled"
+		}
+
+		b.WriteString(fmt.Sprintf("[%s] %s: %s (ID: %s)", status, timeStr, text, tweet.ID))
+		if i < len(tweets)-1 {
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+// FormatLists displays a list of lists
+func FormatLists(lists []core.ListInfo) string {
+	if len(lists) == 0 {
+		return lipgloss.NewStyle().Foreground(colorGray).Render("No lists found.")
+	}
+
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
+	b.WriteString(headerStyle.Render(fmt.Sprintf("Lists · %d", len(lists))))
+	b.WriteString("\n\n")
+
+	for i, list := range lists {
+		mode := list.Mode
+		if mode == "" {
+			mode = "Public"
+		}
+
+		b.WriteString(fmt.Sprintf("%s (%d members) [%s] - ID: %s", list.Name, list.MemberCount, mode, list.ID))
+		if list.Description != "" {
+			b.WriteString(fmt.Sprintf("\n  %s", list.Description))
+		}
+		if i < len(lists)-1 {
+			b.WriteString("\n\n")
+		}
+	}
+
+	return b.String()
+}
+
+// FormatBookmarkFolders displays bookmark folders
+func FormatBookmarkFolders(folders []core.BookmarkFolder) string {
+	if len(folders) == 0 {
+		return lipgloss.NewStyle().Foreground(colorGray).Render("No bookmark folders.")
+	}
+
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
+	b.WriteString(headerStyle.Render(fmt.Sprintf("Bookmark Folders · %d", len(folders))))
+	b.WriteString("\n\n")
+
+	for i, folder := range folders {
+		b.WriteString(fmt.Sprintf("%s (ID: %s)", folder.Name, folder.ID))
+		if i < len(folders)-1 {
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+// FormatJobs displays a list of jobs
+func FormatJobs(jobs []interface{}) string {
+	if len(jobs) == 0 {
+		return lipgloss.NewStyle().Foreground(colorGray).Render("No jobs found.")
+	}
+
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
+	b.WriteString(headerStyle.Render(fmt.Sprintf("Jobs · %d", len(jobs))))
+	b.WriteString("\n\n")
+
+	for i, jobInterface := range jobs {
+		if job, ok := jobInterface.(models.Job); ok {
+			b.WriteString(fmt.Sprintf("%s at %s", job.Title, job.Company.Name))
+			if job.Location != "" {
+				b.WriteString(fmt.Sprintf(" (%s)", job.Location))
+			}
+			if job.WorkplaceType != "" {
+				b.WriteString(fmt.Sprintf(" [%s]", job.WorkplaceType))
+			}
+			b.WriteString(fmt.Sprintf("\n  ID: %s", job.ID))
+			if i < len(jobs)-1 {
+				b.WriteString("\n\n")
+			}
+		}
+	}
+
+	return b.String()
+}
+
+// FormatJobDetail displays detailed job information
+func FormatJobDetail(job *models.Job) string {
+	var b strings.Builder
+
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorCyan)
+	b.WriteString(headerStyle.Render(fmt.Sprintf("%s at %s", job.Title, job.Company.Name)))
+	b.WriteString("\n\n")
+
+	if job.Location != "" {
+		b.WriteString(fmt.Sprintf("📍 %s\n", job.Location))
+	}
+	if job.WorkplaceType != "" {
+		b.WriteString(fmt.Sprintf("🏢 %s\n", job.WorkplaceType))
+	}
+	if job.EmploymentType != "" {
+		b.WriteString(fmt.Sprintf("💼 %s\n", job.EmploymentType))
+	}
+	if job.Salary != "" {
+		b.WriteString(fmt.Sprintf("💰 %s\n", job.Salary))
+	}
+
+	b.WriteString(fmt.Sprintf("\n🆔 %s\n", job.ID))
+
+	if job.Description != "" {
+		b.WriteString("\nDescription:\n")
+		// Try to parse as Draft.js JSON and convert to Markdown
+		var descData map[string]interface{}
+		if err := json.Unmarshal([]byte(job.Description), &descData); err == nil {
+			// Convert Draft.js to Markdown
+			markdown := utils.ArticleToMarkdown(map[string]interface{}{"result": map[string]interface{}{"content": map[string]interface{}{"content_state": descData}}})
+			if markdown != "" {
+				b.WriteString(markdown)
+			} else {
+				b.WriteString(job.Description)
+			}
+		} else {
+			b.WriteString(job.Description)
+		}
+		b.WriteString("\n")
+	}
+
+	if job.ApplyURL != "" {
+		b.WriteString(fmt.Sprintf("\n🔗 Apply: %s\n", job.ApplyURL))
+	}
+
+	return b.String()
+}
+
+// FormatArticle displays an article (long-form content)
+func FormatArticle(title, author, contentMD string, engagement models.TweetEngagement) string {
+	var b strings.Builder
+
+	// Header
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorCyan)
+	b.WriteString(headerStyle.Render("Article"))
+	b.WriteString("\n\n")
+
+	// Title
+	if title != "" {
+		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Width(80)
+		b.WriteString(titleStyle.Render(title))
+		b.WriteString("\n\n")
+	}
+
+	// Author
+	authorStyle := lipgloss.NewStyle().Foreground(colorGray)
+	b.WriteString(authorStyle.Render(fmt.Sprintf("By @%s", author)))
+	b.WriteString("\n\n")
+
+	// Engagement
+	if engagement.Likes > 0 || engagement.Retweets > 0 || engagement.Replies > 0 {
+		stats := []string{}
+		if engagement.Replies > 0 {
+			stats = append(stats, fmt.Sprintf("💬 %s", FormatNumber(engagement.Replies)))
+		}
+		if engagement.Retweets > 0 {
+			stats = append(stats, fmt.Sprintf("🔁 %s", FormatNumber(engagement.Retweets)))
+		}
+		if engagement.Likes > 0 {
+			stats = append(stats, fmt.Sprintf("❤️ %s", FormatNumber(engagement.Likes)))
+		}
+		if engagement.Bookmarks > 0 {
+			stats = append(stats, fmt.Sprintf("🔖 %s", FormatNumber(engagement.Bookmarks)))
+		}
+		b.WriteString(strings.Join(stats, "  "))
+		b.WriteString("\n\n")
+	}
+
+	// Content (convert Markdown to display-friendly format)
+	// Simple approach: preserve structure but limit width
+	lines := strings.Split(contentMD, "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			b.WriteString("\n")
+			continue
+		}
+		// Handle headers
+		if strings.HasPrefix(line, "# ") {
+			b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Render(line[2:]))
+			b.WriteString("\n")
+		} else if strings.HasPrefix(line, "## ") {
+			b.WriteString(lipgloss.NewStyle().Bold(true).Render(line[3:]))
+			b.WriteString("\n")
+		} else if strings.HasPrefix(line, "### ") {
+			b.WriteString(lipgloss.NewStyle().Bold(true).Render(line[4:]))
+			b.WriteString("\n")
+		} else if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+			b.WriteString("  • " + line[2:])
+			b.WriteString("\n")
+		} else if strings.HasPrefix(line, "> ") {
+			quoteStyle := lipgloss.NewStyle().Foreground(colorGray).Italic(true)
+			b.WriteString(quoteStyle.Render("  \"" + line[2:] + "\""))
+			b.WriteString("\n")
+		} else if strings.HasPrefix(line, "```") {
+			// Code block - skip markers
+			if line == "```" {
+				continue
+			}
+			codeStyle := lipgloss.NewStyle().Foreground(colorCyan)
+			b.WriteString(codeStyle.Render("  " + line))
+			b.WriteString("\n")
+		} else {
+			// Regular text - wrap if needed
+			wrapped := wrapText(line, 78)
+			for _, w := range wrapped {
+				b.WriteString(w)
+				b.WriteString("\n")
+			}
+		}
+	}
 
 	return b.String()
 }

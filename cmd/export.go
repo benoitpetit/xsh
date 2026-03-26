@@ -43,15 +43,26 @@ var exportFeedCmd = &cobra.Command{
 
 		feedType, _ := cmd.Flags().GetString("type")
 		count, _ := cmd.Flags().GetInt("count")
+		pages, _ := cmd.Flags().GetInt("pages")
 		filter, _ := cmd.Flags().GetString("filter")
 
-		response, err := core.GetHomeTimeline(client, feedType, count, "")
-		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to fetch timeline: %v", err)))
-			return
+		var allTweets []*models.Tweet
+		cursor := ""
+
+		for i := 0; i < pages; i++ {
+			response, err := core.GetHomeTimeline(client, feedType, count, cursor)
+			if err != nil {
+				fmt.Println(display.PrintError(fmt.Sprintf("Failed to fetch timeline: %v", err)))
+				return
+			}
+			allTweets = append(allTweets, response.Tweets...)
+			cursor = response.CursorBottom
+			if !response.HasMore {
+				break
+			}
 		}
 
-		tweets := response.Tweets
+		tweets := allTweets
 
 		// Apply filter if specified
 		if filter != "" {
@@ -276,7 +287,8 @@ func init() {
 
 	// Feed export flags
 	exportFeedCmd.Flags().StringP("type", "t", "for-you", "Timeline type: for-you, following")
-	exportFeedCmd.Flags().IntP("count", "n", 100, "Number of tweets")
+	exportFeedCmd.Flags().IntP("count", "n", 100, "Number of tweets per page")
+	exportFeedCmd.Flags().IntP("pages", "p", 1, "Number of pages to fetch")
 	exportFeedCmd.Flags().String("filter", "", "Filter: all, top, score")
 
 	// Search export flags

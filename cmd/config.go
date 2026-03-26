@@ -29,9 +29,7 @@ var configCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(cfg)
-		} else {
+		output(cfg, func() {
 			cv := &display.ConfigValues{
 				DefaultCount:    cfg.DefaultCount,
 				DefaultAccount:  cfg.DefaultAccount,
@@ -40,7 +38,7 @@ var configCmd = &cobra.Command{
 				ShowTimestamps:  cfg.Display.ShowTimestamps,
 				MaxWidth:        cfg.Display.MaxWidth,
 				Delay:           cfg.Request.Delay,
-				Proxy:           cfg.Request.Proxy,
+				Proxy:           cfg.Network.Proxy,
 				Timeout:         cfg.Request.Timeout,
 				MaxRetries:      cfg.Request.MaxRetries,
 				LikesWeight:     cfg.Filter.LikesWeight,
@@ -50,7 +48,7 @@ var configCmd = &cobra.Command{
 				ViewsLogWeight:  cfg.Filter.ViewsLogWeight,
 			}
 			fmt.Println(display.FormatConfig(cv))
-		}
+		})
 	},
 }
 
@@ -65,9 +63,7 @@ var configShowCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(cfg)
-		} else {
+		output(cfg, func() {
 			cv := &display.ConfigValues{
 				DefaultCount:    cfg.DefaultCount,
 				DefaultAccount:  cfg.DefaultAccount,
@@ -76,7 +72,7 @@ var configShowCmd = &cobra.Command{
 				ShowTimestamps:  cfg.Display.ShowTimestamps,
 				MaxWidth:        cfg.Display.MaxWidth,
 				Delay:           cfg.Request.Delay,
-				Proxy:           cfg.Request.Proxy,
+				Proxy:           cfg.Network.Proxy,
 				Timeout:         cfg.Request.Timeout,
 				MaxRetries:      cfg.Request.MaxRetries,
 				LikesWeight:     cfg.Filter.LikesWeight,
@@ -86,7 +82,7 @@ var configShowCmd = &cobra.Command{
 				ViewsLogWeight:  cfg.Filter.ViewsLogWeight,
 			}
 			fmt.Println(display.FormatConfig(cv))
-		}
+		})
 	},
 }
 
@@ -113,11 +109,9 @@ var configGetCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(map[string]string{key: value})
-		} else {
+		output(map[string]string{key: value}, func() {
 			fmt.Println(value)
-		}
+		})
 	},
 }
 
@@ -128,21 +122,21 @@ var configSetCmd = &cobra.Command{
 	Long: `Set a configuration value.
 
 Available keys:
-  default_count        - Default number of tweets to fetch
-  default_account      - Default account to use
-  display.theme        - Display theme (default, dark, light)
-  display.show_engagement  - Show engagement stats (true/false)
-  display.show_timestamps  - Show timestamps (true/false)
-  display.max_width    - Maximum display width
-  request.delay        - Request delay in seconds
-  request.proxy        - Proxy URL
-  request.timeout      - Request timeout in seconds
-  request.max_retries  - Maximum retry attempts
-  filter.likes_weight      - Likes weight for scoring
-  filter.retweets_weight   - Retweets weight for scoring
-  filter.replies_weight    - Replies weight for scoring
-  filter.bookmarks_weight  - Bookmarks weight for scoring
-  filter.views_log_weight  - Views log weight for scoring`,
+  default_count           - Default number of tweets to fetch
+  default_account         - Default account to use
+  display.theme           - Display theme (default, dark, light)
+  display.show_engagement - Show engagement stats (true/false)
+  display.show_timestamps - Show timestamps (true/false)
+  display.max_width       - Maximum display width
+  request.delay           - Request delay in seconds
+  request.timeout         - Request timeout in seconds
+  request.max_retries     - Maximum retry attempts
+  network.proxy           - Proxy URL
+  filter.likes_weight     - Likes weight for scoring
+  filter.retweets_weight  - Retweets weight for scoring
+  filter.replies_weight   - Replies weight for scoring
+  filter.bookmarks_weight - Bookmarks weight for scoring
+  filter.views_log_weight - Views log weight for scoring`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg, err := core.LoadConfig()
@@ -166,11 +160,9 @@ Available keys:
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(map[string]string{"status": "ok", "key": key, "value": value})
-		} else {
+		output(map[string]string{"status": "ok", "key": key, "value": value}, func() {
 			fmt.Println(display.PrintSuccess(fmt.Sprintf("Set %s = %s", key, value)))
-		}
+		})
 	},
 }
 
@@ -198,11 +190,9 @@ var configResetCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(map[string]string{"status": "reset"})
-		} else {
+		output(map[string]string{"status": "reset"}, func() {
 			fmt.Println(display.PrintSuccess("Configuration reset to defaults"))
-		}
+		})
 	},
 }
 
@@ -217,11 +207,9 @@ var configPathCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(map[string]string{"path": path})
-		} else {
+		output(map[string]string{"path": path}, func() {
 			fmt.Println(path)
-		}
+		})
 	},
 }
 
@@ -295,8 +283,8 @@ func getConfigValue(cfg *core.Config, key string) string {
 		return strconv.Itoa(cfg.Display.MaxWidth)
 	case "request.delay":
 		return fmt.Sprintf("%.2f", cfg.Request.Delay)
-	case "request.proxy":
-		return cfg.Request.Proxy
+	case "network.proxy":
+		return cfg.Network.Proxy
 	case "request.timeout":
 		return strconv.Itoa(cfg.Request.Timeout)
 	case "request.max_retries":
@@ -352,8 +340,11 @@ func setConfigValue(cfg *core.Config, key, value string) error {
 			return fmt.Errorf("invalid float value")
 		}
 		cfg.Request.Delay = v
+	case "network.proxy":
+		cfg.Network.Proxy = value
 	case "request.proxy":
-		cfg.Request.Proxy = value
+		// Backwards compatibility
+		cfg.Network.Proxy = value
 	case "request.timeout":
 		v, err := strconv.Atoi(value)
 		if err != nil {
@@ -411,9 +402,9 @@ func printAvailableKeys() {
 		"display.show_timestamps",
 		"display.max_width",
 		"request.delay",
-		"request.proxy",
 		"request.timeout",
 		"request.max_retries",
+		"network.proxy",
 		"filter.likes_weight",
 		"filter.retweets_weight",
 		"filter.replies_weight",
