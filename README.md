@@ -1,6 +1,6 @@
 # xsh — Twitter/X CLI
 
-[![Go Version](https://img.shields.io/badge/go-1.25+-00ADD8?style=flat-square&logo=go)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8?style=flat-square&logo=go)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green?style=flat-square)](https://modelcontextprotocol.io/)
 
@@ -58,7 +58,7 @@ No API keys required — authenticates directly via browser cookies.
 
 ### Using `go install` (Recommended)
 
-Requires [Go 1.25+](https://go.dev/doc/install):
+Requires [Go 1.24+](https://go.dev/doc/install):
 
 ```bash
 go install github.com/benoitpetit/xsh@latest
@@ -682,7 +682,7 @@ core/
 
 ### Requirements
 
-- Go 1.25+
+- Go 1.24+
 - A Twitter/X account
 - A supported browser (for cookie extraction)
 
