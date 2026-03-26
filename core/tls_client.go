@@ -38,14 +38,15 @@ func DefaultTLSClientConfig() *TLSClientConfig {
 }
 
 // chromeClientHelloIDs maps Chrome versions to uTLS ClientHello IDs
+// All versions map to HelloChrome_120 for compatibility with utls v1.6.7
 var chromeClientHelloIDs = map[TLSFingerprintType]utls.ClientHelloID{
 	Chrome120: utls.HelloChrome_120,
 	Chrome123: utls.HelloChrome_120,
 	Chrome124: utls.HelloChrome_120,
 	Chrome126: utls.HelloChrome_120,
 	Chrome127: utls.HelloChrome_120,
-	Chrome131: utls.HelloChrome_131,
-	Chrome133: utls.HelloChrome_133,
+	Chrome131: utls.HelloChrome_120,
+	Chrome133: utls.HelloChrome_120,
 }
 
 // uTLSTransport is a custom http.RoundTripper that uses uTLS
@@ -54,7 +55,7 @@ type uTLSTransport struct {
 	tlsConfig     *utls.Config
 	proxy         string
 	dialer        *net.Dialer
-	
+
 	// http2Transport is used for HTTP/2 connections
 	http2Transport *http2.Transport
 }
@@ -169,7 +170,7 @@ func (t *uTLSTransport) dialProxy(ctx context.Context, addr, host string) (net.C
 func newUTLSHTTPClient(proxy string) (*http.Client, error) {
 	// Select a random Chrome version for rotation
 	chromeVersion := selectRandomChromeVersion()
-	
+
 	clientHelloID, ok := chromeClientHelloIDs[chromeVersion]
 	if !ok {
 		clientHelloID = utls.HelloChrome_120
@@ -254,22 +255,22 @@ func getChromeCipherSuites() []uint16 {
 // selectRandomChromeVersion returns a random Chrome version for rotation
 func selectRandomChromeVersion() TLSFingerprintType {
 	versions := []TLSFingerprintType{
-		Chrome131,
-		Chrome133,
 		Chrome127,
 		Chrome126,
+		Chrome124,
+		Chrome123,
 	}
 	return versions[rand.Intn(len(versions))]
 }
 
 // BestChromeTarget returns the best available Chrome target
 func BestChromeTarget() TLSFingerprintType {
-	return Chrome133
+	return Chrome127
 }
 
 // chromeTargetMutex protects the current target
 var chromeTargetMutex sync.RWMutex
-var currentChromeTarget TLSFingerprintType = Chrome133
+var currentChromeTarget TLSFingerprintType = Chrome127
 
 // SyncChromeVersion updates the global Chrome version for headers
 func SyncChromeVersion(version TLSFingerprintType) {
@@ -289,7 +290,7 @@ func GetCurrentChromeTarget() TLSFingerprintType {
 func GetUserAgentForVersion(version TLSFingerprintType) string {
 	ver := chromeVersionStrings[version]
 	if ver == "" {
-		ver = "133.0.0.0"
+		ver = "127.0.0.0"
 	}
 
 	var platform string
@@ -348,7 +349,7 @@ func GetSecChUa() string {
 	target := GetCurrentChromeTarget()
 	ver := chromeVersionStrings[target]
 	if ver == "" {
-		ver = "133.0.0.0"
+		ver = "127.0.0.0"
 	}
 	majorVer := ver[:3]
 	if majorVer[2] == '.' {
@@ -362,7 +363,7 @@ func GetSecChUaFullVersionList() string {
 	target := GetCurrentChromeTarget()
 	ver := chromeVersionStrings[target]
 	if ver == "" {
-		ver = "133.0.0.0"
+		ver = "127.0.0.0"
 	}
 	return fmt.Sprintf(`"Google Chrome";v="%s", "Chromium";v="%s", "Not.A/Brand";v="99.0.0.0"`, ver, ver)
 }
@@ -386,5 +387,3 @@ func GetAcceptLanguage() string {
 
 	return "en-US,en;q=0.9"
 }
-
-
