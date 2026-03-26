@@ -53,6 +53,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.24"
+          cache-dependency-path: core/go.sum
 
       - name: Build
         env:
@@ -60,9 +61,10 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           # Disable CGO for cross-compilation (all non-linux/amd64 targets)
           CGO_ENABLED: ${{ (matrix.goos == 'linux' && matrix.goarch == 'amd64') && '1' || '0' }}
+          GO111MODULE: on
         run: |
           output="xsh-${{ matrix.suffix }}"
-          go build -ldflags="-s -w -X github.com/benoitpetit/xsh/cmd.Version=${{ github.ref_name }}" -o "$output" main.go
+          go build -ldflags="-s -w -X github.com/benoitpetit/xsh/cmd.Version=${{ github.ref_name }}" -o "$output" .
 
           # Also create compressed archive as alternative
           if [[ "${{ matrix.goos }}" == "windows" ]]; then
