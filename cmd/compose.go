@@ -215,6 +215,7 @@ func postThread(tweets []string) {
 	client, err := getClient("")
 	if err != nil {
 		fmt.Println(display.PrintError(err.Error()))
+		os.Exit(core.ExitAuthError)
 		return
 	}
 	defer client.Close()

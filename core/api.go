@@ -20,9 +20,10 @@ func extractTweetsFromTimeline(data map[string]interface{}) *models.TimelineResp
 		instType := getString(instruction, "type")
 
 		var entries []interface{}
-		if instType == "TimelineAddEntries" {
+		switch instType {
+		case "TimelineAddEntries":
 			entries, _ = instruction["entries"].([]interface{})
-		} else if instType == "TimelineAddToModule" {
+		case "TimelineAddToModule":
 			entries, _ = instruction["moduleItems"].([]interface{})
 		}
 
@@ -150,7 +151,7 @@ func GetHomeTimeline(client *XClient, timelineType string, count int, cursor str
 	}
 
 	variables := map[string]interface{}{
-		"count":                count,
+		"count":                  count,
 		"includePromotedContent": false,
 		"latestControlAvailable": true,
 	}
@@ -198,7 +199,7 @@ func GetTweetDetail(client *XClient, tweetID string, count int) ([]*models.Tweet
 	}
 
 	var tweets []*models.Tweet
-	
+
 	if dataData, ok := data["data"].(map[string]interface{}); ok {
 		if conversation, ok := dataData["threaded_conversation_with_injections_v2"].(map[string]interface{}); ok {
 			if instructions, ok := conversation["instructions"].([]interface{}); ok {
@@ -273,7 +274,7 @@ func SearchTweets(client *XClient, query, searchType string, count int, cursor s
 // GetUserByHandle fetches user profile by screen name
 func GetUserByHandle(client *XClient, handle string) (*models.User, error) {
 	variables := map[string]interface{}{
-		"screen_name":            handle,
+		"screen_name":              handle,
 		"withSafetyModeUserFields": true,
 	}
 
@@ -304,12 +305,12 @@ func GetUserTweets(client *XClient, userID string, count int, cursor string, inc
 	}
 
 	variables := map[string]interface{}{
-		"userId":                 userID,
-		"count":                  count,
-		"includePromotedContent": false,
+		"userId":                                 userID,
+		"count":                                  count,
+		"includePromotedContent":                 false,
 		"withQuickPromoteEligibilityTweetFields": false,
-		"withVoice":              true,
-		"withV2Timeline":         true,
+		"withVoice":                              true,
+		"withV2Timeline":                         true,
 	}
 	if cursor != "" {
 		variables["cursor"] = cursor
@@ -467,7 +468,7 @@ func CreateTweet(client *XClient, text, replyToID, quoteTweetURL string, mediaID
 		})
 	}
 	variables["media"] = map[string]interface{}{
-		"media_entities":   mediaEntities,
+		"media_entities":     mediaEntities,
 		"possibly_sensitive": false,
 	}
 
@@ -654,9 +655,9 @@ func GetTrends(client *XClient, woeid int) ([]*models.Trend, error) {
 	}
 
 	variables := map[string]interface{}{
-		"count":                20,
+		"count":                    20,
 		"includePageConfiguration": true,
-		"includePromotedContent": true,
+		"includePromotedContent":   true,
 	}
 
 	data, err := client.GraphQLGet("Trends", variables)
@@ -667,7 +668,7 @@ func GetTrends(client *XClient, woeid int) ([]*models.Trend, error) {
 
 	// Parse trends from response
 	var trends []*models.Trend
-	
+
 	// Try to extract trends from various API response formats
 	if timeline, ok := data["data"].(map[string]interface{}); ok {
 		if trendsData, ok := timeline["trends"].(map[string]interface{}); ok {
@@ -736,20 +737,6 @@ func getMockTrends() []*models.Trend {
 		{Name: "#Linux", Query: "#Linux", TweetVolume: 15000, Rank: 9},
 		{Name: "#Docker", Query: "#Docker", TweetVolume: 12000, Rank: 10},
 	}
-}
-
-// UploadMedia uploads media to Twitter/X and returns media ID
-// This is the first step before attaching media to a tweet
-func UploadMedia(client *XClient, mediaData []byte, mediaType string) (string, error) {
-	// This would require the upload API endpoint
-	// For now, return error indicating not implemented
-	return "", fmt.Errorf("media upload not yet implemented - use media_ids from existing media")
-}
-
-// GetNotifications fetches user notifications
-func GetNotifications(client *XClient, count int, cursor string) (*models.TimelineResponse, error) {
-	// This would require the notifications API endpoint
-	return nil, fmt.Errorf("notifications not yet implemented")
 }
 
 func getString(m map[string]interface{}, key string) string {

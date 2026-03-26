@@ -6,15 +6,19 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
+	"github.com/benoitpetit/xsh/models"
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var (
 	// Global flags
-	jsonOutput bool
-	account    string
-	verbose    bool
+	jsonOutput  bool
+	yamlOutput  bool
+	compactMode bool
+	account     string
+	verbose     bool
 )
 
 const logo = `
@@ -33,7 +37,7 @@ No API keys required. Just log in with your browser, and you're in.
 Works for humans (rich terminal output) and AI agents (structured JSON).
 
 Get started:
-  xsh login                    # Authenticate with your browser cookies
+  xsh auth login               # Authenticate with your browser cookies
   xsh feed                     # View your timeline
   xsh tweet view <id>          # View a specific tweet
   xsh search "golang"          # Search for tweets
@@ -59,6 +63,8 @@ func Execute() {
 func init() {
 	// Global flags
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
+	rootCmd.PersistentFlags().BoolVar(&yamlOutput, "yaml", false, "Output as YAML")
+	rootCmd.PersistentFlags().BoolVarP(&compactMode, "compact", "c", false, "Compact output for AI agents (essential fields only)")
 	rootCmd.PersistentFlags().StringVar(&account, "account", "", "Account name to use")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output (show HTTP requests)")
 }
@@ -68,15 +74,28 @@ func isJSONMode() bool {
 	if jsonOutput {
 		return true
 	}
-	// Auto-detect pipe/redirect like Python
-	stat, _ := os.Stdout.Stat()
-	return (stat.Mode() & os.ModeCharDevice) == 0
+	// Auto-detect pipe/redirect like Python (but only if yaml/compact are not explicitly set)
+	if !yamlOutput && !compactMode {
+		stat, _ := os.Stdout.Stat()
+		return (stat.Mode() & os.ModeCharDevice) == 0
+	}
+	return false
+}
+
+// isYAMLMode determines if output should be YAML
+func isYAMLMode() bool {
+	return yamlOutput
+}
+
+// isCompactMode determines if output should be compact (for AI agents)
+func isCompactMode() bool {
+	return compactMode
 }
 
 // outputJSON prints data as JSON
 func outputJSON(data interface{}) {
 	var output interface{}
-	
+
 	switch v := data.(type) {
 	case *core.AuthCredentials:
 		output = map[string]interface{}{
@@ -93,10 +112,114 @@ func outputJSON(data interface{}) {
 	encoder.Encode(output)
 }
 
+// outputYAML prints data as YAML
+func outputYAML(data interface{}) {
+	var output interface{}
+
+	switch v := data.(type) {
+	case *core.AuthCredentials:
+		output = map[string]interface{}{
+			"auth_token": v.AuthToken[:8] + "...",
+			"ct0":        v.Ct0[:8] + "...",
+			"account":    v.AccountName,
+		}
+	default:
+		output = data
+	}
+
+	yamlData, err := yaml.Marshal(output)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshaling YAML: %v\n", err)
+		return
+	}
+	os.Stdout.Write(yamlData)
+}
+
 // getClient creates an XClient with error handling
 func getClient(acc string) (*core.XClient, error) {
 	if acc == "" {
 		acc = account
 	}
-	return core.NewXClient(nil, acc, "")
+	
+	// Load config to get proxy settings
+	cfg, err := core.LoadConfig()
+	if err != nil {
+		cfg = core.DefaultConfig()
+	}
+	
+	return core.NewXClient(nil, acc, cfg.Network.Proxy)
+}
+
+// output handles output in the appropriate format (YAML, JSON, Compact, or human-readable)
+// humanOutput should be a function that prints human-readable output
+func output(data interface{}, humanOutput func()) {
+	if isCompactMode() {
+		outputCompact(data)
+	} else if isYAMLMode() {
+		outputYAML(data)
+	} else if isJSONMode() {
+		outputJSON(data)
+	} else {
+		humanOutput()
+	}
+}
+
+// outputCompact prints minimal data for AI agents (compact JSON with essential fields)
+func outputCompact(data interface{}) {
+	compact := toCompact(data)
+	outputJSON(compact)
+}
+
+// toCompact converts data to compact format with only essential fields
+func toCompact(data interface{}) interface{} {
+	switch v := data.(type) {
+	case []*models.Tweet:
+		var result []map[string]interface{}
+		for _, t := range v {
+			result = append(result, map[string]interface{}{
+				"id":       t.ID,
+				"text":     t.Text,
+				"author":   t.AuthorHandle,
+				"created":  t.CreatedAt,
+				"likes":    t.Engagement.Likes,
+				"retweets": t.Engagement.Retweets,
+				"replies":  t.Engagement.Replies,
+			})
+		}
+		return result
+	case *models.Tweet:
+		return map[string]interface{}{
+			"id":       v.ID,
+			"text":     v.Text,
+			"author":   v.AuthorHandle,
+			"created":  v.CreatedAt,
+			"likes":    v.Engagement.Likes,
+			"retweets": v.Engagement.Retweets,
+			"replies":  v.Engagement.Replies,
+		}
+	case []*models.User:
+		var result []map[string]interface{}
+		for _, u := range v {
+			result = append(result, map[string]interface{}{
+				"id":        u.ID,
+				"handle":    u.Handle,
+				"name":      u.Name,
+				"followers": u.FollowersCount,
+				"following": u.FollowingCount,
+			})
+		}
+		return result
+	case *models.User:
+		return map[string]interface{}{
+			"id":        v.ID,
+			"handle":    v.Handle,
+			"name":      v.Name,
+			"bio":       v.Bio,
+			"followers": v.FollowersCount,
+			"following": v.FollowingCount,
+			"verified":  v.Verified,
+		}
+	default:
+		return data
+	}
 }

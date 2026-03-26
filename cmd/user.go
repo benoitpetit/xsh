@@ -56,11 +56,9 @@ Use subcommands for specific actions:
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(user)
-		} else {
+		output(user, func() {
 			fmt.Println(display.FormatUser(user))
-		}
+		})
 	},
 }
 
@@ -104,11 +102,9 @@ var userTweetsCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(response.Tweets)
-		} else {
+		output(response.Tweets, func() {
 			fmt.Println(display.FormatTweetList(response.Tweets))
-		}
+		})
 	},
 }
 
@@ -152,11 +148,9 @@ var userLikesCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(response.Tweets)
-		} else {
+		output(response.Tweets, func() {
 			fmt.Println(display.FormatTweetList(response.Tweets))
-		}
+		})
 	},
 }
 
@@ -200,11 +194,9 @@ var userFollowersCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(users)
-		} else {
+		output(users, func() {
 			fmt.Println(display.FormatUserList(users))
-		}
+		})
 	},
 }
 
@@ -248,11 +240,9 @@ var userFollowingCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(users)
-		} else {
+		output(users, func() {
 			fmt.Println(display.FormatUserList(users))
-		}
+		})
 	},
 }
 

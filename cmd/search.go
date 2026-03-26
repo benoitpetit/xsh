@@ -25,7 +25,7 @@ var searchCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Sanitize search query (max 500 chars for Twitter search)
-		query := utils.SanitizeInput(args[0], 500)
+		query := utils.SanitizeInputWithMaxLength(args[0], 500)
 		if query == "" {
 			fmt.Println(display.PrintError("Search query cannot be empty"))
 			os.Exit(core.ExitError)
@@ -66,7 +66,9 @@ var searchCmd = &cobra.Command{
 			}
 		}
 
-		if isJSONMode() {
+		if isYAMLMode() {
+			outputYAML(allTweets)
+		} else if isJSONMode() {
 			outputJSON(allTweets)
 		} else {
 			fmt.Println(display.FormatTweetList(allTweets))

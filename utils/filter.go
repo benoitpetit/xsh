@@ -1,166 +1,82 @@
+// Package utils provides helper utilities.
 package utils
 
 import (
 	"math"
-	"regexp"
 	"sort"
 	"strings"
-	"unicode/utf8"
+	"time"
 
 	"github.com/benoitpetit/xsh/models"
 )
 
-// TwitterHandleRegex matches valid Twitter handles
-// Rules: 1-15 chars, alphanumeric + underscore, no spaces, must start with letter or underscore
-var twitterHandleRegex = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,14}$`)
-
-// ValidateTwitterHandle validates a Twitter handle
-// Returns the cleaned handle and true if valid, false otherwise
-func ValidateTwitterHandle(handle string) (string, bool) {
-	// Remove @ prefix if present
-	handle = strings.TrimPrefix(handle, "@")
-	
-	// Check basic constraints
-	if handle == "" {
-		return "", false
-	}
-	
-	// Check length (Twitter allows 1-15 characters)
-	if utf8.RuneCountInString(handle) > 15 {
-		return "", false
-	}
-	
-	// Check against regex
-	if !twitterHandleRegex.MatchString(handle) {
-		return "", false
-	}
-	
-	return handle, true
-}
-
-// TweetIDRegex matches valid Twitter tweet IDs (numeric strings)
-var TweetIDRegex = regexp.MustCompile(`^[0-9]+$`)
-
-// ValidateTweetID validates a tweet ID
-func ValidateTweetID(id string) bool {
-	if id == "" {
-		return false
-	}
-	// Tweet IDs are numeric and typically 19 digits
-	if !TweetIDRegex.MatchString(id) {
-		return false
-	}
-	// Check reasonable length (min 10, max 25 digits)
-	if len(id) < 10 || len(id) > 25 {
-		return false
-	}
-	return true
-}
-
-// ValidateTweetText validates tweet text length
-// Twitter allows 280 characters for standard tweets, 4000 for Twitter Blue
-func ValidateTweetText(text string, maxLength int) (string, bool) {
-	if maxLength <= 0 {
-		maxLength = 280 // Standard tweet limit
-	}
-	
-	// Check if empty
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return "", false
-	}
-	
-	// Check length (count runes for Unicode)
-	if utf8.RuneCountInString(text) > maxLength {
-		return "", false
-	}
-	
-	// Remove null bytes and control characters except newlines
-	var result strings.Builder
-	for _, r := range text {
-		if r == 0 {
-			continue
-		}
-		if r < 32 && r != '\n' && r != '\r' && r != '\t' {
-			continue
-		}
-		result.WriteRune(r)
-	}
-	
-	return result.String(), true
-}
-
-// SanitizeInput removes potentially dangerous characters from user input
-func SanitizeInput(input string, maxLength int) string {
-	if maxLength <= 0 {
-		maxLength = 1000
-	}
-	
-	// Trim whitespace
-	input = strings.TrimSpace(input)
-	
-	// Limit length
-	if len(input) > maxLength {
-		input = input[:maxLength]
-	}
-	
-	// Remove null bytes and control characters
-	var result strings.Builder
-	for _, r := range input {
-		if r >= 32 || r == '\t' || r == '\n' || r == '\r' {
-			result.WriteRune(r)
-		}
-	}
-	
-	return result.String()
-}
-
-// FilterConfig contains filter settings for tweet scoring
+// FilterConfig holds configuration for tweet filtering and scoring
 type FilterConfig struct {
-	LikesWeight      float64
-	RetweetsWeight   float64
-	RepliesWeight    float64
-	BookmarksWeight  float64
-	ViewsLogWeight   float64
+	LikesWeight     float64
+	RetweetsWeight  float64
+	RepliesWeight   float64
+	BookmarksWeight float64
+	ViewsLogWeight  float64
+	MinScore        float64
 }
 
-// DefaultFilterConfig returns the default filter configuration
-func DefaultFilterConfig() *FilterConfig {
-	return &FilterConfig{
+// DefaultFilterConfig returns default filter configuration
+func DefaultFilterConfig() FilterConfig {
+	return FilterConfig{
 		LikesWeight:     1.0,
 		RetweetsWeight:  1.5,
 		RepliesWeight:   0.5,
 		BookmarksWeight: 2.0,
 		ViewsLogWeight:  0.3,
+		MinScore:        0,
 	}
 }
 
 // ScoreTweet calculates engagement score for a tweet
-func ScoreTweet(tweet *models.Tweet, config *FilterConfig) float64 {
-	if config == nil {
-		config = DefaultFilterConfig()
+func ScoreTweet(tweet *models.Tweet, cfg *FilterConfig) float64 {
+	if cfg == nil {
+		default_ := DefaultFilterConfig()
+		cfg = &default_
 	}
 
-	e := tweet.Engagement
-	viewsLog := 0.0
-	if e.Views > 0 {
-		viewsLog = math.Log10(float64(e.Views) + 1)
-	}
+	// Calculate log10 of views (add 1 to avoid log(0))
+	viewsLog := math.Log10(float64(tweet.Engagement.Views) + 1)
 
-	return config.LikesWeight*float64(e.Likes) +
-		config.RetweetsWeight*float64(e.Retweets) +
-		config.RepliesWeight*float64(e.Replies) +
-		config.BookmarksWeight*float64(e.Bookmarks) +
-		config.ViewsLogWeight*viewsLog
+	score := cfg.LikesWeight*float64(tweet.Engagement.Likes) +
+		cfg.RetweetsWeight*float64(tweet.Engagement.Retweets) +
+		cfg.RepliesWeight*float64(tweet.Engagement.Replies) +
+		cfg.BookmarksWeight*float64(tweet.Engagement.Bookmarks) +
+		cfg.ViewsLogWeight*viewsLog
+
+	return score
 }
 
-// FilterTweets filters and sorts tweets by engagement score
-// Modes:
-//   - "all": Sort by score, no filtering
-//   - "score": Keep tweets above threshold
-//   - "top": Keep top N tweets
-func FilterTweets(tweets []*models.Tweet, mode string, threshold float64, topN int, config *FilterConfig) []*models.Tweet {
-	// Score all tweets
+// FilterMode defines filtering behavior
+type FilterMode string
+
+const (
+	// FilterModeAll returns all tweets sorted by score
+	FilterModeAll FilterMode = "all"
+	// FilterModeTop returns top N tweets by score
+	FilterModeTop FilterMode = "top"
+	// FilterModeScore returns tweets above threshold
+	FilterModeScore FilterMode = "score"
+)
+
+// FilterTweets filters and sorts tweets based on engagement score.
+// mode is one of "all", "top", "score". minScore is used for score mode,
+// limit is used for top mode. cfg may be nil to use defaults.
+func FilterTweets(tweets []*models.Tweet, mode string, minScore float64, limit int, cfg *FilterConfig) []*models.Tweet {
+	if len(tweets) == 0 {
+		return tweets
+	}
+
+	if cfg == nil {
+		default_ := DefaultFilterConfig()
+		cfg = &default_
+	}
+
+	// Calculate scores and store with tweets
 	type scoredTweet struct {
 		tweet *models.Tweet
 		score float64
@@ -168,10 +84,8 @@ func FilterTweets(tweets []*models.Tweet, mode string, threshold float64, topN i
 
 	scored := make([]scoredTweet, 0, len(tweets))
 	for _, tweet := range tweets {
-		scored = append(scored, scoredTweet{
-			tweet: tweet,
-			score: ScoreTweet(tweet, config),
-		})
+		score := ScoreTweet(tweet, cfg)
+		scored = append(scored, scoredTweet{tweet, score})
 	}
 
 	// Sort by score descending
@@ -179,20 +93,20 @@ func FilterTweets(tweets []*models.Tweet, mode string, threshold float64, topN i
 		return scored[i].score > scored[j].score
 	})
 
-	// Apply filter
-	switch mode {
-	case "score":
+	// Apply filtering based on mode
+	switch strings.ToLower(mode) {
+	case string(FilterModeTop):
+		if limit > 0 && limit < len(scored) {
+			scored = scored[:limit]
+		}
+	case string(FilterModeScore):
 		filtered := make([]scoredTweet, 0)
 		for _, s := range scored {
-			if s.score >= threshold {
+			if s.score >= minScore {
 				filtered = append(filtered, s)
 			}
 		}
 		scored = filtered
-	case "top":
-		if topN < len(scored) {
-			scored = scored[:topN]
-		}
 	}
 
 	// Extract tweets
@@ -202,4 +116,162 @@ func FilterTweets(tweets []*models.Tweet, mode string, threshold float64, topN i
 	}
 
 	return result
+}
+
+// SortTweetsByDate sorts tweets by creation date (newest first)
+func SortTweetsByDate(tweets []*models.Tweet) {
+	sort.Slice(tweets, func(i, j int) bool {
+		if tweets[i].CreatedAt == nil || tweets[j].CreatedAt == nil {
+			return tweets[i].CreatedAt != nil
+		}
+		return tweets[i].CreatedAt.After(*tweets[j].CreatedAt)
+	})
+}
+
+// SortTweetsByEngagement sorts tweets by total engagement
+func SortTweetsByEngagement(tweets []*models.Tweet) {
+	sort.Slice(tweets, func(i, j int) bool {
+		ei := tweets[i].Engagement.Likes + tweets[i].Engagement.Retweets + tweets[i].Engagement.Replies
+		ej := tweets[j].Engagement.Likes + tweets[j].Engagement.Retweets + tweets[j].Engagement.Replies
+		return ei > ej
+	})
+}
+
+// GetTopTweets returns the top N tweets by engagement score
+func GetTopTweets(tweets []*models.Tweet, n int) []*models.Tweet {
+	return FilterTweets(tweets, string(FilterModeTop), 0, n, nil)
+}
+
+// GetTopTweetsByViews returns top tweets by views
+func GetTopTweetsByViews(tweets []*models.Tweet, n int) []*models.Tweet {
+	sorted := make([]*models.Tweet, len(tweets))
+	copy(sorted, tweets)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Engagement.Views > sorted[j].Engagement.Views
+	})
+
+	if n > 0 && n < len(sorted) {
+		return sorted[:n]
+	}
+	return sorted
+}
+
+// GetTopTweetsByBookmarks returns top tweets by bookmarks
+func GetTopTweetsByBookmarks(tweets []*models.Tweet, n int) []*models.Tweet {
+	sorted := make([]*models.Tweet, len(tweets))
+	copy(sorted, tweets)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Engagement.Bookmarks > sorted[j].Engagement.Bookmarks
+	})
+
+	if n > 0 && n < len(sorted) {
+		return sorted[:n]
+	}
+	return sorted
+}
+
+// FilterTweetsByTime filters tweets by time range
+func FilterTweetsByTime(tweets []*models.Tweet, since, until time.Time) []*models.Tweet {
+	var result []*models.Tweet
+	for _, tweet := range tweets {
+		if !tweet.CreatedAt.Before(since) && !tweet.CreatedAt.After(until) {
+			result = append(result, tweet)
+		}
+	}
+	return result
+}
+
+// FilterTweetsByAuthor filters tweets by author handle
+func FilterTweetsByAuthor(tweets []*models.Tweet, handle string) []*models.Tweet {
+	handle = SanitizeHandle(handle)
+	var result []*models.Tweet
+	for _, tweet := range tweets {
+		if SanitizeHandle(tweet.AuthorHandle) == handle {
+			result = append(result, tweet)
+		}
+	}
+	return result
+}
+
+// FilterTweetsByMedia filters tweets by media presence
+func FilterTweetsByMedia(tweets []*models.Tweet, hasMedia bool) []*models.Tweet {
+	var result []*models.Tweet
+	for _, tweet := range tweets {
+		if (len(tweet.Media) > 0) == hasMedia {
+			result = append(result, tweet)
+		}
+	}
+	return result
+}
+
+// FilterTweetsByText filters tweets containing text (case-insensitive)
+func FilterTweetsByText(tweets []*models.Tweet, query string) []*models.Tweet {
+	if query == "" {
+		return tweets
+	}
+	query = SanitizeInput(query)
+	var result []*models.Tweet
+	for _, tweet := range tweets {
+		if strings.Contains(strings.ToLower(tweet.Text), strings.ToLower(query)) {
+			result = append(result, tweet)
+		}
+	}
+	return result
+}
+
+// CalculateStats calculates statistics for a slice of tweets
+func CalculateStats(tweets []*models.Tweet) map[string]interface{} {
+	if len(tweets) == 0 {
+		return map[string]interface{}{
+			"count":          0,
+			"total_likes":    0,
+			"total_retweets": 0,
+			"total_replies":  0,
+			"avg_engagement": 0.0,
+		}
+	}
+
+	var totalLikes, totalRetweets, totalReplies, totalViews int
+	for _, tweet := range tweets {
+		totalLikes += tweet.Engagement.Likes
+		totalRetweets += tweet.Engagement.Retweets
+		totalReplies += tweet.Engagement.Replies
+		totalViews += tweet.Engagement.Views
+	}
+
+	count := float64(len(tweets))
+	return map[string]interface{}{
+		"count":          len(tweets),
+		"total_likes":    totalLikes,
+		"total_retweets": totalRetweets,
+		"total_replies":  totalReplies,
+		"total_views":    totalViews,
+		"avg_likes":      float64(totalLikes) / count,
+		"avg_retweets":   float64(totalRetweets) / count,
+		"avg_replies":    float64(totalReplies) / count,
+		"avg_views":      float64(totalViews) / count,
+	}
+}
+
+// CalculateEngagementRate calculates engagement rate for a tweet
+func CalculateEngagementRate(tweet *models.Tweet) float64 {
+	if tweet.Engagement.Views == 0 {
+		return 0
+	}
+	total := tweet.Engagement.Likes + tweet.Engagement.Retweets + tweet.Engagement.Replies
+	return float64(total) / float64(tweet.Engagement.Views) * 100
+}
+
+// CalculateAverageEngagementRate calculates average engagement rate for tweets
+func CalculateAverageEngagementRate(tweets []*models.Tweet) float64 {
+	if len(tweets) == 0 {
+		return 0
+	}
+	var total float64
+	for _, tweet := range tweets {
+		total += CalculateEngagementRate(tweet)
+	}
+	return total / float64(len(tweets))
 }

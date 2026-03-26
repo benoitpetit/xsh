@@ -31,11 +31,9 @@ var authStatusCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		creds, err := core.GetCredentials(account)
 		if err != nil {
-			if isJSONMode() {
-				outputJSON(map[string]bool{"authenticated": false})
-			} else {
+			output(map[string]bool{"authenticated": false}, func() {
 				fmt.Println(display.PrintError("Not authenticated"))
-			}
+			})
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -47,14 +45,12 @@ var authStatusCmd = &cobra.Command{
 			"account":       creds.AccountName,
 		}
 
-		if isJSONMode() {
-			outputJSON(info)
-		} else {
+		output(info, func() {
 			fmt.Println(display.PrintSuccess(fmt.Sprintf("Authenticated (token: %s)", info["auth_token"])))
 			if creds.AccountName != "" {
 				fmt.Printf("  Account: %s\n", creds.AccountName)
 			}
-		}
+		})
 	},
 }
 
@@ -274,9 +270,7 @@ var authAccountsCmd = &cobra.Command{
 			accounts = []string{}
 		}
 
-		if isJSONMode() {
-			outputJSON(map[string]interface{}{"accounts": accounts})
-		} else {
+		output(map[string]interface{}{"accounts": accounts}, func() {
 			if len(accounts) == 0 {
 				fmt.Println(display.PrintWarning("No accounts stored"))
 			} else {
@@ -284,7 +278,7 @@ var authAccountsCmd = &cobra.Command{
 					fmt.Printf("  %s\n", acc)
 				}
 			}
-		}
+		})
 	},
 }
 
@@ -363,20 +357,18 @@ var authWhoamiCmd = &cobra.Command{
 			return
 		}
 
-		if isJSONMode() {
-			outputJSON(map[string]interface{}{
-				"authenticated": true,
-				"account":       creds.AccountName,
-				"auth_token":    creds.AuthToken[:8] + "...",
-			})
-		} else {
+		output(map[string]interface{}{
+			"authenticated": true,
+			"account":       creds.AccountName,
+			"auth_token":    creds.AuthToken[:8] + "...",
+		}, func() {
 			fmt.Println(display.PrintSuccess("Authenticated"))
 			fmt.Printf("  Account: %s\n", creds.AccountName)
 			fmt.Printf("  Token: %s...\n", creds.AuthToken[:8])
 			if len(response.Tweets) > 0 {
 				fmt.Printf("  API Status: OK (timeline accessible)\n")
 			}
-		}
+		})
 	},
 }
 

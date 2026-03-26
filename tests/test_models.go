@@ -39,13 +39,13 @@ func TestTweetFromAPIResult(t *testing.T) {
 	result := map[string]interface{}{
 		"rest_id": "123456",
 		"legacy": map[string]interface{}{
-			"full_text":           "Test tweet content",
-			"created_at":          "Mon Jan 01 12:00:00 +0000 2024",
-			"favorite_count":      100.0,
-			"retweet_count":       50.0,
-			"reply_count":         25.0,
-			"quote_count":         10.0,
-			"bookmark_count":      5.0,
+			"full_text":                 "Test tweet content",
+			"created_at":                "Mon Jan 01 12:00:00 +0000 2024",
+			"favorite_count":            100.0,
+			"retweet_count":             50.0,
+			"reply_count":               25.0,
+			"quote_count":               10.0,
+			"bookmark_count":            5.0,
 			"in_reply_to_status_id_str": "",
 			"in_reply_to_screen_name":   "",
 			"conversation_id_str":       "123456",
@@ -54,7 +54,7 @@ func TestTweetFromAPIResult(t *testing.T) {
 		"core": map[string]interface{}{
 			"user_results": map[string]interface{}{
 				"result": map[string]interface{}{
-					"rest_id":         "789",
+					"rest_id":          "789",
 					"is_blue_verified": true,
 					"legacy": map[string]interface{}{
 						"name":        "Test User",
@@ -129,7 +129,7 @@ func TestTweetFromAPIResultRetweet(t *testing.T) {
 					"core": map[string]interface{}{
 						"user_results": map[string]interface{}{
 							"result": map[string]interface{}{
-								"rest_id":         "original_user",
+								"rest_id":          "original_user",
 								"is_blue_verified": false,
 								"legacy": map[string]interface{}{
 									"name":        "Original Author",
@@ -177,18 +177,18 @@ func TestTweetFromAPIResultRetweet(t *testing.T) {
 // TestUserFromAPIResult teste le parsing d'un utilisateur depuis l'API
 func TestUserFromAPIResult(t *testing.T) {
 	result := map[string]interface{}{
-		"rest_id": "123",
+		"rest_id":          "123",
 		"is_blue_verified": true,
 		"legacy": map[string]interface{}{
-			"name":              "Test User",
-			"screen_name":       "testuser",
-			"description":       "Test bio",
-			"location":          "Test Location",
-			"followers_count":   1000.0,
-			"friends_count":     500.0,
-			"statuses_count":    10000.0,
-			"listed_count":      50.0,
-			"created_at":        "Mon Jan 01 00:00:00 +0000 2020",
+			"name":                    "Test User",
+			"screen_name":             "testuser",
+			"description":             "Test bio",
+			"location":                "Test Location",
+			"followers_count":         1000.0,
+			"friends_count":           500.0,
+			"statuses_count":          10000.0,
+			"listed_count":            50.0,
+			"created_at":              "Mon Jan 01 00:00:00 +0000 2020",
 			"profile_image_url_https": "https://example.com/normal.jpg",
 			"profile_banner_url":      "https://example.com/banner.jpg",
 			"pinned_tweet_ids_str":    []interface{}{"456"},
@@ -269,6 +269,10 @@ func TestTimelineResponse(t *testing.T) {
 		t.Errorf("CursorTop = %v, want 'top_cursor'", response.CursorTop)
 	}
 
+	if response.CursorBottom != "bottom_cursor" {
+		t.Errorf("CursorBottom = %v, want 'bottom_cursor'", response.CursorBottom)
+	}
+
 	if !response.HasMore {
 		t.Error("HasMore should be true")
 	}
@@ -290,6 +294,14 @@ func TestTweetMedia(t *testing.T) {
 	if media.URL != "https://example.com/image.jpg" {
 		t.Errorf("URL = %v, want image URL", media.URL)
 	}
+
+	if media.PreviewURL != "https://example.com/preview.jpg" {
+		t.Errorf("PreviewURL = %v, want preview URL", media.PreviewURL)
+	}
+
+	if media.AltText != "Test image" {
+		t.Errorf("AltText = %v, want 'Test image'", media.AltText)
+	}
 }
 
 // TestTweetEngagement teste la structure TweetEngagement
@@ -305,6 +317,22 @@ func TestTweetEngagement(t *testing.T) {
 
 	if engagement.Likes != 100 {
 		t.Errorf("Likes = %v, want 100", engagement.Likes)
+	}
+
+	if engagement.Retweets != 50 {
+		t.Errorf("Retweets = %v, want 50", engagement.Retweets)
+	}
+
+	if engagement.Replies != 25 {
+		t.Errorf("Replies = %v, want 25", engagement.Replies)
+	}
+
+	if engagement.Quotes != 10 {
+		t.Errorf("Quotes = %v, want 10", engagement.Quotes)
+	}
+
+	if engagement.Bookmarks != 5 {
+		t.Errorf("Bookmarks = %v, want 5", engagement.Bookmarks)
 	}
 
 	if engagement.Views != 1000 {
@@ -323,6 +351,14 @@ func TestTweetWithTime(t *testing.T) {
 
 	if tweet.CreatedAt == nil {
 		t.Error("CreatedAt should not be nil")
+	}
+
+	if tweet.ID != "123" {
+		t.Errorf("ID = %v, want '123'", tweet.ID)
+	}
+
+	if tweet.Text != "Test" {
+		t.Errorf("Text = %v, want 'Test'", tweet.Text)
 	}
 
 	if !tweet.CreatedAt.Equal(now) {
@@ -345,6 +381,14 @@ func TestQuotedTweet(t *testing.T) {
 
 	if tweet.QuotedTweet == nil {
 		t.Fatal("QuotedTweet should not be nil")
+	}
+
+	if tweet.ID != "123" {
+		t.Errorf("ID = %v, want '123'", tweet.ID)
+	}
+
+	if tweet.Text != "Tweet with quote" {
+		t.Errorf("Text = %v, want 'Tweet with quote'", tweet.Text)
 	}
 
 	if tweet.QuotedTweet.ID != "quoted123" {
