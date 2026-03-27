@@ -1,6 +1,6 @@
 #
 # install.ps1 - Script d'installation de xsh pour Windows (PowerShell)
-# Usage: iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/main/core/scripts/install.ps1 | iex
+# Usage: iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/master/core/scripts/install.ps1 | iex
 #
 # Ce script télécharge et installe xsh automatiquement sur Windows
 #
@@ -21,16 +21,16 @@ function Write-Warning { param($Message) Write-Host "⚠️  $Message" -Foregrou
 # Détection de l'OS et architecture
 function Detect-Platform {
     $arch = $env:PROCESSOR_ARCHITECTURE
-    
+
     switch ($arch) {
         "AMD64" { $script:Arch = "amd64" }
         "ARM64" { $script:Arch = "arm64" }
-        default { 
+        default {
             Write-Error "Architecture non supportée: $arch"
             exit 1
         }
     }
-    
+
     Write-Info "Plateforme détectée: windows-$script:Arch"
 }
 
@@ -47,7 +47,7 @@ function Check-Dependencies {
 # Récupération de la dernière version
 function Get-LatestVersion {
     Write-Info "Récupération de la dernière release..."
-    
+
     try {
         $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -TimeoutSec 10
         $script:Version = $release.tag_name
@@ -62,29 +62,29 @@ function Get-LatestVersion {
 function Install-xsh {
     $assetName = "xsh-windows-$script:Arch.exe"
     $downloadUrl = "https://github.com/$Repo/releases/download/$script:Version/$assetName"
-    
+
     Write-Info "Téléchargement depuis: $downloadUrl"
-    
+
     # Créer le répertoire d'installation
     if (!(Test-Path $InstallDir)) {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
-    
+
     $tempFile = "$env:TEMP\$BinaryName"
-    
+
     try {
         Invoke-WebRequest -Uri $downloadUrl -OutFile $tempFile -TimeoutSec 60
     } catch {
         Write-Error "Échec du téléchargement: $_"
         exit 1
     }
-    
+
     # Déplacer vers le répertoire d'installation
     $installPath = "$InstallDir\$BinaryName"
     Move-Item -Path $tempFile -Destination $installPath -Force
-    
+
     Write-Success "xsh installé dans $installPath"
-    
+
     # Vérifier si le répertoire est dans le PATH
     $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
     if ($userPath -notlike "*$InstallDir*") {
