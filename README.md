@@ -68,12 +68,12 @@ go install github.com/benoitpetit/xsh@latest
 
 **Linux/macOS:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/main/core/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/master/core/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell as Administrator):**
 ```powershell
-iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/main/core/scripts/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/master/core/scripts/install.ps1 | iex
 ```
 
 ### Pre-built Binaries
