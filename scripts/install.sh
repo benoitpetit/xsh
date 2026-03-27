@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # install.sh - Script d'installation de xsh (Linux & macOS uniquement)
-# Usage: curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/master/core/scripts/install.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.sh | bash
 #
 # Pour Windows, téléchargez directement le .exe depuis:
 # https://github.com/benoitpetit/xsh/releases/latest
@@ -166,7 +166,7 @@ install_from_source() {
     git clone "https://github.com/${REPO}.git" "${TMP_DIR}/xsh"
 
     print_info "Compilation..."
-    cd "${TMP_DIR}/xsh/core"
+    cd "${TMP_DIR}/xsh"
     go build -o "${TMP_DIR}/xsh" .
 
     if [ -w "$INSTALL_DIR" ]; then
