@@ -7,27 +7,49 @@ Usage:
   xsh [command]
 
 Available Commands:
-  auth         Manage authentication
-  feed         View your timeline
-  search       Search for tweets
-  tweet        View a tweet and its thread
-  user         View a user's profile
-  post         Post a new tweet
-  delete       Delete a tweet
-  like         Like a tweet
-  unlike       Unlike a tweet
-  retweet      Retweet a tweet
-  unretweet    Undo a retweet
-  bookmark     Bookmark a tweet
-  unbookmark   Remove a bookmark
-  bookmarks    View your bookmarks
-  config       Show current configuration
-  mcp          Start the MCP server
+  auth          Manage authentication (login, logout, import, accounts, switch, status, whoami)
+  feed          View your timeline
+  search        Search for tweets
+  tweet         View a tweet and its thread
+  user          View a user's profile
+  post          Post a new tweet
+  delete        Delete a tweet
+  like          Like a tweet
+  unlike        Unlike a tweet
+  retweet       Retweet a tweet
+  unretweet     Undo a retweet
+  bookmark      Bookmark a tweet
+  unbookmark    Remove a bookmark
+  bookmarks     View your bookmarks
+  tweets        List tweets from a user
+  follow        Follow a user
+  unfollow      Unfollow a user
+  block         Block a user
+  unblock       Unblock a user
+  mute          Mute a user
+  unmute        Unmute a user
+  lists         Manage lists (list, create, delete, add, remove)
+  dm            Direct messages (list, view, send)
+  schedule      Schedule tweets
+  scheduled     List scheduled tweets
+  unschedule    Cancel a scheduled tweet
+  jobs          Search job listings
+  trends        View trending topics
+  download      Download media from tweets
+  endpoints     Manage API endpoints (list, check, refresh, status, update, reset)
+  auto-update   Automatically update obsolete endpoints
+  config        Show current configuration
+  doctor        Diagnose common issues
+  mcp           Start the MCP server
+  version       Show version information
 
 Flags:
-  --json       Output as JSON
-  --account    Account name to use
-  -h, --help   Help for xsh
+  --json        Output as JSON
+  --yaml        Output as YAML
+  --compact, -c Compact output (essential fields only)
+  --account     Account name to use
+  -v, --verbose Verbose output (show HTTP requests)
+  -h, --help    Help for xsh
 
 Use "xsh [command] --help" for more information about a command.
 */
@@ -41,7 +63,20 @@ import (
 	"github.com/benoitpetit/xsh/core"
 )
 
+// globalMonitor holds the endpoint monitor for cleanup
+var globalMonitor *core.EndpointMonitor
+
+// stopEndpointMonitoring stops the global monitor if running
+func stopEndpointMonitoring() {
+	if globalMonitor != nil {
+		globalMonitor.Stop()
+	}
+}
+
 func main() {
+	// Ensure cleanup on exit
+	defer stopEndpointMonitoring()
+	
 	// Run startup check for endpoint obsolescence
 	// Only for specific commands that need API access, not for help/config
 	if shouldRunStartupCheck() {
@@ -83,9 +118,8 @@ func startEndpointMonitoring() {
 		return
 	}
 	
+	globalMonitor = monitor
 	monitor.Start()
-	// Note: monitor.Stop() should be called when the application exits
-	// This is handled via client.Close() chain in normal flow
 }
 
 // shouldRunStartupCheck returns true if we should run the endpoint check

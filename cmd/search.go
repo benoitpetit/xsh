@@ -12,6 +12,12 @@ import (
 )
 
 var (
+	searchFilter    string
+	searchTopN      int
+	searchThreshold float64
+)
+
+var (
 	searchType   string
 	searchCount  int
 	searchPages  int
@@ -41,7 +47,7 @@ var searchCmd = &cobra.Command{
 		defer client.Close()
 
 		var allTweets []*models.Tweet
-		cursor := ""
+		cursor := searchCursor
 
 		for i := 0; i < searchPages; i++ {
 			response, err := core.SearchTweets(client, query, searchType, searchCount, cursor)
@@ -66,6 +72,12 @@ var searchCmd = &cobra.Command{
 			}
 		}
 
+		// Apply filter if specified
+		if searchFilter != "" {
+			cfg, _ := core.LoadConfig()
+			allTweets = utils.FilterTweets(allTweets, searchFilter, searchThreshold, searchTopN, &cfg.Filter)
+		}
+
 		if isYAMLMode() {
 			outputYAML(allTweets)
 		} else if isJSONMode() {
@@ -83,4 +95,7 @@ func init() {
 	searchCmd.Flags().IntVarP(&searchCount, "count", "n", 20, "Number of tweets")
 	searchCmd.Flags().IntVarP(&searchPages, "pages", "p", 1, "Number of pages")
 	searchCmd.Flags().StringVar(&searchCursor, "cursor", "", "Cursor for pagination (from previous response)")
+	searchCmd.Flags().StringVar(&searchFilter, "filter", "", "Filter: all, top, score")
+	searchCmd.Flags().IntVar(&searchTopN, "top", 10, "Top N for filter mode")
+	searchCmd.Flags().Float64Var(&searchThreshold, "threshold", 0.0, "Score threshold")
 }

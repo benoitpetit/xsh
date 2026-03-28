@@ -15,6 +15,11 @@ var (
 	tweetThread    bool
 	tweetCount     int
 	exportArticle  string
+	
+	// Bookmarks filter flags
+	bookmarksFilter    string
+	bookmarksTopN      int
+	bookmarksThreshold float64
 )
 
 // tweetCmd represents the tweet command (parent for tweet operations)
@@ -478,8 +483,15 @@ var bookmarksCmd = &cobra.Command{
 			return
 		}
 
-		output(response.Tweets, func() {
-			fmt.Println(display.FormatTweetList(response.Tweets))
+		// Apply filter if specified
+		filteredTweets := response.Tweets
+		if bookmarksFilter != "" {
+			cfg, _ := core.LoadConfig()
+			filteredTweets = utils.FilterTweets(filteredTweets, bookmarksFilter, bookmarksThreshold, bookmarksTopN, &cfg.Filter)
+		}
+
+		output(filteredTweets, func() {
+			fmt.Println(display.FormatTweetList(filteredTweets))
 		})
 	},
 }
@@ -535,4 +547,7 @@ func init() {
 	tweetPostCmd.Flags().StringArrayP("image", "i", nil, "Image to attach (can be used multiple times, max 4)")
 	tweetDeleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 	bookmarksCmd.Flags().IntP("count", "n", 20, "Number of tweets")
+	bookmarksCmd.Flags().StringVar(&bookmarksFilter, "filter", "", "Filter: all, top, score")
+	bookmarksCmd.Flags().IntVar(&bookmarksTopN, "top", 10, "Top N for filter mode")
+	bookmarksCmd.Flags().Float64Var(&bookmarksThreshold, "threshold", 0.0, "Score threshold")
 }
