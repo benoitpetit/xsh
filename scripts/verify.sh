@@ -85,16 +85,7 @@ else
     print_success "web/src/lib/components/Logo.svelte: already at v$TARGET_VERSION"
 fi
 
-# 1.4 TODO.md
-CURRENT_TODO_VERSION=$(grep '^\*\*Version' "$ROOT_DIR/TODO.md" | sed 's/.*: \(.*\)/\1/')
-if [ "$CURRENT_TODO_VERSION" != "$TARGET_VERSION" ]; then
-    sed -i "s/^\*\*Version\*\*: .*/**Version**: $TARGET_VERSION/" "$ROOT_DIR/TODO.md"
-    print_success "TODO.md: $CURRENT_TODO_VERSION → $TARGET_VERSION"
-else
-    print_success "TODO.md: already at $TARGET_VERSION"
-fi
-
-# 1.5 web package.json (if version present)
+# 1.4 web package.json (if version present)
 if [ -f "$WEB_DIR/package.json" ]; then
     CURRENT_PKG_VERSION=$(grep '"version"' "$WEB_DIR/package.json" | head -1 | sed 's/.*"\([0-9]\+\.[0-9]\+\.[0-9]\+\)".*/\1/')
     if [ "$CURRENT_PKG_VERSION" != "$TARGET_VERSION" ]; then
@@ -180,7 +171,7 @@ echo "Current versions in files:"
 echo "  core/cmd/version.go:      $(grep 'var Version' "$CORE_DIR/cmd/version.go" | sed 's/.*"\(.*\)".*/\1/')"
 echo "  web/+page.svelte:         $(grep -o 'v0\.[0-9]\+\.[0-9]\+' "$WEB_DIR/src/routes/+page.svelte" | head -1)"
 echo "  web/Logo.svelte:          $(grep 'export let version' "$WEB_DIR/src/lib/components/Logo.svelte" | sed 's/.*"\(v[^"]*\)".*/\1/')"
-echo "  TODO.md:                  $(grep '^\*\*Version' "$ROOT_DIR/TODO.md" | sed 's/.*: \(.*\)/\1/')"
+
 echo ""
 
 # ============================================
