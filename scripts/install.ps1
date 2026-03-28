@@ -1,8 +1,8 @@
 #
-# install.ps1 - Script d'installation de xsh pour Windows (PowerShell)
-# Usage: iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/main/core/scripts/install.ps1 | iex
+# install.ps1 - xsh Installation Script for Windows (PowerShell)
+# Usage: iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.ps1 | iex
 #
-# Ce script télécharge et installe xsh automatiquement sur Windows
+# This script downloads and installs xsh automatically on Windows
 #
 
 $ErrorActionPreference = "Stop"
@@ -12,48 +12,48 @@ $Repo = "benoitpetit/xsh"
 $BinaryName = "xsh.exe"
 $InstallDir = "$env:LOCALAPPDATA\xsh"
 
-# Couleurs
+# Colors
 function Write-Success { param($Message) Write-Host "✅ $Message" -ForegroundColor Green }
 function Write-Error { param($Message) Write-Host "❌ $Message" -ForegroundColor Red }
 function Write-Info { param($Message) Write-Host "ℹ️  $Message" -ForegroundColor Cyan }
 function Write-Warning { param($Message) Write-Host "⚠️  $Message" -ForegroundColor Yellow }
 
-# Détection de l'OS et architecture
+# OS and architecture detection
 function Detect-Platform {
     $arch = $env:PROCESSOR_ARCHITECTURE
-    
+
     switch ($arch) {
         "AMD64" { $script:Arch = "amd64" }
         "ARM64" { $script:Arch = "arm64" }
-        default { 
-            Write-Error "Architecture non supportée: $arch"
+        default {
+            Write-Error "Unsupported architecture: $arch"
             exit 1
         }
     }
-    
-    Write-Info "Plateforme détectée: windows-$script:Arch"
+
+    Write-Info "Detected platform: windows-$script:Arch"
 }
 
-# Vérification des dépendances
+# Dependency check
 function Check-Dependencies {
     try {
         $null = Invoke-WebRequest -Uri "https://github.com" -Method HEAD -TimeoutSec 5
     } catch {
-        Write-Error "Impossible de se connecter à internet"
+        Write-Error "Unable to connect to the internet"
         exit 1
     }
 }
 
-# Récupération de la dernière version
+# Get latest version
 function Get-LatestVersion {
-    Write-Info "Récupération de la dernière release..."
-    
+    Write-Info "Fetching latest release..."
+
     try {
         $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -TimeoutSec 10
         $script:Version = $release.tag_name
         Write-Info "Version: $script:Version"
     } catch {
-        Write-Error "Impossible de récupérer la dernière version"
+        Write-Error "Unable to fetch latest version"
         exit 1
     }
 }
@@ -62,41 +62,41 @@ function Get-LatestVersion {
 function Install-xsh {
     $assetName = "xsh-windows-$script:Arch.exe"
     $downloadUrl = "https://github.com/$Repo/releases/download/$script:Version/$assetName"
-    
-    Write-Info "Téléchargement depuis: $downloadUrl"
-    
-    # Créer le répertoire d'installation
+
+    Write-Info "Downloading from: $downloadUrl"
+
+    # Create installation directory
     if (!(Test-Path $InstallDir)) {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
-    
+
     $tempFile = "$env:TEMP\$BinaryName"
-    
+
     try {
         Invoke-WebRequest -Uri $downloadUrl -OutFile $tempFile -TimeoutSec 60
     } catch {
-        Write-Error "Échec du téléchargement: $_"
+        Write-Error "Download failed: $_"
         exit 1
     }
-    
-    # Déplacer vers le répertoire d'installation
+
+    # Move to installation directory
     $installPath = "$InstallDir\$BinaryName"
     Move-Item -Path $tempFile -Destination $installPath -Force
-    
-    Write-Success "xsh installé dans $installPath"
-    
-    # Vérifier si le répertoire est dans le PATH
+
+    Write-Success "xsh installed in $installPath"
+
+    # Check if directory is in PATH
     $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
     if ($userPath -notlike "*$InstallDir*") {
-        Write-Info "Ajout de $InstallDir au PATH utilisateur..."
+        Write-Info "Adding $InstallDir to user PATH..."
         [Environment]::SetEnvironmentVariable("PATH", "$userPath;$InstallDir", "User")
-        Write-Success "PATH mis à jour. Redémarrez PowerShell pour utiliser 'xsh'"
+        Write-Success "PATH updated. Restart PowerShell to use 'xsh'"
     } else {
-        Write-Info "Le répertoire est déjà dans le PATH"
+        Write-Info "Directory is already in PATH"
     }
 }
 
-# Message de bienvenue
+# Welcome message
 function Show-Welcome {
     Write-Host ""
     Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Cyan
@@ -108,19 +108,19 @@ function Show-Welcome {
     Write-Host ""
 }
 
-# Message post-installation
+# Post-installation message
 function Show-PostInstall {
     Write-Host ""
-    Write-Success "Installation terminée !"
+    Write-Success "Installation complete!"
     Write-Host ""
-    Write-Host "Commandes rapides:"
-    Write-Host "  xsh auth login       # Authentification"
+    Write-Host "Quick commands:"
+    Write-Host "  xsh auth login       # Authentication"
     Write-Host "  xsh feed             # Timeline"
-    Write-Host "  xsh --help           # Aide"
+    Write-Host "  xsh --help           # Help"
     Write-Host ""
     Write-Host "Documentation: https://github.com/$Repo"
     Write-Host ""
-    Write-Warning "Redémarrez PowerShell pour utiliser 'xsh' si c'est la première installation"
+    Write-Warning "Restart PowerShell to use 'xsh' if this is the first installation"
     Write-Host ""
 }
 

@@ -219,6 +219,81 @@ func toCompact(data interface{}) interface{} {
 			"following": v.FollowingCount,
 			"verified":  v.Verified,
 		}
+	case []*models.DMConversation:
+		var result []map[string]interface{}
+		for _, c := range v {
+			result = append(result, map[string]interface{}{
+				"id":           c.ID,
+				"type":         c.Type,
+				"participants": len(c.Participants),
+				"last_message": c.LastMessage,
+				"unread":       c.Unread,
+			})
+		}
+		return result
+	case *models.DMConversation:
+		return map[string]interface{}{
+			"id":           v.ID,
+			"type":         v.Type,
+			"participants": len(v.Participants),
+			"last_message": v.LastMessage,
+			"unread":       v.Unread,
+		}
+	case []*models.Job:
+		var result []map[string]interface{}
+		for _, j := range v {
+			result = append(result, map[string]interface{}{
+				"id":       j.ID,
+				"title":    j.Title,
+				"company":  j.Company.Name,
+				"location": j.Location,
+				"salary":   j.FormattedSalary,
+			})
+		}
+		return result
+	case *models.Job:
+		return map[string]interface{}{
+			"id":          v.ID,
+			"title":       v.Title,
+			"company":     v.Company.Name,
+			"location":    v.Location,
+			"salary":      v.FormattedSalary,
+			"employment":  v.EmploymentType,
+			"description": v.Description,
+		}
+	case []*models.Trend:
+		var result []map[string]interface{}
+		for _, t := range v {
+			result = append(result, map[string]interface{}{
+				"name":   t.Name,
+				"volume": t.TweetVolume,
+				"rank":   t.Rank,
+			})
+		}
+		return result
+	case *models.Trend:
+		return map[string]interface{}{
+			"name":   v.Name,
+			"query":  v.Query,
+			"volume": v.TweetVolume,
+			"rank":   v.Rank,
+		}
+	case map[string]interface{}:
+		// For simple API responses (post/delete/etc), return as-is but filter to essential fields
+		compact := make(map[string]interface{})
+		if id, ok := v["id"]; ok {
+			compact["id"] = id
+		}
+		if success, ok := v["success"]; ok {
+			compact["success"] = success
+		}
+		if message, ok := v["message"]; ok {
+			compact["message"] = message
+		}
+		if len(compact) == 0 {
+			return v // Return original if no recognized fields
+		}
+		return compact
 	default:
 		return data
 	}

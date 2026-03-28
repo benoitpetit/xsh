@@ -8,7 +8,7 @@ import (
 	"github.com/benoitpetit/xsh/core"
 )
 
-// TestAuthCredentials teste la validation des credentials
+// TestAuthCredentials tests credential validation
 func TestAuthCredentials(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -55,14 +55,14 @@ func TestAuthCredentials(t *testing.T) {
 	}
 }
 
-// TestEnvAuth teste la récupération des credentials depuis les variables d'environnement
+// TestEnvAuth tests credential retrieval from environment variables
 func TestEnvAuth(t *testing.T) {
 	tests := []struct {
-		name          string
-		envVars       map[string]string
-		wantToken     string
-		wantCt0       string
-		wantNil       bool
+		name      string
+		envVars   map[string]string
+		wantToken string
+		wantCt0   string
+		wantNil   bool
 	}{
 		{
 			name: "X_ env vars",
@@ -85,21 +85,21 @@ func TestEnvAuth(t *testing.T) {
 			wantNil:   false,
 		},
 		{
-			name:          "no env vars",
-			envVars:       map[string]string{},
-			wantNil:       true,
+			name:    "no env vars",
+			envVars: map[string]string{},
+			wantNil: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Nettoyer les variables d'environnement
+			// Clean up environment variables
 			os.Unsetenv("X_AUTH_TOKEN")
 			os.Unsetenv("X_CT0")
 			os.Unsetenv("TWITTER_AUTH_TOKEN")
 			os.Unsetenv("TWITTER_CT0")
 
-			// Définir les variables de test
+			// Set test variables
 			for k, v := range tt.envVars {
 				os.Setenv(k, v)
 				defer os.Unsetenv(k)
@@ -128,17 +128,17 @@ func TestEnvAuth(t *testing.T) {
 	}
 }
 
-// TestStoredAuth teste la sauvegarde et le chargement des credentials
+// TestStoredAuth tests credential saving and loading
 func TestStoredAuth(t *testing.T) {
-	// Créer un répertoire temporaire
+	// Create a temporary directory
 	tmpDir := t.TempDir()
 
-	// Utiliser une variable d'environnement pour changer le chemin
+	// Use environment variable to change path
 	originalHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", originalHome)
 
-	// Créer le répertoire .config/xsh
+	// Create the .config/xsh directory
 	configDir := filepath.Join(tmpDir, ".config", "xsh")
 	os.MkdirAll(configDir, 0755)
 
@@ -216,20 +216,20 @@ func TestStoredAuth(t *testing.T) {
 	})
 }
 
-// TestListAccounts teste la liste des comptes
+// TestListAccounts tests account listing
 func TestListAccounts(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Utiliser une variable d'environnement pour changer le chemin
+	// Use environment variable to change path
 	originalHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", originalHome)
 
-	// Créer le répertoire .config/xsh
+	// Create the .config/xsh directory
 	configDir := filepath.Join(tmpDir, ".config", "xsh")
 	os.MkdirAll(configDir, 0755)
 
-	// Créer plusieurs comptes
+	// Create multiple accounts
 	creds1 := &core.AuthCredentials{AuthToken: "t1", Ct0: "c1"}
 	creds2 := &core.AuthCredentials{AuthToken: "t2", Ct0: "c2"}
 
@@ -245,7 +245,7 @@ func TestListAccounts(t *testing.T) {
 		t.Errorf("ListAccounts() returned %d accounts, want 2", len(accounts))
 	}
 
-	// Vérifier que les deux comptes sont présents
+	// Verify both accounts are present
 	hasWork := false
 	hasPersonal := false
 	for _, acc := range accounts {
@@ -265,33 +265,33 @@ func TestListAccounts(t *testing.T) {
 	}
 }
 
-// TestSetDefaultAccount teste le changement de compte par défaut
+// TestSetDefaultAccount tests default account switching
 func TestSetDefaultAccount(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Utiliser une variable d'environnement pour changer le chemin
+	// Use environment variable to change path
 	originalHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", originalHome)
 
-	// Créer le répertoire .config/xsh
+	// Create the .config/xsh directory
 	configDir := filepath.Join(tmpDir, ".config", "xsh")
 	os.MkdirAll(configDir, 0755)
 
-	// Créer deux comptes
+	// Create two accounts
 	creds1 := &core.AuthCredentials{AuthToken: "t1", Ct0: "c1"}
 	core.SaveAuth(creds1, "account1")
 
 	creds2 := &core.AuthCredentials{AuthToken: "t2", Ct0: "c2"}
 	core.SaveAuth(creds2, "account2")
 
-	// Changer le compte par défaut
+	// Change default account
 	err := core.SetDefaultAccount("account2")
 	if err != nil {
 		t.Fatalf("SetDefaultAccount() error = %v", err)
 	}
 
-	// Vérifier que le compte par défaut a changé
+	// Verify default account changed
 	loaded, err := core.LoadStoredAuth("")
 	if err != nil {
 		t.Fatalf("LoadStoredAuth() error = %v", err)
@@ -305,37 +305,37 @@ func TestSetDefaultAccount(t *testing.T) {
 		t.Errorf("Default account AuthToken = %v, want %v", loaded.AuthToken, "t2")
 	}
 
-	// Tester avec un compte inexistant
+	// Test with nonexistent account
 	err = core.SetDefaultAccount("nonexistent")
 	if err == nil {
 		t.Error("SetDefaultAccount(nonexistent) should return error")
 	}
 }
 
-// TestRemoveAuth teste la suppression d'un compte
+// TestRemoveAuth tests account removal
 func TestRemoveAuth(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Utiliser une variable d'environnement pour changer le chemin
+	// Use environment variable to change path
 	originalHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", originalHome)
 
-	// Créer le répertoire .config/xsh
+	// Create the .config/xsh directory
 	configDir := filepath.Join(tmpDir, ".config", "xsh")
 	os.MkdirAll(configDir, 0755)
 
-	// Créer un compte
+	// Create an account
 	creds := &core.AuthCredentials{AuthToken: "t1", Ct0: "c1"}
 	core.SaveAuth(creds, "to_delete")
 
-	// Supprimer le compte
+	// Delete the account
 	err := core.RemoveAuth("to_delete")
 	if err != nil {
 		t.Fatalf("RemoveAuth() error = %v", err)
 	}
 
-	// Vérifier que le compte n'existe plus
+	// Verify account no longer exists
 	loaded, err := core.LoadStoredAuth("to_delete")
 	if err != nil {
 		t.Fatalf("LoadStoredAuth() error = %v", err)
@@ -344,14 +344,14 @@ func TestRemoveAuth(t *testing.T) {
 		t.Error("LoadStoredAuth() should return nil after removal")
 	}
 
-	// Tester la suppression d'un compte inexistant
+	// Test deleting nonexistent account
 	err = core.RemoveAuth("nonexistent")
 	if err == nil {
 		t.Error("RemoveAuth(nonexistent) should return error")
 	}
 }
 
-// TestAuthError teste le type d'erreur d'authentification
+// TestAuthError tests authentication error type
 func TestAuthError(t *testing.T) {
 	err := &core.AuthError{Message: "test error"}
 	if err.Error() != "test error" {
@@ -359,7 +359,7 @@ func TestAuthError(t *testing.T) {
 	}
 }
 
-// TestSanitizeCookieValue teste la sanitization des valeurs de cookies
+// TestSanitizeCookieValue tests cookie value sanitization
 func TestSanitizeCookieValue(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -428,7 +428,7 @@ func TestSanitizeCookieValue(t *testing.T) {
 	}
 }
 
-// TestAuthCredentialsSanitization teste la sanitization des credentials
+// TestAuthCredentialsSanitization tests credential sanitization
 func TestAuthCredentialsSanitization(t *testing.T) {
 	creds := &core.AuthCredentials{
 		AuthToken: `"token"with"quotes"`,

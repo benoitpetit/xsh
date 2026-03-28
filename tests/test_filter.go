@@ -7,9 +7,9 @@ import (
 	"github.com/benoitpetit/xsh/utils"
 )
 
-// TestScoreTweet teste le calcul du score d'engagement
+// TestScoreTweet tests engagement score calculation
 func TestScoreTweet(t *testing.T) {
-	// Créer un tweet avec des métriques connues
+	// Create a tweet with known metrics
 	tweet := &models.Tweet{
 		ID:   "123",
 		Text: "Test tweet",
@@ -25,7 +25,7 @@ func TestScoreTweet(t *testing.T) {
 	cfg := utils.DefaultFilterConfig()
 	score := utils.ScoreTweet(tweet, &cfg)
 
-	// Calcul attendu:
+	// Expected calculation:
 	// likes: 100 * 1.0 = 100
 	// retweets: 50 * 1.5 = 75
 	// replies: 25 * 0.5 = 12.5
@@ -37,13 +37,13 @@ func TestScoreTweet(t *testing.T) {
 		t.Errorf("ScoreTweet() = %f, want positive value", score)
 	}
 
-	// Vérifier que le score est raisonnable (entre 200 et 210)
+	// Verify score is reasonable (between 200 and 210)
 	if score < 200 || score > 210 {
 		t.Errorf("ScoreTweet() = %f, want between 200 and 210", score)
 	}
 }
 
-// TestScoreTweetWithNilConfig teste le scoring avec config nil
+// TestScoreTweetWithNilConfig tests scoring with nil config
 func TestScoreTweetWithNilConfig(t *testing.T) {
 	tweet := &models.Tweet{
 		ID:   "123",
@@ -53,7 +53,7 @@ func TestScoreTweetWithNilConfig(t *testing.T) {
 		},
 	}
 
-	// Test avec config nil (doit utiliser la config par défaut)
+	// Test with nil config (should use default config)
 	score := utils.ScoreTweet(tweet, nil)
 
 	if score <= 0 {
@@ -61,7 +61,7 @@ func TestScoreTweetWithNilConfig(t *testing.T) {
 	}
 }
 
-// TestScoreTweetZeroViews teste le scoring avec 0 vues
+// TestScoreTweetZeroViews tests scoring with 0 views
 func TestScoreTweetZeroViews(t *testing.T) {
 	tweet := &models.Tweet{
 		ID:   "123",
@@ -75,14 +75,14 @@ func TestScoreTweetZeroViews(t *testing.T) {
 	cfg := utils.DefaultFilterConfig()
 	score := utils.ScoreTweet(tweet, &cfg)
 
-	// Avec 0 vues, views_log devrait être 0
-	expectedScore := 100.0 // Juste les likes
+	// With 0 views, views_log should be 0
+	expectedScore := 100.0 // Just the likes
 	if score != expectedScore {
 		t.Errorf("ScoreTweet() = %f, want %f", score, expectedScore)
 	}
 }
 
-// TestFilterTweetsAllMode teste le filtrage en mode "all"
+// TestFilterTweetsAllMode tests filtering in "all" mode
 func TestFilterTweetsAllMode(t *testing.T) {
 	tweets := []*models.Tweet{
 		{ID: "1", Engagement: models.TweetEngagement{Likes: 100}},
@@ -96,7 +96,7 @@ func TestFilterTweetsAllMode(t *testing.T) {
 		t.Errorf("FilterTweets(all) returned %d tweets, want 3", len(result))
 	}
 
-	// Vérifier que les tweets sont triés par score (décroissant)
+	// Verify tweets are sorted by score (descending)
 	if result[0].ID != "3" {
 		t.Errorf("First tweet should be ID 3 (highest score), got %s", result[0].ID)
 	}
@@ -105,7 +105,7 @@ func TestFilterTweetsAllMode(t *testing.T) {
 	}
 }
 
-// TestFilterTweetsTopMode teste le filtrage en mode "top"
+// TestFilterTweetsTopMode tests filtering in "top" mode
 func TestFilterTweetsTopMode(t *testing.T) {
 	tweets := []*models.Tweet{
 		{ID: "1", Engagement: models.TweetEngagement{Likes: 100}},
@@ -121,13 +121,13 @@ func TestFilterTweetsTopMode(t *testing.T) {
 		t.Errorf("FilterTweets(top, 3) returned %d tweets, want 3", len(result))
 	}
 
-	// Vérifier que ce sont les 3 meilleurs
+	// Verify these are the top 3
 	if result[0].ID != "3" || result[1].ID != "4" || result[2].ID != "1" {
 		t.Error("FilterTweets(top) did not return top 3 tweets in correct order")
 	}
 }
 
-// TestFilterTweetsScoreMode teste le filtrage en mode "score"
+// TestFilterTweetsScoreMode tests filtering in "score" mode
 func TestFilterTweetsScoreMode(t *testing.T) {
 	tweets := []*models.Tweet{
 		{ID: "1", Engagement: models.TweetEngagement{Likes: 100}},
@@ -135,14 +135,14 @@ func TestFilterTweetsScoreMode(t *testing.T) {
 		{ID: "3", Engagement: models.TweetEngagement{Likes: 200}},
 	}
 
-	// Filtrer avec un seuil de 75 (devrait garder 1 et 3)
+	// Filter with threshold of 75 (should keep 1 and 3)
 	result := utils.FilterTweets(tweets, "score", 75, 0, nil)
 
 	if len(result) != 2 {
 		t.Errorf("FilterTweets(score, 75) returned %d tweets, want 2", len(result))
 	}
 
-	// Vérifier que les tweets avec score >= 75 sont présents
+	// Verify tweets with score >= 75 are present
 	hasID1 := false
 	hasID3 := false
 	for _, t := range result {
@@ -162,7 +162,7 @@ func TestFilterTweetsScoreMode(t *testing.T) {
 	}
 }
 
-// TestFilterTweetsEmptyList teste le filtrage avec une liste vide
+// TestFilterTweetsEmptyList tests filtering with an empty list
 func TestFilterTweetsEmptyList(t *testing.T) {
 	var tweets []*models.Tweet
 
@@ -173,14 +173,14 @@ func TestFilterTweetsEmptyList(t *testing.T) {
 	}
 }
 
-// TestFilterTweetsTopNLargerThanList teste top N plus grand que la liste
+// TestFilterTweetsTopNLargerThanList tests top N larger than list
 func TestFilterTweetsTopNLargerThanList(t *testing.T) {
 	tweets := []*models.Tweet{
 		{ID: "1", Engagement: models.TweetEngagement{Likes: 100}},
 		{ID: "2", Engagement: models.TweetEngagement{Likes: 50}},
 	}
 
-	// Demander top 10 mais il n'y a que 2 tweets
+	// Request top 10 but there are only 2 tweets
 	result := utils.FilterTweets(tweets, "top", 0, 10, nil)
 
 	if len(result) != 2 {
@@ -188,25 +188,25 @@ func TestFilterTweetsTopNLargerThanList(t *testing.T) {
 	}
 }
 
-// TestFilterTweetsCustomWeights teste le filtrage avec des pondérations personnalisées
+// TestFilterTweetsCustomWeights tests filtering with custom weights
 func TestFilterTweetsCustomWeights(t *testing.T) {
 	tweets := []*models.Tweet{
 		{ID: "1", Engagement: models.TweetEngagement{Likes: 100, Retweets: 0}},
 		{ID: "2", Engagement: models.TweetEngagement{Likes: 0, Retweets: 100}},
 	}
 
-	// Config avec pondération élevée pour les retweets
+	// Config with high weight for retweets
 	cfg := &utils.FilterConfig{
-		LikesWeight:    1.0,
-		RetweetsWeight: 10.0, // Les retweets comptent 10x plus
-		RepliesWeight:  0.5,
+		LikesWeight:     1.0,
+		RetweetsWeight:  10.0, // Retweets count 10x more
+		RepliesWeight:   0.5,
 		BookmarksWeight: 2.0,
-		ViewsLogWeight: 0.3,
+		ViewsLogWeight:  0.3,
 	}
 
 	result := utils.FilterTweets(tweets, "all", 0, 0, cfg)
 
-	// Le tweet 2 devrait être premier car 100 retweets * 10 = 1000 > 100 likes * 1 = 100
+	// Tweet 2 should be first because 100 retweets * 10 = 1000 > 100 likes * 1 = 100
 	if result[0].ID != "2" {
 		t.Errorf("First tweet should be ID 2 (high retweet weight), got %s", result[0].ID)
 	}

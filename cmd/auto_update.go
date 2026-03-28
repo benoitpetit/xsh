@@ -63,8 +63,40 @@ JS bundles that your browser downloads when visiting x.com.`,
 		
 		if autoUpdateDryRun {
 			// Just check which endpoints are obsolete
-			fmt.Println("Checking endpoints (dry run)...")
-			// TODO: Implement proper dry run
+			fmt.Println("🔍 Checking endpoints for obsolescence...")
+			fmt.Println()
+			
+			obsolete, err := discovery.CheckObsoleteEndpoints()
+			if err != nil {
+				fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#E0245E")).
+					Render(fmt.Sprintf("❌ Error checking endpoints: %v", err)))
+				os.Exit(1)
+			}
+			
+			if len(obsolete) == 0 {
+				fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#00BA7C")).
+					Render("✅ All endpoints are up to date!"))
+				fmt.Println()
+				fmt.Println("No updates needed.")
+				return
+			}
+			
+			fmt.Printf("⚠️  Found %d obsolete endpoint(s):\n\n", len(obsolete))
+			
+			for _, ep := range obsolete {
+				fmt.Printf("  • %s\n", lipgloss.NewStyle().Bold(true).Render(ep.Name))
+				fmt.Printf("    Current:  %s\n", ep.CurrentID)
+				if ep.SuggestedID != "" {
+					fmt.Printf("    Suggested: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("#00BA7C")).Render(ep.SuggestedID))
+				} else {
+					fmt.Printf("    Suggested: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F")).Render("(not discovered - manual update needed)"))
+				}
+				fmt.Println()
+			}
+			
+			fmt.Println("Run without --dry-run to apply these updates:")
+			fmt.Println("  xsh auto-update")
+			return
 		} else {
 			if err := discovery.UpdateObsoleteEndpoints(); err != nil {
 				// Don't exit with error - manual instructions were shown

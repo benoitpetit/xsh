@@ -8,7 +8,7 @@ import (
 	"github.com/benoitpetit/xsh/models"
 )
 
-// TestFormatConfig teste l'affichage de la configuration
+// TestFormatConfig tests configuration display
 func TestFormatConfig(t *testing.T) {
 	cv := &display.ConfigValues{
 		DefaultCount:    50,
@@ -34,7 +34,7 @@ func TestFormatConfig(t *testing.T) {
 		t.Error("FormatConfig() returned empty string")
 	}
 
-	// Vérifier que les valeurs importantes sont présentes
+	// Verify important values are present
 	if !strings.Contains(result, "50") {
 		t.Error("FormatConfig() should contain default_count value")
 	}
@@ -48,7 +48,7 @@ func TestFormatConfig(t *testing.T) {
 	}
 }
 
-// TestFormatUserList teste l'affichage de la liste d'utilisateurs
+// TestFormatUserList tests user list display
 func TestFormatUserList(t *testing.T) {
 	users := []*models.User{
 		{
@@ -77,7 +77,7 @@ func TestFormatUserList(t *testing.T) {
 		t.Error("FormatUserList() returned empty string")
 	}
 
-	// Vérifier que les handles sont présents
+	// Verify handles are present
 	if !strings.Contains(result, "testuser1") {
 		t.Error("FormatUserList() should contain first user handle")
 	}
@@ -87,7 +87,7 @@ func TestFormatUserList(t *testing.T) {
 	}
 }
 
-// TestFormatUserListEmpty teste l'affichage avec une liste vide
+// TestFormatUserListEmpty tests display with empty list
 func TestFormatUserListEmpty(t *testing.T) {
 	users := []*models.User{}
 
@@ -102,7 +102,7 @@ func TestFormatUserListEmpty(t *testing.T) {
 	}
 }
 
-// TestFormatTweet teste l'affichage simple d'un tweet
+// TestFormatTweet tests simple tweet display
 func TestFormatTweet(t *testing.T) {
 	tweet := &models.Tweet{
 		ID:             "123456",
@@ -122,23 +122,23 @@ func TestFormatTweet(t *testing.T) {
 		t.Error("FormatTweetSimple() returned empty string")
 	}
 
-	// Vérifier que le texte est présent
+	// Verify text is present
 	if !strings.Contains(result, "This is a test tweet") {
 		t.Error("FormatTweetSimple() should contain tweet text")
 	}
 
-	// Vérifier que le handle est présent
+	// Verify handle is present
 	if !strings.Contains(result, "testuser") {
 		t.Error("FormatTweetSimple() should contain author handle")
 	}
 
-	// Vérifier que l'ID est présent
+	// Verify ID is present
 	if !strings.Contains(result, "123456") {
 		t.Error("FormatTweetSimple() should contain tweet ID")
 	}
 }
 
-// TestFormatTweetList teste l'affichage d'une liste de tweets en format simple
+// TestFormatTweetList tests tweet list display in simple format
 func TestFormatTweetList(t *testing.T) {
 	tweets := []*models.Tweet{
 		{
@@ -159,7 +159,7 @@ func TestFormatTweetList(t *testing.T) {
 		t.Error("FormatTweetListSimple() returned empty string")
 	}
 
-	// Vérifier que les deux tweets sont présents
+	// Verify both tweets are present
 	if !strings.Contains(result, "First tweet") {
 		t.Error("FormatTweetListSimple() should contain first tweet")
 	}
@@ -168,7 +168,7 @@ func TestFormatTweetList(t *testing.T) {
 		t.Error("FormatTweetListSimple() should contain second tweet")
 	}
 
-	// Vérifier que les IDs sont présents
+	// Verify IDs are present
 	if !strings.Contains(result, "1") {
 		t.Error("FormatTweetListSimple() should contain first tweet ID")
 	}
@@ -178,9 +178,7 @@ func TestFormatTweetList(t *testing.T) {
 	}
 }
 
-
-
-// TestPrintSuccess teste l'affichage des messages de succès
+// TestPrintSuccess tests success message display
 func TestPrintSuccess(t *testing.T) {
 	result := display.PrintSuccess("Test success")
 
@@ -193,7 +191,7 @@ func TestPrintSuccess(t *testing.T) {
 	}
 }
 
-// TestPrintError teste l'affichage des messages d'erreur
+// TestPrintError tests error message display
 func TestPrintError(t *testing.T) {
 	result := display.PrintError("Test error")
 
@@ -206,7 +204,7 @@ func TestPrintError(t *testing.T) {
 	}
 }
 
-// TestPrintWarning teste l'affichage des messages d'avertissement
+// TestPrintWarning tests warning message display
 func TestPrintWarning(t *testing.T) {
 	result := display.PrintWarning("Test warning")
 
@@ -219,7 +217,7 @@ func TestPrintWarning(t *testing.T) {
 	}
 }
 
-// TestFormatUser teste l'affichage d'un profil utilisateur
+// TestFormatUser tests user profile display
 func TestFormatUser(t *testing.T) {
 	user := &models.User{
 		ID:             "123",
@@ -240,7 +238,7 @@ func TestFormatUser(t *testing.T) {
 		t.Error("FormatUser() returned empty string")
 	}
 
-	// Vérifier que les informations sont présentes
+	// Verify information is present
 	if !strings.Contains(result, "Test User") {
 		t.Error("FormatUser() should contain user name")
 	}
@@ -254,17 +252,17 @@ func TestFormatUser(t *testing.T) {
 	}
 }
 
-// TestRelativeTime teste le formatage du temps relatif
+// TestRelativeTime tests relative time formatting
 func TestRelativeTime(t *testing.T) {
-	// Ce test vérifie simplement que la fonction existe et retourne une chaîne
-	// Les tests complets dépendent du temps actuel
+	// This test simply verifies that the function exists and returns a string
+	// Full tests depend on current time
 	now := display.RelativeTime(nil)
 	if now != "" {
 		t.Error("RelativeTime(nil) should return empty string")
 	}
 }
 
-// TestFormatNumber teste le formatage des nombres
+// TestFormatNumber tests number formatting
 func TestFormatNumber(t *testing.T) {
 	tests := []struct {
 		input    int

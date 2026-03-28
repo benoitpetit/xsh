@@ -7,7 +7,7 @@ import (
 	"github.com/benoitpetit/xsh/models"
 )
 
-// TestTweetURL teste la génération de l'URL d'un tweet
+// TestTweetURL tests tweet URL generation
 func TestTweetURL(t *testing.T) {
 	tweet := &models.Tweet{
 		ID:           "123456789",
@@ -20,7 +20,7 @@ func TestTweetURL(t *testing.T) {
 	}
 }
 
-// TestUserProfileURL teste la génération de l'URL de profil
+// TestUserProfileURL tests profile URL generation
 func TestUserProfileURL(t *testing.T) {
 	user := &models.User{
 		ID:     "123",
@@ -33,9 +33,9 @@ func TestUserProfileURL(t *testing.T) {
 	}
 }
 
-// TestTweetFromAPIResult teste le parsing d'un tweet depuis l'API
+// TestTweetFromAPIResult tests tweet parsing from API
 func TestTweetFromAPIResult(t *testing.T) {
-	// Simuler une réponse API simplifiée
+	// Simulate a simplified API response
 	result := map[string]interface{}{
 		"rest_id": "123456",
 		"legacy": map[string]interface{}{
@@ -99,9 +99,9 @@ func TestTweetFromAPIResult(t *testing.T) {
 	}
 }
 
-// TestTweetFromAPIResultNil teste le parsing avec des données nil
+// TestTweetFromAPIResultNil tests parsing with nil data
 func TestTweetFromAPIResultNil(t *testing.T) {
-	// Test avec une map vide
+	// Test with empty map
 	result := map[string]interface{}{}
 
 	tweet := models.TweetFromAPIResult(result)
@@ -111,7 +111,7 @@ func TestTweetFromAPIResultNil(t *testing.T) {
 	}
 }
 
-// TestTweetFromAPIResultRetweet teste le parsing d'un retweet
+// TestTweetFromAPIResultRetweet tests parsing a retweet
 func TestTweetFromAPIResultRetweet(t *testing.T) {
 	result := map[string]interface{}{
 		"rest_id": "original123",
@@ -160,7 +160,7 @@ func TestTweetFromAPIResultRetweet(t *testing.T) {
 		t.Fatal("TweetFromAPIResult(retweet) returned nil")
 	}
 
-	// Devrait parser le tweet original, pas le retweet wrapper
+	// Should parse the original tweet, not the retweet wrapper
 	if tweet.ID != "original456" {
 		t.Errorf("ID = %v, want original456 (original tweet)", tweet.ID)
 	}
@@ -174,7 +174,7 @@ func TestTweetFromAPIResultRetweet(t *testing.T) {
 	}
 }
 
-// TestUserFromAPIResult teste le parsing d'un utilisateur depuis l'API
+// TestUserFromAPIResult tests user parsing from API
 func TestUserFromAPIResult(t *testing.T) {
 	result := map[string]interface{}{
 		"rest_id":          "123",
@@ -238,7 +238,7 @@ func TestUserFromAPIResult(t *testing.T) {
 	}
 }
 
-// TestUserFromAPIResultNil teste le parsing utilisateur avec données nil
+// TestUserFromAPIResultNil tests user parsing with nil data
 func TestUserFromAPIResultNil(t *testing.T) {
 	result := map[string]interface{}{}
 
@@ -249,7 +249,7 @@ func TestUserFromAPIResultNil(t *testing.T) {
 	}
 }
 
-// TestTimelineResponse teste la structure TimelineResponse
+// TestTimelineResponse tests TimelineResponse structure
 func TestTimelineResponse(t *testing.T) {
 	response := &models.TimelineResponse{
 		Tweets: []*models.Tweet{
@@ -278,7 +278,7 @@ func TestTimelineResponse(t *testing.T) {
 	}
 }
 
-// TestTweetMedia teste la structure TweetMedia
+// TestTweetMedia tests TweetMedia structure
 func TestTweetMedia(t *testing.T) {
 	media := models.TweetMedia{
 		Type:       "photo",
@@ -304,7 +304,7 @@ func TestTweetMedia(t *testing.T) {
 	}
 }
 
-// TestTweetEngagement teste la structure TweetEngagement
+// TestTweetEngagement tests TweetEngagement structure
 func TestTweetEngagement(t *testing.T) {
 	engagement := models.TweetEngagement{
 		Likes:     100,
@@ -340,7 +340,7 @@ func TestTweetEngagement(t *testing.T) {
 	}
 }
 
-// TestTweetWithTime teste un tweet avec CreatedAt
+// TestTweetWithTime tests a tweet with CreatedAt
 func TestTweetWithTime(t *testing.T) {
 	now := time.Now()
 	tweet := &models.Tweet{
@@ -366,7 +366,7 @@ func TestTweetWithTime(t *testing.T) {
 	}
 }
 
-// TestQuotedTweet teste un tweet avec citation
+// TestQuotedTweet tests a tweet with quote
 func TestQuotedTweet(t *testing.T) {
 	quoted := &models.Tweet{
 		ID:   "quoted123",
