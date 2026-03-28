@@ -4,13 +4,13 @@ import (
 	"testing"
 )
 
-// TestMain est le point d'entrée pour tous les tests
+// TestMain is the entry point for all tests
 func TestMain(m *testing.M) {
-	// Configuration globale des tests si nécessaire
+	// Global test configuration if needed
 	m.Run()
 }
 
-// TestSuite vérifie que tous les packages sont testables
+// TestSuite verifies that all packages are testable
 func TestSuite(t *testing.T) {
 	t.Run("Auth", func(t *testing.T) {
 		t.Run("Credentials", TestAuthCredentials)

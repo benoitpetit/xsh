@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# install.sh - Script d'installation de xsh (Linux & macOS uniquement)
+# install.sh - xsh Installation Script (Linux & macOS only)
 # Usage: curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.sh | bash
 #
-# Pour Windows, téléchargez directement le .exe depuis:
+# For Windows, download the .exe directly from:
 # https://github.com/benoitpetit/xsh/releases/latest
 
 set -e
@@ -13,14 +13,14 @@ REPO="benoitpetit/xsh"
 BINARY_NAME="xsh"
 INSTALL_DIR="/usr/local/bin"
 
-# Couleurs
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Fonctions
+# Functions
 print_success() {
     echo -e "${GREEN}✅ $1${NC}"
 }
@@ -37,7 +37,7 @@ print_warning() {
     echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
-# Détection de l'OS
+# OS Detection
 detect_os() {
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
@@ -50,13 +50,13 @@ detect_os() {
             PLATFORM="darwin"
             ;;
         mingw*|msys*|cygwin*)
-            print_error "Windows détecté. Ce script bash ne supporte pas Windows."
-            print_info "Veuillez télécharger directement le fichier .exe depuis:"
+            print_error "Windows detected. This bash script does not support Windows."
+            print_info "Please download the .exe file directly from:"
             print_info "https://github.com/benoitpetit/xsh/releases/latest"
             exit 1
             ;;
         *)
-            print_error "OS non supporté: $OS"
+            print_error "Unsupported OS: $OS"
             exit 1
             ;;
     esac
@@ -69,37 +69,37 @@ detect_os() {
             ARCH="arm64"
             ;;
         *)
-            print_error "Architecture non supportée: $ARCH"
+            print_error "Unsupported architecture: $ARCH"
             exit 1
             ;;
     esac
 
-    print_info "Plateforme détectée: ${PLATFORM}-${ARCH}"
+    print_info "Detected platform: ${PLATFORM}-${ARCH}"
 }
 
-# Vérification des dépendances
+# Dependency Check
 check_deps() {
     if ! command -v curl &> /dev/null; then
-        print_error "curl est requis mais n'est pas installé"
+        print_error "curl is required but not installed"
         exit 1
     fi
 }
 
-# Installation depuis les releases GitHub
+# Installation from GitHub releases
 install_from_release() {
-    print_info "Récupération de la dernière release..."
+    print_info "Fetching latest release..."
 
-    # Récupérer la dernière version
+    # Get latest version
     LATEST_VERSION=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
     if [ -z "$LATEST_VERSION" ]; then
-        print_error "Impossible de récupérer la dernière version"
+        print_error "Unable to fetch latest version"
         exit 1
     fi
 
     print_info "Version: ${LATEST_VERSION}"
 
-    # Construction de l'URL - binaire direct (non compressé)
+    # Build URL - direct binary (uncompressed)
     ASSET_NAME="${BINARY_NAME}-${PLATFORM}-${ARCH}"
     if [ "$PLATFORM" = "windows" ]; then
         ASSET_NAME="${ASSET_NAME}.exe"
@@ -107,13 +107,13 @@ install_from_release() {
 
     DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${LATEST_VERSION}/${ASSET_NAME}"
 
-    # Téléchargement
-    print_info "Téléchargement depuis: ${DOWNLOAD_URL}"
+    # Download
+    print_info "Downloading from: ${DOWNLOAD_URL}"
     TMP_DIR=$(mktemp -d)
     curl -sSL "${DOWNLOAD_URL}" -o "${TMP_DIR}/${BINARY_NAME}"
 
     if [ ! -f "${TMP_DIR}/${BINARY_NAME}" ]; then
-        print_error "Échec du téléchargement"
+        print_error "Download failed"
         exit 1
     fi
 
@@ -123,49 +123,49 @@ install_from_release() {
     if [ -w "$INSTALL_DIR" ]; then
         mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
     else
-        print_warning "Permission requise pour installer dans ${INSTALL_DIR}"
+        print_warning "Permission required to install in ${INSTALL_DIR}"
         sudo mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
     fi
 
     rm -rf "$TMP_DIR"
 
-    print_success "xsh installé dans ${INSTALL_DIR}/${BINARY_NAME}"
+    print_success "xsh installed in ${INSTALL_DIR}/${BINARY_NAME}"
 }
 
-# Installation depuis Go
+# Installation via Go
 install_from_go() {
     if ! command -v go &> /dev/null; then
-        print_error "Go n'est pas installé"
+        print_error "Go is not installed"
         exit 1
     fi
 
     GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
     print_info "Go version: ${GO_VERSION}"
 
-    print_info "Installation via go install..."
+    print_info "Installing via go install..."
     go install "github.com/${REPO}@latest"
 
-    # Vérifier que le binaire est dans le PATH
+    # Verify binary is in PATH
     if command -v xsh &> /dev/null; then
-        print_success "xsh installé"
+        print_success "xsh installed"
     else
-        print_warning "xsh installé mais peut-être pas dans le PATH"
-        print_info "Assurez-vous que \$GOPATH/bin ou \$HOME/go/bin est dans votre PATH"
+        print_warning "xsh installed but may not be in PATH"
+        print_info "Make sure \$GOPATH/bin or \$HOME/go/bin is in your PATH"
     fi
 }
 
-# Installation depuis le source
+# Installation from source
 install_from_source() {
     if ! command -v go &> /dev/null; then
-        print_error "Go est requis pour compiler depuis le source"
+        print_error "Go is required to compile from source"
         exit 1
     fi
 
-    print_info "Clonage du dépôt..."
+    print_info "Cloning repository..."
     TMP_DIR=$(mktemp -d)
     git clone "https://github.com/${REPO}.git" "${TMP_DIR}/xsh"
 
-    print_info "Compilation..."
+    print_info "Building..."
     cd "${TMP_DIR}/xsh"
     go build -o "${TMP_DIR}/xsh" .
 
@@ -177,10 +177,10 @@ install_from_source() {
 
     rm -rf "$TMP_DIR"
 
-    print_success "xsh compilé et installé"
+    print_success "xsh compiled and installed"
 }
 
-# Message de bienvenue
+# Welcome message
 show_welcome() {
     echo ""
     echo "╔══════════════════════════════════════╗"
@@ -191,15 +191,15 @@ show_welcome() {
     echo ""
 }
 
-# Message post-installation
+# Post-installation message
 show_post_install() {
     echo ""
-    print_success "Installation terminée !"
+    print_success "Installation complete!"
     echo ""
-    echo "Commandes rapides:"
-    echo "  xsh auth login       # Authentification"
+    echo "Quick commands:"
+    echo "  xsh auth login       # Authentication"
     echo "  xsh feed             # Timeline"
-    echo "  xsh --help           # Aide"
+    echo "  xsh --help           # Help"
     echo ""
     echo "Documentation: https://github.com/${REPO}"
     echo ""
@@ -212,7 +212,7 @@ main() {
     check_deps
     detect_os
 
-    # Méthode d'installation
+    # Installation method
     METHOD="${1:-release}"
 
     case "$METHOD" in
@@ -226,7 +226,7 @@ main() {
             install_from_source
             ;;
         *)
-            print_error "Méthode inconnue: $METHOD"
+            print_error "Unknown method: $METHOD"
             print_info "Usage: $0 [release|go|source]"
             exit 1
             ;;
