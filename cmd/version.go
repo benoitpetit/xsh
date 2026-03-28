@@ -7,7 +7,7 @@ import (
 )
 
 // Version is set at build time via ldflags
-var Version = "0.0.2"
+var Version = "0.0.3"
 
 // versionCmd represents the version command
 var versionCmd = &cobra.Command{
