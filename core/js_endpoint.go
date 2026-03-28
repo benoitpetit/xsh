@@ -443,6 +443,59 @@ func getJSCachePath() string {
 	return filepath.Join(home, ".config", ConfigDirName, endpointCacheFile)
 }
 
+// ObsoleteEndpointInfo holds information about an obsolete endpoint
+type ObsoleteEndpointInfo struct {
+	Name         string
+	CurrentID    string
+	SuggestedID  string
+}
+
+// CheckObsoleteEndpoints checks all endpoints and returns obsolete ones without updating
+func (jsd *JSEndpointDiscovery) CheckObsoleteEndpoints() ([]ObsoleteEndpointInfo, error) {
+	manager := GetEndpointManager()
+	
+	// Quick check of critical endpoints (not all, to save time)
+	endpointsToCheck := []string{
+		"HomeTimeline",
+		"UserByScreenName",
+		"SearchTimeline",
+		"TweetDetail",
+		"CreateTweet",
+		"UserTweets",
+		"Followers",
+		"Following",
+		"Bookmarks",
+	}
+	
+	var obsolete []ObsoleteEndpointInfo
+	
+	for _, operation := range endpointsToCheck {
+		if err := jsd.checkEndpointWithClient(operation); err != nil {
+			// Endpoint is obsolete, get current ID
+			currentID := manager.GetEndpoint(operation)
+			if currentID == "" {
+				currentID = "unknown"
+			}
+			obsolete = append(obsolete, ObsoleteEndpointInfo{
+				Name:      operation,
+				CurrentID: currentID,
+			})
+		}
+	}
+	
+	// Try to discover new endpoints to suggest replacements
+	if len(obsolete) > 0 {
+		discovered, _ := jsd.DiscoverEndpoints()
+		for i := range obsolete {
+			if newID, ok := discovered[obsolete[i].Name]; ok {
+				obsolete[i].SuggestedID = newID
+			}
+		}
+	}
+	
+	return obsolete, nil
+}
+
 // invalidateJSCache clears the endpoint cache
 // UpdateObsoleteEndpoints checks all endpoints and updates obsolete ones
 func (jsd *JSEndpointDiscovery) UpdateObsoleteEndpoints() error {

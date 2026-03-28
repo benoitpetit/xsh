@@ -68,12 +68,12 @@ go install github.com/benoitpetit/xsh@latest
 
 **Linux/macOS:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/main/core/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell as Administrator):**
 ```powershell
-iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/main/core/scripts/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.ps1 | iex
 ```
 
 ### Pre-built Binaries
@@ -91,7 +91,7 @@ sudo mv xsh /usr/local/bin/
 
 ```bash
 git clone https://github.com/benoitpetit/xsh
-cd xsh/core
+cd xsh
 go build -o xsh .
 sudo mv xsh /usr/local/bin/
 ```
@@ -654,7 +654,7 @@ xsh version
 ```bash
 # Clone
 git clone https://github.com/benoitpetit/xsh
-cd xsh/core
+cd xsh
 
 # Build
 go build -o xsh .

@@ -7,31 +7,31 @@ import (
 	"github.com/benoitpetit/xsh/core"
 )
 
-// TestIsJSONMode teste la détection du mode JSON
+// TestIsJSONMode tests JSON mode detection
 func TestIsJSONMode(t *testing.T) {
-	// Quand stdout est un TTY et jsonFlag est false
+	// When stdout is a TTY and jsonFlag is false
 	oldStdout := os.Stdout
 	defer func() { os.Stdout = oldStdout }()
 
-	// Note: Ce test est simplifié car is_json_mode dépend de sys.stdout.isatty()
-	// Dans un vrai environnement de test, stdout n'est pas un TTY
+	// Note: This test is simplified because is_json_mode depends on sys.stdout.isatty()
+	// In a real test environment, stdout is not a TTY
 
-	// Tester avec jsonFlag = true (devrait toujours retourner true)
+	// Test with jsonFlag = true (should always return true)
 	if !isJSONModeHelper(true) {
 		t.Error("isJSONMode(true) should return true")
 	}
 }
 
-// Helper pour tester isJSONMode
+// Helper to test isJSONMode
 func isJSONModeHelper(jsonFlag bool) bool {
 	if jsonFlag {
 		return true
 	}
-	// Simuler la vérification TTY (toujours false dans les tests)
+	// Simulate TTY check (always false in tests)
 	return false
 }
 
-// TestExitCodes teste les codes de sortie
+// TestExitCodes tests exit codes
 func TestExitCodes(t *testing.T) {
 	if core.ExitSuccess != 0 {
 		t.Errorf("ExitSuccess = %d, want 0", core.ExitSuccess)
@@ -50,28 +50,28 @@ func TestExitCodes(t *testing.T) {
 	}
 }
 
-// TestConfigDirName teste le nom du répertoire de configuration
+// TestConfigDirName tests configuration directory name
 func TestConfigDirName(t *testing.T) {
 	if core.ConfigDirName != "xsh" {
 		t.Errorf("ConfigDirName = %s, want 'xsh'", core.ConfigDirName)
 	}
 }
 
-// TestConfigFileName teste le nom du fichier de configuration
+// TestConfigFileName tests configuration file name
 func TestConfigFileName(t *testing.T) {
 	if core.ConfigFileName != "config.toml" {
 		t.Errorf("ConfigFileName = %s, want 'config.toml'", core.ConfigFileName)
 	}
 }
 
-// TestAuthFileName teste le nom du fichier d'authentification
+// TestAuthFileName tests authentication file name
 func TestAuthFileName(t *testing.T) {
 	if core.AuthFileName != "auth.json" {
 		t.Errorf("AuthFileName = %s, want 'auth.json'", core.AuthFileName)
 	}
 }
 
-// TestDefaultConstants teste les constantes par défaut
+// TestDefaultConstants tests default constants
 func TestDefaultConstants(t *testing.T) {
 	if core.DefaultCount != 20 {
 		t.Errorf("DefaultCount = %d, want 20", core.DefaultCount)
@@ -86,9 +86,9 @@ func TestDefaultConstants(t *testing.T) {
 	}
 }
 
-// TestGraphQLEndpointsCount vérifie le nombre d'endpoints GraphQL
+// TestGraphQLEndpointsCount verifies the number of GraphQL endpoints
 func TestGraphQLEndpointsCount(t *testing.T) {
-	// Vérifier que nous avons les endpoints principaux
+	// Verify main endpoints are present
 	requiredEndpoints := []string{
 		"HomeTimeline",
 		"HomeLatestTimeline",
@@ -113,19 +113,19 @@ func TestGraphQLEndpointsCount(t *testing.T) {
 	}
 }
 
-// TestBearerToken teste que le Bearer token est défini
+// TestBearerToken tests that the Bearer token is set
 func TestBearerToken(t *testing.T) {
 	if core.BearerToken == "" {
 		t.Error("BearerToken should not be empty")
 	}
 
-	// Vérifier que ça ressemble à un token
+	// Verify it looks like a token
 	if len(core.BearerToken) < 50 {
 		t.Error("BearerToken seems too short")
 	}
 }
 
-// TestBaseURLs teste les URLs de base
+// TestBaseURLs tests base URLs
 func TestBaseURLs(t *testing.T) {
 	if core.BaseURL != "https://x.com" {
 		t.Errorf("BaseURL = %s, want 'https://x.com'", core.BaseURL)
@@ -141,13 +141,13 @@ func TestBaseURLs(t *testing.T) {
 	}
 }
 
-// TestChromeVersions teste les versions Chrome pour User-Agent
+// TestChromeVersions tests Chrome versions for User-Agent
 func TestChromeVersions(t *testing.T) {
 	if len(core.ChromeVersions) == 0 {
 		t.Error("ChromeVersions should not be empty")
 	}
 
-	// Vérifier que toutes les versions sont non vides
+	// Verify all versions are non-empty
 	for i, version := range core.ChromeVersions {
 		if version == "" {
 			t.Errorf("ChromeVersions[%d] is empty", i)
@@ -155,9 +155,9 @@ func TestChromeVersions(t *testing.T) {
 	}
 }
 
-// TestDefaultFeatures teste les feature flags par défaut
+// TestDefaultFeatures tests default feature flags
 func TestDefaultFeatures(t *testing.T) {
-	// Vérifier quelques features importantes
+	// Verify some important features
 	importantFeatures := []string{
 		"responsive_web_graphql_timeline_navigation_enabled",
 		"view_counts_everywhere_api_enabled",
@@ -171,9 +171,9 @@ func TestDefaultFeatures(t *testing.T) {
 	}
 }
 
-// TestTruncateUsername teste la gestion des handles utilisateur
+// TestTruncateUsername tests user handle management
 func TestTruncateUsername(t *testing.T) {
-	// Simuler le retrait du @ en début de handle
+	// Simulate stripping @ from start of handle
 	handle := "@testuser"
 	if handle[0] == '@' {
 		handle = handle[1:]
@@ -184,9 +184,9 @@ func TestTruncateUsername(t *testing.T) {
 	}
 }
 
-// TestTweetIDValidation teste la validation des IDs de tweet
+// TestTweetIDValidation tests tweet ID validation
 func TestTweetIDValidation(t *testing.T) {
-	// Les IDs de tweet sont des chaînes numériques
+	// Tweet IDs are numeric strings
 	validIDs := []string{"123456789", "9876543210", "0"}
 	invalidIDs := []string{"", "abc", "12 34"}
 
@@ -198,17 +198,17 @@ func TestTweetIDValidation(t *testing.T) {
 
 	for _, id := range invalidIDs {
 		if id == "" {
-			// OK, vide est géré comme cas spécial
+			// OK, empty is handled as special case
 			continue
 		}
-		// Dans le vrai code, il y aurait validation ici
+		// In real code there would be validation here
 		_ = id
 	}
 }
 
-// TestTLSFingerprinting teste la disponibilité du TLS fingerprinting
+// TestTLSFingerprinting tests TLS fingerprinting availability
 func TestTLSFingerprinting(t *testing.T) {
-	// Vérifier que les fingerprints sont disponibles
+	// Verify fingerprints are available
 	fingerprints := []string{
 		"HelloChrome_Auto",
 		"HelloChrome_120",
@@ -217,8 +217,8 @@ func TestTLSFingerprinting(t *testing.T) {
 		"HelloFirefox_105",
 	}
 
-	// Ces fingerprints sont définis dans le package utls
-	// Nous vérifions simplement que nous pouvons les référencer
+	// These fingerprints are defined in the utls package
+	// We simply verify that we can reference them
 	for _, fp := range fingerprints {
 		if fp == "" {
 			t.Error("Fingerprint should not be empty")
@@ -226,9 +226,9 @@ func TestTLSFingerprinting(t *testing.T) {
 	}
 }
 
-// TestConfigCommands teste les commandes de configuration
+// TestConfigCommands tests configuration commands
 func TestConfigCommands(t *testing.T) {
-	// Tester que les clés de configuration sont valides
+	// Test that configuration keys are valid
 	validKeys := []string{
 		"default_count",
 		"default_account",

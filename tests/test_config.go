@@ -9,7 +9,7 @@ import (
 	"github.com/benoitpetit/xsh/utils"
 )
 
-// TestDefaultConfig teste la configuration par défaut
+// TestDefaultConfig tests default configuration
 func TestDefaultConfig(t *testing.T) {
 	cfg := core.DefaultConfig()
 
@@ -33,23 +33,23 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("Request.MaxRetries = %d, want 3", cfg.Request.MaxRetries)
 	}
 
-	// Vérifier les valeurs de filtrage
+	// Verify filter weights
 	if cfg.Filter.LikesWeight != 1.0 {
 		t.Errorf("Filter.LikesWeight = %f, want 1.0", cfg.Filter.LikesWeight)
 	}
 }
 
-// TestConfigLoadSave teste le chargement et la sauvegarde de la configuration
+// TestConfigLoadSave tests configuration loading and saving
 func TestConfigLoadSave(t *testing.T) {
-	// Créer un répertoire temporaire
+	// Create a temporary directory
 	tmpDir := t.TempDir()
 
-	// Utiliser une variable d'environnement pour changer le chemin
+	// Use environment variable to change path
 	originalHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", originalHome)
 
-	// Créer le répertoire .config/xsh
+	// Create the .config/xsh directory
 	configDir := filepath.Join(tmpDir, ".config", "xsh")
 	os.MkdirAll(configDir, 0755)
 
@@ -84,7 +84,7 @@ func TestConfigLoadSave(t *testing.T) {
 			t.Fatalf("Save() error = %v", err)
 		}
 
-		// Recharger la configuration
+		// Reload configuration
 		loaded, err := core.LoadConfig()
 		if err != nil {
 			t.Fatalf("LoadConfig() error = %v", err)
@@ -108,11 +108,11 @@ func TestConfigLoadSave(t *testing.T) {
 	})
 }
 
-// TestFilterConfig teste la configuration des filtres
+// TestFilterConfig tests filter configuration
 func TestFilterConfig(t *testing.T) {
 	cfg := core.DefaultConfig()
 
-	// Vérifier les pondérations par défaut
+	// Verify default weights
 	expectedWeights := map[string]float64{
 		"Likes":     1.0,
 		"Retweets":  1.5,
@@ -142,7 +142,7 @@ func TestFilterConfig(t *testing.T) {
 	}
 }
 
-// TestDefaultFilterConfig teste la fonction DefaultFilterConfig
+// TestDefaultFilterConfig tests the DefaultFilterConfig function
 func TestDefaultFilterConfig(t *testing.T) {
 	cfg := utils.DefaultFilterConfig()
 
@@ -151,7 +151,7 @@ func TestDefaultFilterConfig(t *testing.T) {
 	}
 }
 
-// TestGetConfigDir teste la récupération du répertoire de configuration
+// TestGetConfigDir tests configuration directory retrieval
 func TestGetConfigDir(t *testing.T) {
 	dir, err := core.GetConfigDir()
 	if err != nil {
@@ -162,13 +162,13 @@ func TestGetConfigDir(t *testing.T) {
 		t.Error("GetConfigDir() returned empty string")
 	}
 
-	// Vérifier que le répertoire existe
+	// Verify directory exists
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		t.Errorf("Config directory %s does not exist", dir)
 	}
 }
 
-// TestGetConfigPath teste la récupération du chemin de configuration
+// TestGetConfigPath tests configuration path retrieval
 func TestGetConfigPath(t *testing.T) {
 	path, err := core.GetConfigPath()
 	if err != nil {
@@ -179,17 +179,17 @@ func TestGetConfigPath(t *testing.T) {
 		t.Error("GetConfigPath() returned empty string")
 	}
 
-	// Vérifier que le chemin se termine par config.toml
+	// Verify path ends with config.toml
 	if filepath.Base(path) != "config.toml" {
 		t.Errorf("Config path %s should end with config.toml", path)
 	}
 }
 
-// TestConfigSetValues teste la modification des valeurs de configuration
+// TestConfigSetValues tests configuration value modification
 func TestConfigSetValues(t *testing.T) {
 	cfg := core.DefaultConfig()
 
-	// Modifier les valeurs
+	// Modify values
 	cfg.DefaultCount = 100
 	cfg.Display.Theme = "light"
 	cfg.Display.ShowEngagement = false
