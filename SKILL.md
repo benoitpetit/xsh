@@ -1,73 +1,73 @@
-# xsh - Guide pour LLM
+# xsh - Guide for LLM
 
-Guide de référence pour utiliser xsh (Twitter/X CLI) via Model Context Protocol (MCP) ou commandes directes.
+Reference guide for using xsh (Twitter/X CLI) via Model Context Protocol (MCP) or direct commands.
 
-## Qu'est-ce que xsh ?
+## What is xsh?
 
-CLI pour Twitter/X utilisant l'authentification par cookies de navigateur. Aucune clé API requise. Fonctionne en mode terminal (humain) ou JSON (LLM/AI).
+CLI for Twitter/X using browser cookie authentication. No API key required. Works in terminal mode (human) or JSON mode (LLM/AI).
 
-## Installation Rapide
+## Quick Installation
 
 ```bash
 # Option 1: Via Go
 go install github.com/benoitpetit/xsh@latest
 
-# Option 2: Script Linux/macOS
+# Option 2: Linux/macOS Script
 curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.sh | bash
 
-# Option 3: Binaire direct
+# Option 3: Direct Binary
 wget https://github.com/benoitpetit/xsh/releases/latest/download/xsh-linux-amd64 -O xsh
 chmod +x xsh && sudo mv xsh /usr/local/bin/
 ```
 
-## Authentification (Obligatoire)
+## Authentication (Required)
 
-Avant toute commande, authentifiez-vous:
+Before any command, authenticate:
 
 ```bash
-# Extraction auto des cookies du navigateur
+# Auto cookie extraction from browser
 xsh auth login
 
-# Ou import depuis Cookie Editor
+# Or import from Cookie Editor
 xsh auth import cookies.json
 
-# Vérifier le statut
+# Check status
 xsh auth status
 ```
 
-**Multi-compte:**
+**Multi-account:**
 ```bash
-xsh auth login --account work    # Créer compte nommé
-xsh auth switch work             # Changer de compte
-xsh auth accounts                # Lister les comptes
+xsh auth login --account work    # Create named account
+xsh auth switch work             # Switch account
+xsh auth accounts                # List accounts
 ```
 
-## Formats de Sortie (Important pour LLM)
+## Output Formats (Important for LLM)
 
-Toutes les commandes supportent:
+All commands support:
 
 ```bash
---json      # JSON complet
---compact   # JSON minimal (essentiel uniquement)
+--json      # Full JSON
+--compact   # Minimal JSON (essential only)
 --yaml      # YAML
 ```
 
-**Mode auto-détection:** Si stdout est redirigé (pipe), le JSON est automatiquement utilisé.
+**Auto-detection mode:** If stdout is redirected (pipe), JSON is automatically used.
 
-## Commandes par Usage
+## Commands by Usage
 
-### 1. Timeline & Découverte
+### 1. Timeline & Discovery
 
 ```bash
-# Timeline personnelle
+# Personal timeline
 xsh feed --count 20 --json
 xsh feed --type following --count 50
 
-# Recherche
+# Search
 xsh search "golang" --type Latest --pages 2 --json
 xsh search "python" --type Top --count 100
 
-# Tendances
+# Trends
 xsh trends --location "France"
 xsh trends --woeid 615702  # Paris
 ```
@@ -75,47 +75,47 @@ xsh trends --woeid 615702  # Paris
 ### 2. Tweets
 
 ```bash
-# Voir un tweet
+# View a tweet
 xsh tweet view <tweet_id> --thread --json
 
-# Publier
+# Publish
 xsh tweet post "Hello World!"
-xsh tweet post "Avec image" --image photo.jpg
-xsh tweet post "Réponse" --reply-to <tweet_id>
-xsh tweet post "Citation" --quote <tweet_url>
+xsh tweet post "With image" --image photo.jpg
+xsh tweet post "Reply" --reply-to <tweet_id>
+xsh tweet post "Quote" --quote <tweet_url>
 
 # Engagement
 xsh tweet like <tweet_id>
 xsh tweet retweet <tweet_id>
 xsh tweet bookmark <tweet_id>
 
-# Actions rapides (root level)
+# Quick actions (root level)
 xsh unlike <tweet_id>
 xsh unretweet <tweet_id>
 xsh unbookmark <tweet_id>
 
-# Supprimer
+# Delete
 xsh tweet delete <tweet_id>
 ```
 
-### 3. Utilisateurs
+### 3. Users
 
 ```bash
-# Profil
+# Profile
 xsh user <handle> --json
 
-# Tweets d'un utilisateur
+# User's tweets
 xsh user tweets <handle> --count 50 --json
-xsh user tweets <handle> --replies  # Inclure réponses
+xsh user tweets <handle> --replies  # Include replies
 
 # Likes
 xsh user likes <handle> --count 50
 
-# Réseau
+# Network
 xsh user followers <handle> --count 100
 xsh user following <handle> --count 100
 
-# Actions sociales
+# Social actions
 xsh follow <handle>
 xsh unfollow <handle>
 xsh block <handle>
@@ -125,24 +125,24 @@ xsh mute <handle>
 ### 4. Batch Operations (Multiple IDs)
 
 ```bash
-# Récupérer plusieurs tweets
+# Fetch multiple tweets
 xsh tweets <id1> <id2> <id3> --json
 
-# Récupérer plusieurs utilisateurs
+# Fetch multiple users
 xsh users <handle1> <handle2> <handle3> --json
 ```
 
-### 5. Listes
+### 5. Lists
 
 ```bash
-# Lister mes listes
+# List my lists
 xsh lists --json
 
-# Voir tweets d'une liste
+# View tweets from a list
 xsh lists view <list_id> --count 50
 
-# Gérer
-xsh lists create "Ma Liste" --description "Description"
+# Manage
+xsh lists create "My List" --description "Description"
 xsh lists add-member <list_id> <handle>
 xsh lists remove-member <list_id> <handle>
 xsh lists delete <list_id>
@@ -156,7 +156,7 @@ xsh bookmarks-folders
 xsh bookmarks-folder <folder_id>
 ```
 
-### 7. Messages Directs
+### 7. Direct Messages
 
 ```bash
 xsh dm inbox --json
@@ -164,10 +164,10 @@ xsh dm send <handle> "Message text"
 xsh dm delete <message_id>
 ```
 
-### 8. Tweets Programmés
+### 8. Scheduled Tweets
 
 ```bash
-xsh schedule "Futur tweet" --at "2026-04-01 09:00"
+xsh schedule "Future tweet" --at "2026-04-01 09:00"
 xsh scheduled --json
 xsh unschedule <scheduled_tweet_id>
 ```
@@ -180,58 +180,58 @@ xsh jobs search "devops" --location-type remote --count 50
 xsh jobs view <job_id>
 ```
 
-### 10. Médias & Export
+### 10. Media & Export
 
 ```bash
-# Télécharger média d'un tweet
+# Download media from a tweet
 xsh download <tweet_id> --output-dir ./media
 
-# Exporter en différents formats
+# Export to different formats
 xsh export feed --format json --output tweets.json
 xsh export feed --format csv --output tweets.csv
 xsh export search "golang" --format jsonl --output results.jsonl
 xsh export bookmarks --format md --output bookmarks.md
 
-# Formats supportés: json, jsonl, csv, tsv, md
+# Supported formats: json, jsonl, csv, tsv, md
 ```
 
-### 11. Composition de Threads
+### 11. Thread Composition
 
 ```bash
-# Mode interactif
+# Interactive mode
 xsh compose
 
-# Depuis fichier
+# From file
 xsh compose --file thread.txt --dry-run
 ```
 
-### 12. Utilitaires
+### 12. Utilities
 
 ```bash
-# Compter caractères
-xsh count "Texte du tweet"
+# Count characters
+xsh count "Tweet text"
 xsh count --file draft.txt
 
 # Diagnostics
 xsh doctor --json
 xsh status --json
 
-# Endpoints (gestion interne)
+# Endpoints (internal management)
 xsh endpoints list
 xsh endpoints refresh
 xsh auto-update
 ```
 
-## Schémas JSON
+## JSON Schemas
 
 ### Tweet
 
 ```json
 {
   "id": "1234567890",
-  "text": "Contenu du tweet",
+  "text": "Tweet content",
   "author_id": "987654321",
-  "author_name": "Nom",
+  "author_name": "Name",
   "author_handle": "username",
   "author_verified": true,
   "created_at": "2024-01-15T10:30:00Z",
@@ -261,7 +261,7 @@ xsh auto-update
 {
   "id": "987654321",
   "handle": "username",
-  "name": "Nom Complet",
+  "name": "Full Name",
   "bio": "Description...",
   "location": "Paris",
   "website": "https://...",
@@ -287,12 +287,12 @@ xsh auto-update
 
 ## MCP Server (Model Context Protocol)
 
-Démarrer le serveur MCP:
+Start the MCP server:
 ```bash
 xsh mcp
 ```
 
-### Configuration Claude Desktop
+### Claude Desktop Configuration
 
 `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -307,9 +307,9 @@ xsh mcp
 }
 ```
 
-### Outils MCP Disponibles (52)
+### Available MCP Tools (52)
 
-**Lecture (24):**
+**Read (24):**
 - `get_feed`, `search`, `get_tweet`, `get_tweet_thread`
 - `get_tweets_batch`, `get_users_batch`
 - `get_user`, `get_user_tweets`, `get_user_likes`
@@ -318,7 +318,7 @@ xsh mcp
 - `get_lists`, `get_list_timeline`, `get_list_members`
 - `dm_inbox`, `get_trending`, `search_jobs`, `get_job`, `auth_status`
 
-**Écriture (14):**
+**Write (14):**
 - `post_tweet`, `delete_tweet`
 - `like`, `unlike`, `retweet`, `unretweet`, `bookmark`, `unbookmark`
 - `follow`, `unfollow`, `block`, `unblock`, `mute`, `unmute`
@@ -329,44 +329,44 @@ xsh mcp
 - `dm_send`, `dm_delete`
 - `download_media`
 
-## Exemples pour LLM / Scripts
+## Examples for LLM / Scripts
 
-### Pipeline de Traitement
+### Processing Pipeline
 
 ```bash
-# Extraire textes des tweets
+# Extract tweet texts
 xsh feed --json | jq '.[].text'
 
-# Filtrer par engagement
+# Filter by engagement
 xsh search "golang" --json | jq '[.[] | select(.engagement.likes > 100)]'
 
-# Analyse de followers
+# Followers analysis
 xsh user followers elonmusk --json | jq 'map(.followers_count) | add'
 ```
 
-### Export pour Analyse
+### Export for Analysis
 
 ```bash
-# Exporter timeline complète
+# Export full timeline
 xsh export feed --format json --output timeline.json
 
-# Convertir en CSV pour Excel
+# Convert to CSV for Excel
 xsh export search "keyword" --format csv --output results.csv
 ```
 
-### Surveillance Continue
+### Continuous Monitoring
 
 ```bash
-# Monitorer mentions
+# Monitor mentions
 while true; do
-  xsh search "@moncompte" --json | jq '.[].text'
+  xsh search "@myaccount" --json | jq '.[].text'
   sleep 60
 done
 ```
 
 ## Configuration
 
-Fichier: `~/.config/xsh/config.toml`
+File: `~/.config/xsh/config.toml`
 
 ```toml
 default_count = 20
@@ -382,42 +382,42 @@ timeout = 30
 max_retries = 3
 ```
 
-## Codes de Sortie
+## Exit Codes
 
-| Code | Signification |
+| Code | Meaning |
 |------|---------------|
-| 0 | Succès |
-| 1 | Erreur générale |
-| 2 | Erreur d'authentification |
+| 0 | Success |
+| 1 | General error |
+| 2 | Authentication error |
 | 3 | Rate limit |
 
-## Résolution de Problèmes
+## Troubleshooting
 
 ```bash
-# Vérifier santé du système
+# Check system health
 xsh doctor
 
-# Rafraîchir endpoints
+# Refresh endpoints
 xsh endpoints refresh
 
-# Mettre à jour endpoints obsolètes
+# Update obsolete endpoints
 xsh auto-update
 
-# Mode verbose (debug)
+# Verbose mode (debug)
 xsh feed --verbose
 ```
 
-## Bonnes Pratiques
+## Best Practices
 
-1. **Rate Limiting**: Utilisez `--delay` ou configurez `delay` dans config.toml
-2. **Batch**: Privilégiez `tweets` et `users` pour plusieurs IDs
-3. **Pipes**: Les commandes détectent automatiquement les pipes et sortent en JSON
-4. **Comptes**: Utilisez des comptes nommés pour gérer multiples profils
-5. **Export**: Utilisez `export` pour sauvegarder des données en masse
+1. **Rate Limiting**: Use `--delay` or configure `delay` in config.toml
+2. **Batch**: Prefer `tweets` and `users` for multiple IDs
+3. **Pipes**: Commands auto-detect pipes and output JSON
+4. **Accounts**: Use named accounts to manage multiple profiles
+5. **Export**: Use `export` to bulk save data
 
-## Sécurité
+## Security
 
-- Credentials stockés avec permissions 0600
-- TLS fingerprinting (uTLS) pour éviter la détection bot
-- Aucune donnée envoyée à des tiers
-- Configuration locale uniquement
+- Credentials stored with 0600 permissions
+- TLS fingerprinting (uTLS) to avoid bot detection
+- No data sent to third parties
+- Local configuration only
