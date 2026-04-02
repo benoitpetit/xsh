@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/benoitpetit/xsh/core"
+	"github.com/benoitpetit/xsh/display"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -18,13 +18,13 @@ var accountsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		accounts, err := core.ListAccounts()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Failed to list accounts: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Failed to list accounts: %v", err)))
 			os.Exit(1)
 		}
 
 		if len(accounts) == 0 {
-			fmt.Println("No stored accounts found.")
-			fmt.Println("\nUse 'xsh auth' to add an account.")
+			fmt.Println(display.Warning("No stored accounts found"))
+			fmt.Println(display.Muted("\nUse 'xsh auth' to add an account."))
 			return
 		}
 
@@ -35,34 +35,23 @@ var accountsCmd = &cobra.Command{
 			defaultAccount = creds.AccountName
 		}
 
-		titleStyle := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#1DA1F2"))
-
-		activeStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FF00")).
-			Bold(true)
-
-		accountStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF"))
-
-		fmt.Println(titleStyle.Render("\n📂 Stored Accounts"))
+		fmt.Println(display.Title("📂 Stored Accounts"))
 		fmt.Println()
 
 		for _, acc := range accounts {
 			if acc == defaultAccount {
-				fmt.Printf("  %s %s\n", 
-					activeStyle.Render("●"),
-					accountStyle.Render(acc+" (active)"))
+				fmt.Println(display.Bullet(
+					display.Success("●") +
+					display.Bold(acc+" (active)")))
 			} else {
-				fmt.Printf("  %s %s\n", 
-					lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("○"),
-					accountStyle.Render(acc))
+				fmt.Println(display.Bullet(
+					display.Muted("○") +
+					display.Bold(acc)))
 			}
 		}
 
 		fmt.Println()
-		fmt.Println("Use 'xsh switch <account>' to change accounts")
+		fmt.Println(display.Muted("Use 'xsh switch <account>' to change accounts"))
 	},
 }
 
@@ -75,17 +64,11 @@ var switchCmd = &cobra.Command{
 		acc := args[0]
 
 		if err := core.SetDefaultAccount(acc); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Failed to switch account: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Failed to switch account: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 
-		successStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FF00")).
-			Bold(true)
-
-		fmt.Printf("\n%s Switched to account '%s'\n\n", 
-			successStyle.Render("✓"),
-			acc)
+		fmt.Println(display.Success(fmt.Sprintf("Switched to account '%s'", acc)))
 	},
 }
 
@@ -107,7 +90,7 @@ The cookie file should be in JSON format exported from x.com with 'auth_token' a
 		if !filepath.IsAbs(cookieFile) {
 			cwd, err := os.Getwd()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: Failed to get working directory: %v\n", err)
+				fmt.Println(display.Error(fmt.Sprintf("Failed to get working directory: %v", err)))
 				os.Exit(1)
 			}
 			cookieFile = filepath.Join(cwd, cookieFile)
@@ -115,14 +98,14 @@ The cookie file should be in JSON format exported from x.com with 'auth_token' a
 
 		// Check file exists
 		if _, err := os.Stat(cookieFile); os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "Error: Cookie file not found: %s\n", cookieFile)
+			fmt.Println(display.Error(fmt.Sprintf("Cookie file not found: %s", cookieFile)))
 			os.Exit(1)
 		}
 
 		// Import cookies
 		creds, err := core.ImportCookiesFromFile(cookieFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Failed to import cookies: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Failed to import cookies: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 
@@ -149,17 +132,11 @@ The cookie file should be in JSON format exported from x.com with 'auth_token' a
 
 		// Save auth
 		if err := core.SaveAuth(creds, accountName); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: Failed to save auth: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Failed to save auth: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 
-		successStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FF00")).
-			Bold(true)
-
-		fmt.Printf("\n%s Successfully imported account '%s'\n\n", 
-			successStyle.Render("✓"),
-			accountName)
+		fmt.Println(display.Success(fmt.Sprintf("Successfully imported account '%s'", accountName)))
 	},
 }
 

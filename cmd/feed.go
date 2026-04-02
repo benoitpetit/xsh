@@ -30,7 +30,7 @@ var feedCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -43,7 +43,7 @@ var feedCmd = &cobra.Command{
 		for i := 0; i < feedPages; i++ {
 			response, err := core.GetHomeTimeline(client, feedType, feedCount, cursor)
 			if err != nil {
-				fmt.Println(display.PrintError(fmt.Sprintf("Failed to fetch timeline: %v", err)))
+				fmt.Println(display.Error(fmt.Sprintf("Failed to fetch timeline: %v", err)))
 				os.Exit(core.ExitError)
 				return
 			}
@@ -56,7 +56,7 @@ var feedCmd = &cobra.Command{
 
 		// Print cursor for next page if available
 		if cursor != "" && !isJSONMode() {
-			fmt.Fprintf(os.Stderr, "\n%s Next cursor: %s\n", display.PrintWarning("Pagination:"), cursor)
+			fmt.Fprintln(os.Stderr, display.Info(fmt.Sprintf("Next cursor: %s", cursor)))
 		}
 
 		// Truncate to exact count requested (API may return more than requested)

@@ -23,7 +23,6 @@ var statusCmd = &cobra.Command{
 		showJSON, _ := cmd.Flags().GetBool("json")
 		checkNow, _ := cmd.Flags().GetBool("check")
 
-		// Collect status information
 		status := collectSystemStatus(checkNow)
 
 		if showJSON || isJSONMode() || isYAMLMode() {
@@ -31,33 +30,32 @@ var statusCmd = &cobra.Command{
 			return
 		}
 
-		// Display formatted status
 		displayStatus(status)
 	},
 }
 
 // systemStatus holds all status information
 type systemStatus struct {
-	Authenticated   bool                   `json:"authenticated"`
-	Account         string                 `json:"account,omitempty"`
-	EndpointHealth  endpointHealth         `json:"endpoint_health"`
-	CacheStatus     cacheStatus            `json:"cache_status"`
-	Connectivity    connectivityStatus     `json:"connectivity"`
-	Timestamp       time.Time              `json:"timestamp"`
+	Authenticated   bool               `json:"authenticated"`
+	Account         string             `json:"account,omitempty"`
+	EndpointHealth  endpointHealth     `json:"endpoint_health"`
+	CacheStatus     cacheStatus        `json:"cache_status"`
+	Connectivity    connectivityStatus `json:"connectivity"`
+	Timestamp       time.Time          `json:"timestamp"`
 }
 
 type endpointHealth struct {
-	Healthy        bool     `json:"healthy"`
-	TotalEndpoints int      `json:"total_endpoints"`
+	Healthy         bool     `json:"healthy"`
+	TotalEndpoints  int      `json:"total_endpoints"`
 	FailedEndpoints []string `json:"failed_endpoints,omitempty"`
-	Message        string   `json:"message"`
+	Message         string   `json:"message"`
 }
 
 type cacheStatus struct {
-	Valid        bool          `json:"valid"`
-	Age          time.Duration `json:"age"`
-	EndpointCount int          `json:"endpoint_count"`
-	FeatureCount  int          `json:"feature_count"`
+	Valid         bool          `json:"valid"`
+	Age           time.Duration `json:"age"`
+	EndpointCount int           `json:"endpoint_count"`
+	FeatureCount  int           `json:"feature_count"`
 }
 
 type connectivityStatus struct {
@@ -71,17 +69,15 @@ func collectSystemStatus(checkNow bool) *systemStatus {
 		Timestamp: time.Now(),
 	}
 
-	// Check authentication
 	creds, err := core.GetCredentials(account)
 	if err == nil && creds != nil && creds.IsValid() {
 		status.Authenticated = true
 		status.Account = creds.AccountName
 	}
 
-	// Check endpoint health
 	manager := core.GetEndpointManager()
 	stats := manager.GetStats()
-	
+
 	status.CacheStatus = cacheStatus{
 		Valid:         stats.CacheAge < 24*time.Hour,
 		Age:           stats.CacheAge,
@@ -89,26 +85,23 @@ func collectSystemStatus(checkNow bool) *systemStatus {
 		FeatureCount:  stats.FeatureCount,
 	}
 
-	// Check connectivity
 	status.Connectivity = checkConnectivity()
 
-	// Perform endpoint check if requested
 	if checkNow {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		
+
 		healthy, issues := core.CheckEndpointHealth(ctx, nil)
 		status.EndpointHealth = endpointHealth{
-			Healthy:        healthy,
-			TotalEndpoints: stats.TotalCount,
+			Healthy:         healthy,
+			TotalEndpoints:  stats.TotalCount,
 			FailedEndpoints: issues,
-			Message:        "Checked just now",
+			Message:         "Checked just now",
 		}
 		if !healthy && len(issues) > 0 {
 			status.EndpointHealth.Message = fmt.Sprintf("%d issues found", len(issues))
 		}
 	} else {
-		// Use cached health status
 		status.EndpointHealth = endpointHealth{
 			Healthy:        status.CacheStatus.Valid,
 			TotalEndpoints: stats.TotalCount,
@@ -125,7 +118,6 @@ func checkConnectivity() connectivityStatus {
 		DiscoveryWorks: true,
 	}
 
-	// Try to create endpoint discovery
 	discovery, err := core.NewEndpointDiscovery(false)
 	if err != nil {
 		conn.DiscoveryWorks = false
@@ -133,7 +125,6 @@ func checkConnectivity() connectivityStatus {
 		return conn
 	}
 
-	// Quick check if we can reach X.com
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -147,68 +138,71 @@ func checkConnectivity() connectivityStatus {
 }
 
 func displayStatus(s *systemStatus) {
-	// Header
 	fmt.Println()
-	fmt.Println(display.StyleBold.Render("XSH System Status"))
-	fmt.Println(display.StyleMuted.Render("================="))
+	fmt.Println(display.Title("XSH System Status"))
+	fmt.Println(display.Separator(40))
 	fmt.Println()
 
 	// Authentication
-	authStatus := "✓ Authenticated"
-	if !s.Authenticated {
-		authStatus = "✗ Not authenticated"
-	}
-	fmt.Printf("%-20s %s\n", "Authentication:", authStatus)
-	if s.Authenticated && s.Account != "" {
-		fmt.Printf("%-20s %s\n", "  Account:", s.Account)
+	fmt.Println(display.Section("Authentication"))
+	if s.Authenticated {
+		fmt.Println(display.KeyValue("Status:", display.Success("Authenticated")))
+		if s.Account != "" {
+			fmt.Println(display.KeyValue("Account:", s.Account))
+		}
+	} else {
+		fmt.Println(display.KeyValue("Status:", display.Error("Not authenticated")))
 	}
 	fmt.Println()
 
 	// Endpoint Health
-	healthStatus := "✓ Healthy"
-	if !s.EndpointHealth.Healthy {
-		healthStatus = "✗ Issues detected"
+	fmt.Println(display.Section("Endpoint Health"))
+	if s.EndpointHealth.Healthy {
+		fmt.Println(display.KeyValue("Status:", display.Success("Healthy")))
+	} else {
+		fmt.Println(display.KeyValue("Status:", display.Error("Issues detected")))
 	}
-	fmt.Printf("%-20s %s\n", "Endpoint Health:", healthStatus)
-	fmt.Printf("%-20s %d endpoints\n", "  Total:", s.EndpointHealth.TotalEndpoints)
+	fmt.Println(display.KeyValue("Total:", fmt.Sprintf("%d endpoints", s.EndpointHealth.TotalEndpoints)))
 	if len(s.EndpointHealth.FailedEndpoints) > 0 {
-		fmt.Printf("%-20s %v\n", "  Issues:", s.EndpointHealth.FailedEndpoints)
+		fmt.Println(display.KeyValue("Issues:", fmt.Sprintf("%v", s.EndpointHealth.FailedEndpoints)))
 	}
-	fmt.Printf("%-20s %s\n", "  Message:", s.EndpointHealth.Message)
+	fmt.Println(display.KeyValue("Message:", s.EndpointHealth.Message))
 	fmt.Println()
 
 	// Cache Status
-	cacheStatus := "✓ Valid"
-	if !s.CacheStatus.Valid {
-		cacheStatus = "✗ Expired"
+	fmt.Println(display.Section("Cache Status"))
+	if s.CacheStatus.Valid {
+		fmt.Println(display.KeyValue("Status:", display.Success("Valid")))
+	} else {
+		fmt.Println(display.KeyValue("Status:", display.Error("Expired")))
 	}
-	fmt.Printf("%-20s %s\n", "Cache:", cacheStatus)
-	fmt.Printf("%-20s %s\n", "  Age:", s.CacheStatus.Age.Round(time.Second))
-	fmt.Printf("%-20s %d\n", "  Endpoints:", s.CacheStatus.EndpointCount)
-	fmt.Printf("%-20s %d\n", "  Features:", s.CacheStatus.FeatureCount)
+	fmt.Println(display.KeyValue("Age:", s.CacheStatus.Age.Round(time.Second).String()))
+	fmt.Println(display.KeyValue("Endpoints:", fmt.Sprintf("%d", s.CacheStatus.EndpointCount)))
+	fmt.Println(display.KeyValue("Features:", fmt.Sprintf("%d", s.CacheStatus.FeatureCount)))
 	fmt.Println()
 
 	// Connectivity
-	connStatus := "✓ OK"
-	if !s.Connectivity.CanReachX || !s.Connectivity.DiscoveryWorks {
-		connStatus = "✗ Issues"
+	fmt.Println(display.Section("Connectivity"))
+	if s.Connectivity.CanReachX && s.Connectivity.DiscoveryWorks {
+		fmt.Println(display.KeyValue("Status:", display.Success("OK")))
+	} else {
+		fmt.Println(display.KeyValue("Status:", display.Error("Issues")))
 	}
-	fmt.Printf("%-20s %s\n", "Connectivity:", connStatus)
 	if s.Connectivity.Message != "" {
-		fmt.Printf("%-20s %s\n", "  Message:", s.Connectivity.Message)
+		fmt.Println(display.KeyValue("Message:", s.Connectivity.Message))
 	}
 	fmt.Println()
 
 	// Timestamp
-	fmt.Printf("%-20s %s\n", "Last Updated:", s.Timestamp.Format("15:04:05"))
+	fmt.Println(display.KeyValue("Last Updated:", s.Timestamp.Format("15:04:05")))
 	fmt.Println()
 
 	// Recommendations
 	if !s.Authenticated {
-		fmt.Println(display.PrintWarning("Run 'xsh auth login' to authenticate"))
+		fmt.Println(display.Warning("Run 'xsh auth login' to authenticate"))
 	}
 	if !s.CacheStatus.Valid {
-		fmt.Println(display.PrintWarning("Run 'xsh endpoints refresh' to update endpoints"))
+		fmt.Println(display.Warning("Run 'xsh endpoints refresh' to update endpoints"))
 	}
 }
 

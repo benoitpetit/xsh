@@ -25,14 +25,14 @@ var dmInboxCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		conversations, err := core.GetDMInbox(client)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -53,7 +53,7 @@ var dmSendCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
@@ -61,22 +61,22 @@ var dmSendCmd = &cobra.Command{
 		// Get user by handle
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error fetching user: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
 			os.Exit(1)
 		}
 		if user == nil {
-			fmt.Fprintf(os.Stderr, "User @%s not found\n", handle)
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			os.Exit(1)
 		}
 
 		result, err := core.SendDM(client, user.ID, message)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
 		output(result, func() {
-			fmt.Printf("✓ DM sent to @%s\n", handle)
+			fmt.Println(display.Success(fmt.Sprintf("DM sent to @%s", handle)))
 		})
 	},
 }
@@ -95,21 +95,21 @@ var dmDeleteCmd = &cobra.Command{
 			var response string
 			fmt.Scanln(&response)
 			if response != "y" && response != "Y" {
-				fmt.Println("Cancelled")
+				fmt.Println(display.Warning("Cancelled"))
 				return
 			}
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.DeleteDM(client, messageID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -118,7 +118,7 @@ var dmDeleteCmd = &cobra.Command{
 			"message_id": messageID,
 			"status":     "success",
 		}, func() {
-			fmt.Printf("✓ Message deleted\n")
+			fmt.Println(display.Success("Message deleted"))
 		})
 	},
 }

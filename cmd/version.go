@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/benoitpetit/xsh/display"
 )
 
 // Version is set at build time via ldflags
@@ -14,7 +15,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of xsh",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("xsh version %s\n", Version)
+		fmt.Println(display.Title(fmt.Sprintf("xsh version %s", Version)))
 	},
 }
 

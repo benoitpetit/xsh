@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"sort"
+	"time"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
+	"github.com/benoitpetit/xsh/display"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -38,83 +41,92 @@ JS bundles that your browser downloads when visiting x.com.`,
   # Dry run (check only, don't update)
   xsh auto-update --dry-run`,
 	Run: func(cmd *cobra.Command, args []string) {
-		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#1DA1F2"))
-		
-		fmt.Println(titleStyle.Render("🔄 Automatic Endpoint Updater"))
-		fmt.Println()
-		fmt.Println("Method: Extract from X.com JavaScript bundles")
+		fmt.Println(display.Title("🔄 Automatic Endpoint Updater"))
+		fmt.Println(display.Info("Method: Extract from X.com JavaScript bundles"))
 		fmt.Println()
 
 		if autoUpdateDryRun {
-			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F")).
-				Render("📋 DRY RUN MODE - No changes will be made"))
+			fmt.Println(display.Warning("DRY RUN MODE - No changes will be made"))
 			fmt.Println()
 		}
 
 		// Invalidate cache if force flag is set
 		if autoUpdateForce {
-			fmt.Println("🗑️  Clearing endpoint cache...")
+			fmt.Println(display.Action("Clearing", "endpoint cache"))
 			core.InvalidateCache()
 			fmt.Println()
 		}
 
-		// Run auto-update using the JS-based discovery
-		discovery := core.NewJSEndpointDiscovery()
-		
+		manager := core.GetEndpointManager()
+		before := manager.ListEndpoints()
+
+		discovery, err := core.NewEndpointDiscovery(verbose)
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Error initializing endpoint discovery: %v", err)))
+			os.Exit(1)
+		}
+
+		var previousCache *core.EndpointCache
 		if autoUpdateDryRun {
-			// Just check which endpoints are obsolete
-			fmt.Println("🔍 Checking endpoints for obsolescence...")
-			fmt.Println()
-			
-			obsolete, err := discovery.CheckObsoleteEndpoints()
-			if err != nil {
-				fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#E0245E")).
-					Render(fmt.Sprintf("❌ Error checking endpoints: %v", err)))
-				os.Exit(1)
+			previousCache, _ = discovery.LoadCache()
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+
+		cache, err := discovery.DiscoverEndpoints(ctx)
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Auto-update failed: %v", err)))
+			os.Exit(1)
+		}
+
+		after := manager.ListEndpoints()
+		changed := make([]string, 0)
+		for op, newEndpoint := range after {
+			if oldEndpoint, ok := before[op]; ok && oldEndpoint != newEndpoint {
+				changed = append(changed, op)
 			}
-			
-			if len(obsolete) == 0 {
-				fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#00BA7C")).
-					Render("✅ All endpoints are up to date!"))
-				fmt.Println()
-				fmt.Println("No updates needed.")
+			if _, ok := before[op]; !ok {
+				if _, isDynamic := cache.Endpoints[op]; isDynamic {
+					changed = append(changed, op)
+				}
+			}
+		}
+		sort.Strings(changed)
+
+		if autoUpdateDryRun {
+			if previousCache != nil {
+				_ = discovery.SaveCache(previousCache)
+				discovery.UpdateMemoryCache(previousCache)
+			} else {
+				core.InvalidateCache()
+			}
+
+			if len(changed) == 0 {
+				fmt.Println(display.Success("No endpoint changes detected"))
 				return
 			}
-			
-			fmt.Printf("⚠️  Found %d obsolete endpoint(s):\n\n", len(obsolete))
-			
-			for _, ep := range obsolete {
-				fmt.Printf("  • %s\n", lipgloss.NewStyle().Bold(true).Render(ep.Name))
-				fmt.Printf("    Current:  %s\n", ep.CurrentID)
-				if ep.SuggestedID != "" {
-					fmt.Printf("    Suggested: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("#00BA7C")).Render(ep.SuggestedID))
-				} else {
-					fmt.Printf("    Suggested: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F")).Render("(not discovered - manual update needed)"))
-				}
+
+			fmt.Println(display.Warning(fmt.Sprintf("%d endpoint(s) would be updated", len(changed))))
+			fmt.Println()
+			for _, op := range changed {
+				fmt.Println(display.Bullet(display.Bold(op)))
+				fmt.Println(display.KeyValue("  Current", before[op]))
+				fmt.Println(display.KeyValue("  New", after[op]))
 				fmt.Println()
 			}
-			
-			fmt.Println("Run without --dry-run to apply these updates:")
-			fmt.Println("  xsh auto-update")
+
+			fmt.Println(display.Info("Run without --dry-run to apply these updates:"))
+			fmt.Println(display.Code("  xsh auto-update"))
 			return
-		} else {
-			if err := discovery.UpdateObsoleteEndpoints(); err != nil {
-				// Don't exit with error - manual instructions were shown
-				fmt.Println()
-				fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F")).
-					Render("⚠️  Some endpoints could not be auto-updated"))
-				fmt.Println()
-				fmt.Println("Please follow the manual instructions above.")
-				os.Exit(0)
-			}
 		}
 
 		fmt.Println()
-		fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#00BA7C")).
-			Render("✅ Auto-update complete!"))
+		fmt.Println(display.Success("Auto-update complete!"))
+		fmt.Println(display.Info(fmt.Sprintf("Discovered %d endpoints, updated %d entries.", len(cache.Endpoints), len(changed))))
 		fmt.Println()
-		fmt.Println("You can verify the updated endpoints with:")
-		fmt.Println("  xsh endpoints list")
+		fmt.Println(display.Info("You can verify the updated endpoints with:"))
+		fmt.Println(display.Code("  xsh endpoints list"))
 	},
 }
 
