@@ -24,14 +24,14 @@ var listsCmd = &cobra.Command{
 		// Default: list user's lists
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		lists, err := core.GetUserLists(client)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -52,14 +52,14 @@ var listViewCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		response, err := core.GetListTweets(client, listID, count, "")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -79,19 +79,19 @@ var listCreateCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		result, err := core.CreateList(client, name, listDescription, listPrivate)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
 		output(result, func() {
-			fmt.Printf("✓ Created list '%s'\n", name)
+			fmt.Println(display.Success(fmt.Sprintf("Created list '%s'", name)))
 		})
 	},
 }
@@ -110,21 +110,21 @@ var listDeleteCmd = &cobra.Command{
 			var response string
 			fmt.Scanln(&response)
 			if response != "y" && response != "Y" {
-				fmt.Println("Cancelled")
+				fmt.Println(display.Warning("Cancelled"))
 				return
 			}
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.DeleteList(client, listID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -133,7 +133,7 @@ var listDeleteCmd = &cobra.Command{
 			"list_id": listID,
 			"status":  "success",
 		}, func() {
-			fmt.Printf("✓ Deleted list %s\n", listID)
+			fmt.Println(display.Success(fmt.Sprintf("Deleted list %s", listID)))
 		})
 	},
 }
@@ -149,14 +149,14 @@ var listMembersCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		users, _, err := core.GetListMembers(client, listID, count, "")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -177,7 +177,7 @@ var listAddMemberCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
@@ -185,17 +185,17 @@ var listAddMemberCmd = &cobra.Command{
 		// Get user by handle
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error fetching user: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
 			os.Exit(1)
 		}
 		if user == nil {
-			fmt.Fprintf(os.Stderr, "User @%s not found\n", handle)
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			os.Exit(1)
 		}
 
 		_, err = core.AddListMember(client, listID, user.ID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -205,7 +205,7 @@ var listAddMemberCmd = &cobra.Command{
 			"handle":  handle,
 			"status":  "success",
 		}, func() {
-			fmt.Printf("✓ Added @%s to list %s\n", handle, listID)
+			fmt.Println(display.Success(fmt.Sprintf("Added @%s to list %s", handle, listID)))
 		})
 	},
 }
@@ -221,7 +221,7 @@ var listRemoveMemberCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
@@ -229,17 +229,17 @@ var listRemoveMemberCmd = &cobra.Command{
 		// Get user by handle
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error fetching user: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
 			os.Exit(1)
 		}
 		if user == nil {
-			fmt.Fprintf(os.Stderr, "User @%s not found\n", handle)
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			os.Exit(1)
 		}
 
 		_, err = core.RemoveListMember(client, listID, user.ID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -249,7 +249,7 @@ var listRemoveMemberCmd = &cobra.Command{
 			"handle":  handle,
 			"status":  "success",
 		}, func() {
-			fmt.Printf("✓ Removed @%s from list %s\n", handle, listID)
+			fmt.Println(display.Success(fmt.Sprintf("Removed @%s from list %s", handle, listID)))
 		})
 	},
 }
@@ -264,14 +264,14 @@ var listPinCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.PinList(client, listID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -280,7 +280,7 @@ var listPinCmd = &cobra.Command{
 			"list_id": listID,
 			"status":  "success",
 		}, func() {
-			fmt.Printf("✓ Pinned list %s\n", listID)
+			fmt.Println(display.Success(fmt.Sprintf("Pinned list %s", listID)))
 		})
 	},
 }
@@ -295,14 +295,14 @@ var listUnpinCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.UnpinList(client, listID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -311,7 +311,7 @@ var listUnpinCmd = &cobra.Command{
 			"list_id": listID,
 			"status":  "success",
 		}, func() {
-			fmt.Printf("✓ Unpinned list %s\n", listID)
+			fmt.Println(display.Success(fmt.Sprintf("Unpinned list %s", listID)))
 		})
 	},
 }

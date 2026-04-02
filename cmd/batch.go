@@ -19,14 +19,14 @@ var tweetsBatchCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		tweets, err := core.GetTweetsByIDs(client, args)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -49,14 +49,14 @@ var usersBatchCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		users, err := core.GetUsersByHandles(client, args)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 

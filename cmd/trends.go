@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
@@ -30,7 +29,7 @@ Use --location for city/country or --woeid for specific location ID.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			return
 		}
 		defer client.Close()
@@ -38,7 +37,7 @@ Use --location for city/country or --woeid for specific location ID.`,
 		// Get trends
 		trends, err := core.GetTrends(client, trendsWOEID)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to fetch trends: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch trends: %v", err)))
 			return
 		}
 
@@ -48,40 +47,30 @@ Use --location for city/country or --woeid for specific location ID.`,
 		}
 
 		// Display trends
-		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#1DA1F2"))
-		locationStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8899A6"))
-		rankStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8899A6")).Width(4).Align(lipgloss.Right)
-		trendStyle := lipgloss.NewStyle().Bold(true)
-		volumeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8899A6")).Italic(true)
-
-		fmt.Println(titleStyle.Render("🔥 Trending Topics"))
+		fmt.Println(display.Title("🔥 Trending Topics"))
 		if trendsLocation != "" {
-			fmt.Println(locationStyle.Render(fmt.Sprintf("   Location: %s", trendsLocation)))
+			fmt.Println(display.Muted(fmt.Sprintf("   Location: %s", trendsLocation)))
 		} else if trendsWOEID != 0 {
-			fmt.Println(locationStyle.Render(fmt.Sprintf("   WOEID: %d", trendsWOEID)))
+			fmt.Println(display.Muted(fmt.Sprintf("   WOEID: %d", trendsWOEID)))
 		} else {
-			fmt.Println(locationStyle.Render("   Worldwide"))
+			fmt.Println(display.Muted("   Worldwide"))
 		}
 		fmt.Println()
 
 		for i, trend := range trends {
-			rank := fmt.Sprintf("%d.", i+1)
-			fmt.Printf("%s %s", rankStyle.Render(rank), trendStyle.Render(trend.Name))
-			
+			line := display.Numbered(i+1, display.Bold(trend.Name))
 			if trend.TweetVolume > 0 {
 				volume := formatVolume(trend.TweetVolume)
-				fmt.Printf(" %s", volumeStyle.Render(volume))
+				line = line + " " + display.Muted(volume)
 			}
-			
 			if trend.IsPromoted {
-				fmt.Print(" " + lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F")).Render("· Promoted"))
+				line = line + " " + display.Warning("· Promoted")
 			}
-			
-			fmt.Println()
+			fmt.Println(line)
 		}
 
 		fmt.Println()
-		fmt.Println(locationStyle.Render(fmt.Sprintf("Showing top %d trends", len(trends))))
+		fmt.Println(display.Muted(fmt.Sprintf("Showing top %d trends", len(trends))))
 	},
 }
 

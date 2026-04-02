@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/benoitpetit/xsh/models"
 )
@@ -497,40 +500,21 @@ func CreateTweet(client *XClient, text, replyToID, quoteTweetURL string, mediaID
 		fmt.Printf("[DEBUG] CreateTweet response:\n%s\n", string(jsonData))
 	}
 
-	// Check for explicit errors first
+	// Check for explicit errors first (top-level errors array or error object)
 	if errMsg := extractErrorMessage(result); errMsg != "" {
 		return nil, fmt.Errorf("tweet creation failed: %s", errMsg)
 	}
 
-	// Verify the tweet was actually created
+	// Verify the tweet was actually created (must have a valid tweet ID)
+	// An empty create_tweet response is NOT a success — X.com always returns the
+	// created tweet's rest_id on success. Empty means the request was silently
+	// rejected (stale endpoint, rate-limit, policy, etc.).
 	if !isTweetCreated(result) {
-		// Check if we have a create_tweet object (even if empty) - this means success
-		// X/Twitter sometimes returns empty tweet_results but the tweet is created
-		if data, ok := result["data"].(map[string]interface{}); ok {
-			if _, ok := data["create_tweet"].(map[string]interface{}); ok {
-				// Empty response but no error - tweet likely created
-				if Verbose {
-					fmt.Println("[DEBUG] Empty create_tweet response but no error - tweet likely created")
-				}
-				// Return with a placeholder to indicate success
-				return map[string]interface{}{
-					"data": map[string]interface{}{
-						"create_tweet": map[string]interface{}{
-							"tweet_results": map[string]interface{}{
-								"result": map[string]interface{}{
-									"rest_id": "",
-									"legacy": map[string]interface{}{
-										"full_text": text,
-									},
-								},
-							},
-						},
-					},
-					"_note": "Tweet created successfully (API returned empty response - this is normal for X.com)",
-				}, nil
-			}
+		if Verbose {
+			jsonData, _ := json.MarshalIndent(result, "", "  ")
+			fmt.Printf("[DEBUG] CreateTweet rejected (no tweet ID in response):\n%s\n", string(jsonData))
 		}
-		return nil, fmt.Errorf("tweet creation failed: response missing tweet data")
+		return nil, fmt.Errorf("tweet creation failed: API did not return a tweet ID (request may have been silently rejected)")
 	}
 
 	return result, nil
@@ -650,34 +634,31 @@ func UnbookmarkTweet(client *XClient, tweetID string) (map[string]interface{}, e
 
 // GetTrends fetches trending topics
 func GetTrends(client *XClient, woeid int) ([]*models.Trend, error) {
-	if woeid == 0 {
-		woeid = 1 // Worldwide
+	variables := map[string]interface{}{}
+	if woeid != 0 {
+		variables["woeid"] = woeid
 	}
 
-	variables := map[string]interface{}{
-		"count":                    20,
-		"includePageConfiguration": true,
-		"includePromotedContent":   true,
-	}
-
-	data, err := client.GraphQLGet("Trends", variables)
+	data, err := client.GraphQLGet("ExplorePage", variables)
 	if err != nil {
-		// Trends API may not be available, return mock data for demo
-		return getMockTrends(), nil
+		return nil, err
 	}
 
-	// Parse trends from response
-	var trends []*models.Trend
+	return parseTrendsFromExploreResponse(data), nil
+}
 
-	// Try to extract trends from various API response formats
-	if timeline, ok := data["data"].(map[string]interface{}); ok {
-		if trendsData, ok := timeline["trends"].(map[string]interface{}); ok {
-			if items, ok := trendsData["trends"].([]interface{}); ok {
-				for i, item := range items {
-					if trendMap, ok := item.(map[string]interface{}); ok {
-						trend := parseTrend(trendMap, i+1)
-						if trend != nil {
-							trends = append(trends, trend)
+func parseTrendsFromExploreResponse(data map[string]interface{}) []*models.Trend {
+	trends := make([]*models.Trend, 0)
+	rank := 1
+
+	var timeline map[string]interface{}
+	if d, ok := data["data"].(map[string]interface{}); ok {
+		if explorePage, ok := d["explore_page"].(map[string]interface{}); ok {
+			if body, ok := explorePage["body"].(map[string]interface{}); ok {
+				if initialTimeline, ok := body["initialTimeline"].(map[string]interface{}); ok {
+					if t1, ok := initialTimeline["timeline"].(map[string]interface{}); ok {
+						if t2, ok := t1["timeline"].(map[string]interface{}); ok {
+							timeline = t2
 						}
 					}
 				}
@@ -685,58 +666,177 @@ func GetTrends(client *XClient, woeid int) ([]*models.Trend, error) {
 		}
 	}
 
-	// If no trends found, return mock data
-	if len(trends) == 0 {
-		return getMockTrends(), nil
+	if timeline == nil {
+		if t, ok := data["timeline"].(map[string]interface{}); ok {
+			timeline = t
+		}
 	}
 
-	return trends, nil
+	if timeline == nil {
+		return trends
+	}
+
+	instructions, _ := timeline["instructions"].([]interface{})
+	for _, instructionRaw := range instructions {
+		instruction, ok := instructionRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		entries, _ := instruction["entries"].([]interface{})
+		for _, entryRaw := range entries {
+			entry, ok := entryRaw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			content, _ := entry["content"].(map[string]interface{})
+			items, _ := content["items"].([]interface{})
+			for _, itemRaw := range items {
+				item, ok := itemRaw.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				trend := extractTrendFromModuleItem(item, rank)
+				if trend != nil {
+					trends = append(trends, trend)
+					rank++
+				}
+			}
+		}
+	}
+
+	return trends
 }
 
-func parseTrend(data map[string]interface{}, rank int) *models.Trend {
-	name, _ := data["name"].(string)
+func extractTrendFromModuleItem(item map[string]interface{}, rank int) *models.Trend {
+	itemMap, _ := item["item"].(map[string]interface{})
+	if itemMap == nil {
+		return nil
+	}
+
+	itemContent, _ := itemMap["itemContent"].(map[string]interface{})
+	if itemContent == nil {
+		itemContent, _ = itemMap["content"].(map[string]interface{})
+	}
+
+	if itemContent == nil {
+		return nil
+	}
+
+	return extractTrendFromContent(itemContent, rank)
+}
+
+func extractTrendFromContent(content map[string]interface{}, rank int) *models.Trend {
+	if typeName, _ := content["__typename"].(string); typeName == "TimelineTrend" {
+		name, _ := content["name"].(string)
+		if name == "" {
+			return nil
+		}
+
+		context := ""
+		if socialContext, ok := content["social_context"].(map[string]interface{}); ok {
+			context, _ = socialContext["text"].(string)
+		}
+
+		query := name
+		if trendMeta, ok := content["trend_metadata"].(map[string]interface{}); ok {
+			if urlMap, ok := trendMeta["url"].(map[string]interface{}); ok {
+				if u, ok := urlMap["url"].(string); ok && u != "" {
+					query = u
+				}
+			}
+		}
+
+		isPromoted := false
+		if promoted, ok := content["promoted_content"].(map[string]interface{}); ok && promoted != nil {
+			isPromoted = true
+		}
+
+		return &models.Trend{
+			Name:        name,
+			Query:       query,
+			TweetVolume: parseTweetVolume(context),
+			IsPromoted:  isPromoted,
+			Rank:        rank,
+		}
+	}
+
+	trend, _ := content["trend"].(map[string]interface{})
+	if trend == nil {
+		return nil
+	}
+
+	name, _ := trend["name"].(string)
 	if name == "" {
 		return nil
 	}
 
-	query, _ := data["query"].(string)
-	if query == "" {
-		query = name
+	context := ""
+	if trendContext, ok := content["trendContext"].(map[string]interface{}); ok {
+		context, _ = trendContext["text"].(string)
+	} else if socialContext, ok := content["socialContext"].(map[string]interface{}); ok {
+		context, _ = socialContext["text"].(string)
 	}
 
-	var volume int
-	if v, ok := data["tweet_volume"].(float64); ok {
-		volume = int(v)
+	metaDescription := ""
+	if trendMetaData, ok := trend["trendMetadata"].(map[string]interface{}); ok {
+		metaDescription, _ = trendMetaData["metaDescription"].(string)
+	}
+	if metaDescription == "" {
+		metaDescription = context
+	}
+
+	query := name
+	if urlValue, ok := trend["url"].(map[string]interface{}); ok {
+		if u, ok := urlValue["url"].(string); ok && u != "" {
+			query = u
+		}
+	} else if u, ok := trend["url"].(string); ok && u != "" {
+		query = u
 	}
 
 	isPromoted := false
-	if p, ok := data["promoted_content"].(map[string]interface{}); ok && p != nil {
+	if promoted, ok := trend["promoted_content"].(map[string]interface{}); ok && promoted != nil {
 		isPromoted = true
 	}
 
 	return &models.Trend{
 		Name:        name,
 		Query:       query,
-		TweetVolume: volume,
+		TweetVolume: parseTweetVolume(metaDescription),
 		IsPromoted:  isPromoted,
 		Rank:        rank,
 	}
 }
 
-// getMockTrends returns mock trends for demonstration
-func getMockTrends() []*models.Trend {
-	return []*models.Trend{
-		{Name: "#GoLang", Query: "#GoLang", TweetVolume: 125000, Rank: 1},
-		{Name: "#Programming", Query: "#Programming", TweetVolume: 89000, Rank: 2},
-		{Name: "#OpenSource", Query: "#OpenSource", TweetVolume: 67000, Rank: 3},
-		{Name: "Twitter API", Query: "Twitter API", TweetVolume: 45000, Rank: 4},
-		{Name: "#TechNews", Query: "#TechNews", TweetVolume: 34000, Rank: 5},
-		{Name: "#Developer", Query: "#Developer", TweetVolume: 28000, Rank: 6},
-		{Name: "GitHub", Query: "GitHub", TweetVolume: 23000, Rank: 7},
-		{Name: "#Coding", Query: "#Coding", TweetVolume: 19000, Rank: 8},
-		{Name: "#Linux", Query: "#Linux", TweetVolume: 15000, Rank: 9},
-		{Name: "#Docker", Query: "#Docker", TweetVolume: 12000, Rank: 10},
+var tweetVolumePattern = regexp.MustCompile(`([\d,.]+)\s*([KkMm])?\s*(posts|tweets)?`)
+
+func parseTweetVolume(text string) int {
+	if strings.TrimSpace(text) == "" {
+		return 0
 	}
+
+	match := tweetVolumePattern.FindStringSubmatch(text)
+	if len(match) < 2 {
+		return 0
+	}
+
+	numStr := strings.ReplaceAll(match[1], ",", "")
+	value, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0
+	}
+
+	if len(match) > 2 {
+		suffix := strings.ToUpper(match[2])
+		switch suffix {
+		case "K":
+			value *= 1000
+		case "M":
+			value *= 1000000
+		}
+	}
+
+	return int(value)
 }
 
 func getString(m map[string]interface{}, key string) string {

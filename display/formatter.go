@@ -14,41 +14,6 @@ import (
 	"github.com/benoitpetit/xsh/utils"
 )
 
-// Style definitions
-var (
-	// ColorBlue is the Twitter blue color
-	ColorBlue   = lipgloss.Color("#1DA1F2")
-	// ColorGreen is the success green color
-	ColorGreen  = lipgloss.Color("#00BA7C")
-	// ColorRed is the error red color
-	ColorRed    = lipgloss.Color("#F4212E")
-	// ColorYellow is the warning yellow color
-	ColorYellow = lipgloss.Color("#FFAD1F")
-	// ColorGray is the muted gray color
-	ColorGray   = lipgloss.Color("#8899A6")
-	// ColorWhite is the white color
-	ColorWhite  = lipgloss.Color("#FFFFFF")
-	// ColorCyan is the cyan color
-	ColorCyan   = lipgloss.Color("#00BCD4")
-
-	colorBlue   = ColorBlue
-	colorGreen  = ColorGreen
-	colorRed    = ColorRed
-	colorYellow = ColorYellow
-	colorGray   = ColorGray
-	colorWhite  = ColorWhite
-	colorCyan   = ColorCyan
-
-	successStyle = lipgloss.NewStyle().Foreground(colorGreen).Bold(true)
-	errorStyle = lipgloss.NewStyle().Foreground(colorRed).Bold(true)
-	warningStyle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
-
-	// StyleBold is bold text style
-	StyleBold = lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	// StyleMuted is muted/gray text style
-	StyleMuted = lipgloss.NewStyle().Foreground(colorGray)
-)
-
 func RelativeTime(t *time.Time) string {
 	if t == nil {
 		return ""
@@ -80,36 +45,33 @@ func FormatNumber(n int) string {
 func FormatUser(user *models.User) string {
 	var lines []string
 
-	// Header
 	verified := ""
 	if user.Verified {
-		verified = " ✓"
+		verified = Primary(" ✓")
 	}
-	lines = append(lines, fmt.Sprintf("%s%s @%s", user.Name, verified, user.Handle))
+	lines = append(lines, Bold(user.Name)+verified+Muted(" @"+user.Handle))
 	lines = append(lines, "")
 
-	// Bio
 	if user.Bio != "" {
 		lines = append(lines, user.Bio)
 		lines = append(lines, "")
 	}
 
-	// Stats
-	lines = append(lines, fmt.Sprintf("%s Following  ·  %s Followers  ·  %s Tweets",
-		FormatNumber(user.FollowingCount),
-		FormatNumber(user.FollowersCount),
-		FormatNumber(user.TweetCount)))
+	stats := fmt.Sprintf("%s Following  ·  %s Followers  ·  %s Tweets",
+		Bold(FormatNumber(user.FollowingCount)),
+		Bold(FormatNumber(user.FollowersCount)),
+		Bold(FormatNumber(user.TweetCount)))
+	lines = append(lines, stats)
 
-	// Details
 	var details []string
 	if user.Location != "" {
-		details = append(details, "📍 "+user.Location)
+		details = append(details, Muted("📍")+" "+user.Location)
 	}
 	if user.Website != "" {
-		details = append(details, "🔗 "+user.Website)
+		details = append(details, Muted("🔗")+" "+user.Website)
 	}
 	if user.CreatedAt != nil {
-		details = append(details, "📅 Joined "+user.CreatedAt.Format("January 2006"))
+		details = append(details, Muted("📅")+" Joined "+user.CreatedAt.Format("January 2006"))
 	}
 	if len(details) > 0 {
 		lines = append(lines, "")
@@ -122,34 +84,16 @@ func FormatUser(user *models.User) string {
 
 func FormatUserList(users []*models.User) string {
 	if len(users) == 0 {
-		return lipgloss.NewStyle().Foreground(colorGray).Render("No users found.")
+		return EmptyState("No users found.")
 	}
-
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Background(colorBlue).Padding(0, 1)
-	cellStyle := lipgloss.NewStyle().Padding(0, 1)
-	altCellStyle := lipgloss.NewStyle().Padding(0, 1).Background(lipgloss.Color("#232323"))
-
-	var b strings.Builder
 
 	headers := []string{"Handle", "Name", "Followers", "Following", "Bio"}
-	colWidths := []int{20, 20, 12, 12, 40}
-
-	for i, h := range headers {
-		b.WriteString(headerStyle.Width(colWidths[i]).Render(h))
-	}
-	b.WriteString("\n")
-
-	for i, user := range users {
-		style := cellStyle
-		if i%2 == 1 {
-			style = altCellStyle
-		}
-
+	var rows []TableRow
+	for _, user := range users {
 		verified := ""
 		if user.Verified {
 			verified = "✓ "
 		}
-
 		bio := user.Bio
 		if len(bio) > 35 {
 			bio = bio[:32] + "..."
@@ -157,16 +101,16 @@ func FormatUserList(users []*models.User) string {
 		if bio == "" {
 			bio = "-"
 		}
-
-		b.WriteString(style.Width(colWidths[0]).Render("@" + user.Handle))
-		b.WriteString(style.Width(colWidths[1]).Render(verified + user.Name))
-		b.WriteString(style.Width(colWidths[2]).Align(lipgloss.Right).Render(FormatNumber(user.FollowersCount)))
-		b.WriteString(style.Width(colWidths[3]).Align(lipgloss.Right).Render(FormatNumber(user.FollowingCount)))
-		b.WriteString(style.Width(colWidths[4]).Render(bio))
-		b.WriteString("\n")
+		rows = append(rows, TableRow{
+			"@" + user.Handle,
+			verified + user.Name,
+			FormatNumber(user.FollowersCount),
+			FormatNumber(user.FollowingCount),
+			bio,
+		})
 	}
 
-	return b.String()
+	return Subtitle(fmt.Sprintf("Users · %d", len(users))) + "\n\n" + SimpleTable(headers, rows)
 }
 
 type ConfigValues struct {
@@ -188,74 +132,42 @@ type ConfigValues struct {
 }
 
 func FormatConfig(cv *ConfigValues) string {
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(colorCyan).MarginBottom(1)
-	sectionStyle := lipgloss.NewStyle().Bold(true).Foreground(colorBlue).MarginTop(1)
-	keyStyle := lipgloss.NewStyle().Foreground(colorGray).Width(25)
-	valueStyle := lipgloss.NewStyle().Foreground(colorWhite)
-	boolTrueStyle := lipgloss.NewStyle().Foreground(colorGreen)
-	boolFalseStyle := lipgloss.NewStyle().Foreground(colorRed)
+	var lines []string
 
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("⚙️  Configuration"))
-	b.WriteString("\n")
+	lines = append(lines, Title("⚙️  Configuration"))
+	lines = append(lines, Section("General"))
+	lines = append(lines, KeyValue("default_count:", fmt.Sprintf("%d", cv.DefaultCount)))
+	lines = append(lines, KeyValue("default_account:", cv.DefaultAccount))
 
-	b.WriteString(sectionStyle.Render("General"))
-	b.WriteString("\n")
-	b.WriteString(keyStyle.Render("default_count") + valueStyle.Render(fmt.Sprintf("%d", cv.DefaultCount)) + "\n")
-	b.WriteString(keyStyle.Render("default_account") + valueStyle.Render(cv.DefaultAccount) + "\n")
+	lines = append(lines, Section("Display"))
+	lines = append(lines, KeyValue("theme:", cv.Theme))
+	lines = append(lines, KeyValueBool("show_engagement:", cv.ShowEngagement))
+	lines = append(lines, KeyValueBool("show_timestamps:", cv.ShowTimestamps))
+	lines = append(lines, KeyValue("max_width:", fmt.Sprintf("%d", cv.MaxWidth)))
 
-	b.WriteString(sectionStyle.Render("Display"))
-	b.WriteString("\n")
-	b.WriteString(keyStyle.Render("theme") + valueStyle.Render(cv.Theme) + "\n")
-	if cv.ShowEngagement {
-		b.WriteString(keyStyle.Render("show_engagement") + boolTrueStyle.Render("true") + "\n")
-	} else {
-		b.WriteString(keyStyle.Render("show_engagement") + boolFalseStyle.Render("false") + "\n")
-	}
-	if cv.ShowTimestamps {
-		b.WriteString(keyStyle.Render("show_timestamps") + boolTrueStyle.Render("true") + "\n")
-	} else {
-		b.WriteString(keyStyle.Render("show_timestamps") + boolFalseStyle.Render("false") + "\n")
-	}
-	b.WriteString(keyStyle.Render("max_width") + valueStyle.Render(fmt.Sprintf("%d", cv.MaxWidth)) + "\n")
-
-	b.WriteString(sectionStyle.Render("Request"))
-	b.WriteString("\n")
-	b.WriteString(keyStyle.Render("delay") + valueStyle.Render(fmt.Sprintf("%.2fs", cv.Delay)) + "\n")
+	lines = append(lines, Section("Request"))
+	lines = append(lines, KeyValue("delay:", fmt.Sprintf("%.2fs", cv.Delay)))
 	proxy := cv.Proxy
 	if proxy == "" {
 		proxy = "(none)"
 	}
-	b.WriteString(keyStyle.Render("proxy") + valueStyle.Render(proxy) + "\n")
-	b.WriteString(keyStyle.Render("timeout") + valueStyle.Render(fmt.Sprintf("%ds", cv.Timeout)) + "\n")
-	b.WriteString(keyStyle.Render("max_retries") + valueStyle.Render(fmt.Sprintf("%d", cv.MaxRetries)) + "\n")
+	lines = append(lines, KeyValue("proxy:", proxy))
+	lines = append(lines, KeyValue("timeout:", fmt.Sprintf("%ds", cv.Timeout)))
+	lines = append(lines, KeyValue("max_retries:", fmt.Sprintf("%d", cv.MaxRetries)))
 
-	b.WriteString(sectionStyle.Render("Filter Weights"))
-	b.WriteString("\n")
-	b.WriteString(keyStyle.Render("likes") + valueStyle.Render(fmt.Sprintf("%.1f", cv.LikesWeight)) + "\n")
-	b.WriteString(keyStyle.Render("retweets") + valueStyle.Render(fmt.Sprintf("%.1f", cv.RetweetsWeight)) + "\n")
-	b.WriteString(keyStyle.Render("replies") + valueStyle.Render(fmt.Sprintf("%.1f", cv.RepliesWeight)) + "\n")
-	b.WriteString(keyStyle.Render("bookmarks") + valueStyle.Render(fmt.Sprintf("%.1f", cv.BookmarksWeight)) + "\n")
-	b.WriteString(keyStyle.Render("views_log") + valueStyle.Render(fmt.Sprintf("%.1f", cv.ViewsLogWeight)) + "\n")
+	lines = append(lines, Section("Filter Weights"))
+	lines = append(lines, KeyValue("likes:", fmt.Sprintf("%.1f", cv.LikesWeight)))
+	lines = append(lines, KeyValue("retweets:", fmt.Sprintf("%.1f", cv.RetweetsWeight)))
+	lines = append(lines, KeyValue("replies:", fmt.Sprintf("%.1f", cv.RepliesWeight)))
+	lines = append(lines, KeyValue("bookmarks:", fmt.Sprintf("%.1f", cv.BookmarksWeight)))
+	lines = append(lines, KeyValue("views_log:", fmt.Sprintf("%.1f", cv.ViewsLogWeight)))
 
-	return b.String()
-}
-
-func PrintSuccess(message string) string {
-	return successStyle.Render("✓ " + message)
-}
-
-func PrintError(message string) string {
-	return errorStyle.Render("✗ " + message)
-}
-
-func PrintWarning(message string) string {
-	return warningStyle.Render("⚠ " + message)
+	return strings.Join(lines, "\n")
 }
 
 func FormatThread(tweets []*models.Tweet, focalID string) string {
 	if len(tweets) == 0 {
-		return lipgloss.NewStyle().Foreground(colorGray).Render("No tweets in thread.")
+		return EmptyState("No tweets in thread.")
 	}
 
 	var focal *models.Tweet
@@ -284,8 +196,7 @@ func FormatThread(tweets []*models.Tweet, focalID string) string {
 
 	var b strings.Builder
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	b.WriteString(headerStyle.Render(fmt.Sprintf("Thread · %d tweets", len(tweets))))
+	b.WriteString(Title(fmt.Sprintf("Thread · %d tweets", len(tweets))))
 	b.WriteString("\n\n")
 
 	var buildTree func(tweet *models.Tweet, prefix string, isLast bool)
@@ -297,16 +208,15 @@ func FormatThread(tweets []*models.Tweet, focalID string) string {
 
 		verified := ""
 		if tweet.AuthorVerified {
-			verified = " ✓"
+			verified = Primary(" ✓")
 		}
 
-		timeStr := RelativeTime(tweet.CreatedAt)
-		b.WriteString(fmt.Sprintf("%s@%s%s %s\n", prefix+branchChar, tweet.AuthorHandle, verified, timeStr))
+		timeStr := Muted(RelativeTime(tweet.CreatedAt))
+		handleLine := fmt.Sprintf("%s%s@%s%s %s", prefix, branchChar, tweet.AuthorHandle, verified, timeStr)
+		b.WriteString(handleLine + "\n")
 
-		// Replace newlines with spaces to keep tree structure intact
 		text := strings.ReplaceAll(tweet.Text, "\n", " ")
 		text = strings.ReplaceAll(text, "\r", " ")
-		// Collapse multiple spaces into one
 		text = strings.Join(strings.Fields(text), " ")
 
 		textPrefix := prefix
@@ -316,7 +226,6 @@ func FormatThread(tweets []*models.Tweet, focalID string) string {
 			textPrefix += vertical
 		}
 
-		// Wrap text at 70 chars with proper indentation
 		wrappedLines := wrapText(text, 70)
 		for _, line := range wrappedLines {
 			b.WriteString(textPrefix + line + "\n")
@@ -326,18 +235,16 @@ func FormatThread(tweets []*models.Tweet, focalID string) string {
 		if e.Likes > 0 || e.Retweets > 0 {
 			stats := []string{}
 			if e.Likes > 0 {
-				stats = append(stats, fmt.Sprintf("❤️ %s", FormatNumber(e.Likes)))
+				stats = append(stats, StyleError.Render(fmt.Sprintf("❤️ %s", FormatNumber(e.Likes))))
 			}
 			if e.Retweets > 0 {
-				stats = append(stats, fmt.Sprintf("🔁 %s", FormatNumber(e.Retweets)))
+				stats = append(stats, StyleInfo.Render(fmt.Sprintf("🔁 %s", FormatNumber(e.Retweets))))
 			}
 			b.WriteString(textPrefix + strings.Join(stats, " ") + "\n")
 		}
 
-		// Tweet ID (styled in gray)
 		idStyle := lipgloss.NewStyle().Foreground(colorGray)
 		b.WriteString(textPrefix + idStyle.Render("🆔 "+tweet.ID) + "\n")
-
 		b.WriteString(textPrefix + "\n")
 
 		replies := repliesMap[tweet.ID]
@@ -357,7 +264,6 @@ func FormatThread(tweets []*models.Tweet, focalID string) string {
 	return b.String()
 }
 
-// wrapText wraps text at maxWidth, breaking at word boundaries
 func wrapText(text string, maxWidth int) []string {
 	if len(text) <= maxWidth {
 		return []string{text}
@@ -388,8 +294,7 @@ func wrapText(text string, maxWidth int) []string {
 	return lines
 }
 
-// FormatTweet displays a tweet in simple tree-like style (no frame)
-func FormatTweet(tweet *models.Tweet, prefix string, isLast bool) string {
+func FormatTweet(tweet *models.Tweet, prefix string, isLast bool, forceVertical bool) string {
 	const (
 		vertical   = "│  "
 		branch     = "├──"
@@ -401,7 +306,7 @@ func FormatTweet(tweet *models.Tweet, prefix string, isLast bool) string {
 
 	verified := ""
 	if tweet.AuthorVerified {
-		verified = " ✓"
+		verified = Primary(" ✓")
 	}
 
 	branchChar := branch
@@ -409,166 +314,141 @@ func FormatTweet(tweet *models.Tweet, prefix string, isLast bool) string {
 		branchChar = lastBranch
 	}
 
-	timeStr := RelativeTime(tweet.CreatedAt)
+	timeStr := Muted(RelativeTime(tweet.CreatedAt))
 	b.WriteString(fmt.Sprintf("%s%s@%s%s %s\n", prefix, branchChar, tweet.AuthorHandle, verified, timeStr))
 
-	// Replace newlines with spaces and wrap text
 	text := strings.ReplaceAll(tweet.Text, "\n", " ")
 	text = strings.ReplaceAll(text, "\r", " ")
 	text = strings.Join(strings.Fields(text), " ")
 
-	// Determine text prefix based on position
 	textPrefix := prefix
-	if isLast {
+	if isLast && !forceVertical {
 		textPrefix += indent
 	} else {
 		textPrefix += vertical
 	}
 
-	// Wrap text at 70 chars
 	wrappedLines := wrapText(text, 70)
 	for _, line := range wrappedLines {
 		b.WriteString(textPrefix + line + "\n")
 	}
 
-	// Engagement stats
 	e := tweet.Engagement
 	if e.Likes > 0 || e.Retweets > 0 {
 		stats := []string{}
 		if e.Likes > 0 {
-			stats = append(stats, fmt.Sprintf("❤️ %s", FormatNumber(e.Likes)))
+			stats = append(stats, StyleError.Render(fmt.Sprintf("❤️ %s", FormatNumber(e.Likes))))
 		}
 		if e.Retweets > 0 {
-			stats = append(stats, fmt.Sprintf("🔁 %s", FormatNumber(e.Retweets)))
+			stats = append(stats, StyleInfo.Render(fmt.Sprintf("🔁 %s", FormatNumber(e.Retweets))))
 		}
 		b.WriteString(textPrefix + strings.Join(stats, " ") + "\n")
 	}
 
-	// Tweet ID (styled in gray to be distinct but visible)
 	idStyle := lipgloss.NewStyle().Foreground(colorGray)
 	b.WriteString(textPrefix + idStyle.Render("🆔 "+tweet.ID) + "\n")
 
 	return b.String()
 }
 
-// FormatTweetList displays a list of tweets in simple style (no frames)
 func FormatTweetList(tweets []*models.Tweet) string {
 	if len(tweets) == 0 {
-		return lipgloss.NewStyle().Foreground(colorGray).Render("No tweets found.")
+		return EmptyState("No tweets found.")
 	}
 
 	var b strings.Builder
 
-	// Header
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	b.WriteString(headerStyle.Render(fmt.Sprintf("Tweets · %d", len(tweets))))
+	b.WriteString(Title(fmt.Sprintf("Tweets · %d", len(tweets))))
 	b.WriteString("\n\n")
 
-	// Format each tweet
 	for i, tweet := range tweets {
 		isLast := i == len(tweets)-1
-		b.WriteString(FormatTweet(tweet, "", isLast))
+		b.WriteString(FormatTweet(tweet, "", isLast, true))
 	}
 
 	return b.String()
 }
 
-// FormatSingleTweet displays a single tweet in simple tree-like style
 func FormatSingleTweet(tweet *models.Tweet) string {
 	var b strings.Builder
 
-	// Header
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	b.WriteString(headerStyle.Render("Tweet"))
+	b.WriteString(Title("Tweet"))
 	b.WriteString("\n\n")
 
 	verified := ""
 	if tweet.AuthorVerified {
-		verified = " ✓"
+		verified = Primary(" ✓")
 	}
 
-	timeStr := RelativeTime(tweet.CreatedAt)
+	timeStr := Muted(RelativeTime(tweet.CreatedAt))
 	b.WriteString(fmt.Sprintf("└──@%s%s %s\n", tweet.AuthorHandle, verified, timeStr))
 
-	// Replace newlines with spaces and wrap text
 	text := strings.ReplaceAll(tweet.Text, "\n", " ")
 	text = strings.ReplaceAll(text, "\r", " ")
 	text = strings.Join(strings.Fields(text), " ")
 
-	// Wrap text at 70 chars
 	wrappedLines := wrapText(text, 70)
 	for _, line := range wrappedLines {
 		b.WriteString("   " + line + "\n")
 	}
 
-	// Engagement stats
 	e := tweet.Engagement
 	if e.Replies > 0 || e.Retweets > 0 || e.Likes > 0 || e.Bookmarks > 0 || e.Views > 0 {
 		stats := []string{}
 		if e.Replies > 0 {
-			stats = append(stats, fmt.Sprintf("💬 %s", FormatNumber(e.Replies)))
+			stats = append(stats, StyleInfo.Render(fmt.Sprintf("💬 %s", FormatNumber(e.Replies))))
 		}
 		if e.Retweets > 0 {
-			stats = append(stats, fmt.Sprintf("🔁 %s", FormatNumber(e.Retweets)))
+			stats = append(stats, StyleInfo.Render(fmt.Sprintf("🔁 %s", FormatNumber(e.Retweets))))
 		}
 		if e.Likes > 0 {
-			stats = append(stats, fmt.Sprintf("❤️ %s", FormatNumber(e.Likes)))
+			stats = append(stats, StyleError.Render(fmt.Sprintf("❤️ %s", FormatNumber(e.Likes))))
 		}
 		if e.Bookmarks > 0 {
-			stats = append(stats, fmt.Sprintf("🔖 %s", FormatNumber(e.Bookmarks)))
+			stats = append(stats, StyleWarning.Render(fmt.Sprintf("🔖 %s", FormatNumber(e.Bookmarks))))
 		}
 		if e.Views > 0 {
-			stats = append(stats, fmt.Sprintf("👁️ %s", FormatNumber(e.Views)))
+			stats = append(stats, StyleMuted.Render(fmt.Sprintf("👁️ %s", FormatNumber(e.Views))))
 		}
 		b.WriteString("   " + strings.Join(stats, "  ") + "\n")
 	}
 
-	// Tweet ID (styled in gray)
 	idStyle := lipgloss.NewStyle().Foreground(colorGray)
 	b.WriteString("   " + idStyle.Render("🆔 "+tweet.ID) + "\n")
 
 	return b.String()
 }
 
-// Add these functions at the end of formatter.go
-
-// FormatUsers displays a list of users
 func FormatUsers(users []*models.User) string {
 	return FormatUserList(users)
 }
 
-// FormatTweets displays a list of tweets
 func FormatTweets(tweets []*models.Tweet) string {
 	return FormatTweetList(tweets)
 }
 
-// FormatDMInbox displays the DM inbox
 func FormatDMInbox(conversations []models.DMConversation) string {
 	if len(conversations) == 0 {
-		return lipgloss.NewStyle().Foreground(colorGray).Render("No conversations found.")
+		return EmptyState("No conversations found.")
 	}
 
 	var b strings.Builder
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	b.WriteString(headerStyle.Render(fmt.Sprintf("DM Inbox · %d conversations", len(conversations))))
+	b.WriteString(Title(fmt.Sprintf("DM Inbox · %d conversations", len(conversations))))
 	b.WriteString("\n\n")
 
 	for i, conv := range conversations {
-		// Indicator for unread
 		indicator := "  "
 		if conv.Unread {
-			indicator = "● "
+			indicator = StylePrimary.Render("● ")
 		}
 
-		// Format participants
 		var participantNames []string
 		for _, p := range conv.Participants {
-			participantNames = append(participantNames, "@"+p.Handle)
+			participantNames = append(participantNames, Bold("@"+p.Handle))
 		}
 		participants := strings.Join(participantNames, ", ")
 
-		// Format last message
 		lastMsg := conv.LastMessage
 		if len(lastMsg) > 50 {
 			lastMsg = lastMsg[:47] + "..."
@@ -576,7 +456,7 @@ func FormatDMInbox(conversations []models.DMConversation) string {
 
 		line := fmt.Sprintf("%s%s: %s", indicator, participants, lastMsg)
 		if conv.LastMessageTime != "" {
-			line += fmt.Sprintf(" (%s)", conv.LastMessageTime)
+			line += Muted(fmt.Sprintf(" (%s)", conv.LastMessageTime))
 		}
 
 		b.WriteString(line)
@@ -588,24 +468,20 @@ func FormatDMInbox(conversations []models.DMConversation) string {
 	return b.String()
 }
 
-// FormatScheduledTweets displays scheduled tweets
 func FormatScheduledTweets(tweets []core.ScheduledTweet) string {
 	if len(tweets) == 0 {
-		return lipgloss.NewStyle().Foreground(colorGray).Render("No scheduled tweets.")
+		return EmptyState("No scheduled tweets.")
 	}
 
 	var b strings.Builder
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	b.WriteString(headerStyle.Render(fmt.Sprintf("Scheduled Tweets · %d", len(tweets))))
+	b.WriteString(Title(fmt.Sprintf("Scheduled Tweets · %d", len(tweets))))
 	b.WriteString("\n\n")
 
 	for i, tweet := range tweets {
-		// Format time
 		scheduledTime := time.Unix(tweet.ExecuteAt, 0)
 		timeStr := scheduledTime.Format("2006-01-02 15:04")
 
-		// Format text
 		text := tweet.Text
 		if len(text) > 60 {
 			text = text[:57] + "..."
@@ -616,7 +492,8 @@ func FormatScheduledTweets(tweets []core.ScheduledTweet) string {
 			status = "scheduled"
 		}
 
-		b.WriteString(fmt.Sprintf("[%s] %s: %s (ID: %s)", status, timeStr, text, tweet.ID))
+		badge := StatusBadge(status)
+		b.WriteString(fmt.Sprintf("%s %s: %s %s", badge, timeStr, text, Muted("(ID: "+tweet.ID+")")))
 		if i < len(tweets)-1 {
 			b.WriteString("\n")
 		}
@@ -625,16 +502,14 @@ func FormatScheduledTweets(tweets []core.ScheduledTweet) string {
 	return b.String()
 }
 
-// FormatLists displays a list of lists
 func FormatLists(lists []core.ListInfo) string {
 	if len(lists) == 0 {
-		return lipgloss.NewStyle().Foreground(colorGray).Render("No lists found.")
+		return EmptyState("No lists found.")
 	}
 
 	var b strings.Builder
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	b.WriteString(headerStyle.Render(fmt.Sprintf("Lists · %d", len(lists))))
+	b.WriteString(Title(fmt.Sprintf("Lists · %d", len(lists))))
 	b.WriteString("\n\n")
 
 	for i, list := range lists {
@@ -643,7 +518,8 @@ func FormatLists(lists []core.ListInfo) string {
 			mode = "Public"
 		}
 
-		b.WriteString(fmt.Sprintf("%s (%d members) [%s] - ID: %s", list.Name, list.MemberCount, mode, list.ID))
+		b.WriteString(fmt.Sprintf("%s %s", Bold(list.Name), StatusBadge(mode)))
+		b.WriteString(Muted(fmt.Sprintf("  (%d members)  ID: %s", list.MemberCount, list.ID)))
 		if list.Description != "" {
 			b.WriteString(fmt.Sprintf("\n  %s", list.Description))
 		}
@@ -655,20 +531,18 @@ func FormatLists(lists []core.ListInfo) string {
 	return b.String()
 }
 
-// FormatBookmarkFolders displays bookmark folders
 func FormatBookmarkFolders(folders []core.BookmarkFolder) string {
 	if len(folders) == 0 {
-		return lipgloss.NewStyle().Foreground(colorGray).Render("No bookmark folders.")
+		return EmptyState("No bookmark folders.")
 	}
 
 	var b strings.Builder
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	b.WriteString(headerStyle.Render(fmt.Sprintf("Bookmark Folders · %d", len(folders))))
+	b.WriteString(Title(fmt.Sprintf("Bookmark Folders · %d", len(folders))))
 	b.WriteString("\n\n")
 
 	for i, folder := range folders {
-		b.WriteString(fmt.Sprintf("%s (ID: %s)", folder.Name, folder.ID))
+		b.WriteString(fmt.Sprintf("%s %s", Bold(folder.Name), Muted("(ID: "+folder.ID+")")))
 		if i < len(folders)-1 {
 			b.WriteString("\n")
 		}
@@ -677,28 +551,26 @@ func FormatBookmarkFolders(folders []core.BookmarkFolder) string {
 	return b.String()
 }
 
-// FormatJobs displays a list of jobs
 func FormatJobs(jobs []interface{}) string {
 	if len(jobs) == 0 {
-		return lipgloss.NewStyle().Foreground(colorGray).Render("No jobs found.")
+		return EmptyState("No jobs found.")
 	}
 
 	var b strings.Builder
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	b.WriteString(headerStyle.Render(fmt.Sprintf("Jobs · %d", len(jobs))))
+	b.WriteString(Title(fmt.Sprintf("Jobs · %d", len(jobs))))
 	b.WriteString("\n\n")
 
 	for i, jobInterface := range jobs {
 		if job, ok := jobInterface.(models.Job); ok {
-			b.WriteString(fmt.Sprintf("%s at %s", job.Title, job.Company.Name))
+			b.WriteString(Bold(job.Title) + Muted(" at ") + Info(job.Company.Name))
 			if job.Location != "" {
-				b.WriteString(fmt.Sprintf(" (%s)", job.Location))
+				b.WriteString(Muted(fmt.Sprintf(" (%s)", job.Location)))
 			}
 			if job.WorkplaceType != "" {
-				b.WriteString(fmt.Sprintf(" [%s]", job.WorkplaceType))
+				b.WriteString(" " + StatusBadge(job.WorkplaceType))
 			}
-			b.WriteString(fmt.Sprintf("\n  ID: %s", job.ID))
+			b.WriteString(Muted(fmt.Sprintf("\n  ID: %s", job.ID)))
 			if i < len(jobs)-1 {
 				b.WriteString("\n\n")
 			}
@@ -708,103 +580,91 @@ func FormatJobs(jobs []interface{}) string {
 	return b.String()
 }
 
-// FormatJobDetail displays detailed job information
 func FormatJobDetail(job *models.Job) string {
-	var b strings.Builder
+	var lines []string
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorCyan)
-	b.WriteString(headerStyle.Render(fmt.Sprintf("%s at %s", job.Title, job.Company.Name)))
-	b.WriteString("\n\n")
+	lines = append(lines, Title(job.Title))
+	lines = append(lines, Info(job.Company.Name))
+	lines = append(lines, "")
 
 	if job.Location != "" {
-		b.WriteString(fmt.Sprintf("📍 %s\n", job.Location))
+		lines = append(lines, Muted("📍")+" "+job.Location)
 	}
 	if job.WorkplaceType != "" {
-		b.WriteString(fmt.Sprintf("🏢 %s\n", job.WorkplaceType))
+		lines = append(lines, Muted("🏢")+" "+job.WorkplaceType)
 	}
 	if job.EmploymentType != "" {
-		b.WriteString(fmt.Sprintf("💼 %s\n", job.EmploymentType))
+		lines = append(lines, Muted("💼")+" "+job.EmploymentType)
 	}
 	if job.Salary != "" {
-		b.WriteString(fmt.Sprintf("💰 %s\n", job.Salary))
+		lines = append(lines, Muted("💰")+" "+job.Salary)
 	}
 
-	b.WriteString(fmt.Sprintf("\n🆔 %s\n", job.ID))
+	lines = append(lines, "")
+	lines = append(lines, KeyValue("ID:", job.ID))
 
 	if job.Description != "" {
-		b.WriteString("\nDescription:\n")
-		// Try to parse as Draft.js JSON and convert to Markdown
+		lines = append(lines, "")
+		lines = append(lines, Section("Description"))
 		var descData map[string]interface{}
 		if err := json.Unmarshal([]byte(job.Description), &descData); err == nil {
-			// Convert Draft.js to Markdown
 			markdown := utils.ArticleToMarkdown(map[string]interface{}{"result": map[string]interface{}{"content": map[string]interface{}{"content_state": descData}}})
 			if markdown != "" {
-				b.WriteString(markdown)
+				lines = append(lines, markdown)
 			} else {
-				b.WriteString(job.Description)
+				lines = append(lines, job.Description)
 			}
 		} else {
-			b.WriteString(job.Description)
+			lines = append(lines, job.Description)
 		}
-		b.WriteString("\n")
 	}
 
 	if job.ApplyURL != "" {
-		b.WriteString(fmt.Sprintf("\n🔗 Apply: %s\n", job.ApplyURL))
+		lines = append(lines, "")
+		lines = append(lines, Primary("🔗 Apply: "+job.ApplyURL))
 	}
 
-	return b.String()
+	return strings.Join(lines, "\n")
 }
 
-// FormatArticle displays an article (long-form content)
 func FormatArticle(title, author, contentMD string, engagement models.TweetEngagement) string {
 	var b strings.Builder
 
-	// Header
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorCyan)
-	b.WriteString(headerStyle.Render("Article"))
+	b.WriteString(Title("Article"))
 	b.WriteString("\n\n")
 
-	// Title
 	if title != "" {
-		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Width(80)
-		b.WriteString(titleStyle.Render(title))
+		b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Width(80).Render(title))
 		b.WriteString("\n\n")
 	}
 
-	// Author
-	authorStyle := lipgloss.NewStyle().Foreground(colorGray)
-	b.WriteString(authorStyle.Render(fmt.Sprintf("By @%s", author)))
+	b.WriteString(Muted(fmt.Sprintf("By @%s", author)))
 	b.WriteString("\n\n")
 
-	// Engagement
 	if engagement.Likes > 0 || engagement.Retweets > 0 || engagement.Replies > 0 {
 		stats := []string{}
 		if engagement.Replies > 0 {
-			stats = append(stats, fmt.Sprintf("💬 %s", FormatNumber(engagement.Replies)))
+			stats = append(stats, StyleInfo.Render(fmt.Sprintf("💬 %s", FormatNumber(engagement.Replies))))
 		}
 		if engagement.Retweets > 0 {
-			stats = append(stats, fmt.Sprintf("🔁 %s", FormatNumber(engagement.Retweets)))
+			stats = append(stats, StyleInfo.Render(fmt.Sprintf("🔁 %s", FormatNumber(engagement.Retweets))))
 		}
 		if engagement.Likes > 0 {
-			stats = append(stats, fmt.Sprintf("❤️ %s", FormatNumber(engagement.Likes)))
+			stats = append(stats, StyleError.Render(fmt.Sprintf("❤️ %s", FormatNumber(engagement.Likes))))
 		}
 		if engagement.Bookmarks > 0 {
-			stats = append(stats, fmt.Sprintf("🔖 %s", FormatNumber(engagement.Bookmarks)))
+			stats = append(stats, StyleWarning.Render(fmt.Sprintf("🔖 %s", FormatNumber(engagement.Bookmarks))))
 		}
 		b.WriteString(strings.Join(stats, "  "))
 		b.WriteString("\n\n")
 	}
 
-	// Content (convert Markdown to display-friendly format)
-	// Simple approach: preserve structure but limit width
 	lines := strings.Split(contentMD, "\n")
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			b.WriteString("\n")
 			continue
 		}
-		// Handle headers
 		if strings.HasPrefix(line, "# ") {
 			b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(colorWhite).Render(line[2:]))
 			b.WriteString("\n")
@@ -822,15 +682,12 @@ func FormatArticle(title, author, contentMD string, engagement models.TweetEngag
 			b.WriteString(quoteStyle.Render("  \"" + line[2:] + "\""))
 			b.WriteString("\n")
 		} else if strings.HasPrefix(line, "```") {
-			// Code block - skip markers
 			if line == "```" {
 				continue
 			}
-			codeStyle := lipgloss.NewStyle().Foreground(colorCyan)
-			b.WriteString(codeStyle.Render("  " + line))
+			b.WriteString(Code("  " + line))
 			b.WriteString("\n")
 		} else {
-			// Regular text - wrap if needed
 			wrapped := wrapText(line, 78)
 			for _, w := range wrapped {
 				b.WriteString(w)
