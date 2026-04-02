@@ -36,7 +36,7 @@ var exportFeedCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			return
 		}
 		defer client.Close()
@@ -52,7 +52,7 @@ var exportFeedCmd = &cobra.Command{
 		for i := 0; i < pages; i++ {
 			response, err := core.GetHomeTimeline(client, feedType, count, cursor)
 			if err != nil {
-				fmt.Println(display.PrintError(fmt.Sprintf("Failed to fetch timeline: %v", err)))
+				fmt.Println(display.Error(fmt.Sprintf("Failed to fetch timeline: %v", err)))
 				return
 			}
 			allTweets = append(allTweets, response.Tweets...)
@@ -71,11 +71,11 @@ var exportFeedCmd = &cobra.Command{
 		}
 
 		if err := exportTweets(tweets, exportFormat, exportOutput); err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Export failed: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Export failed: %v", err)))
 			return
 		}
 
-		fmt.Printf("✓ Exported %d tweets to %s\n", len(tweets), exportOutput)
+		fmt.Println(display.Success(fmt.Sprintf("Exported %d tweets to %s", len(tweets), exportOutput)))
 	},
 }
 
@@ -87,7 +87,7 @@ var exportSearchCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			return
 		}
 		defer client.Close()
@@ -102,7 +102,7 @@ var exportSearchCmd = &cobra.Command{
 		for i := 0; i < pages; i++ {
 			response, err := core.SearchTweets(client, args[0], searchType, count, cursor)
 			if err != nil {
-				fmt.Println(display.PrintError(fmt.Sprintf("Failed to search: %v", err)))
+				fmt.Println(display.Error(fmt.Sprintf("Failed to search: %v", err)))
 				return
 			}
 			allTweets = append(allTweets, response.Tweets...)
@@ -113,11 +113,11 @@ var exportSearchCmd = &cobra.Command{
 		}
 
 		if err := exportTweets(allTweets, exportFormat, exportOutput); err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Export failed: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Export failed: %v", err)))
 			return
 		}
 
-		fmt.Printf("✓ Exported %d tweets to %s\n", len(allTweets), exportOutput)
+		fmt.Println(display.Success(fmt.Sprintf("Exported %d tweets to %s", len(allTweets), exportOutput)))
 	},
 }
 
@@ -128,7 +128,7 @@ var exportBookmarksCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			return
 		}
 		defer client.Close()
@@ -137,16 +137,16 @@ var exportBookmarksCmd = &cobra.Command{
 
 		response, err := core.GetBookmarks(client, count, "")
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to fetch bookmarks: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch bookmarks: %v", err)))
 			return
 		}
 
 		if err := exportTweets(response.Tweets, exportFormat, exportOutput); err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Export failed: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Export failed: %v", err)))
 			return
 		}
 
-		fmt.Printf("✓ Exported %d bookmarks to %s\n", len(response.Tweets), exportOutput)
+		fmt.Println(display.Success(fmt.Sprintf("Exported %d bookmarks to %s", len(response.Tweets), exportOutput)))
 	},
 }
 

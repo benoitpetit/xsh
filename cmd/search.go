@@ -33,14 +33,14 @@ var searchCmd = &cobra.Command{
 		// Sanitize search query (max 500 chars for Twitter search)
 		query := utils.SanitizeInputWithMaxLength(args[0], 500)
 		if query == "" {
-			fmt.Println(display.PrintError("Search query cannot be empty"))
+			fmt.Println(display.Error("Search query cannot be empty"))
 			os.Exit(core.ExitError)
 			return
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -54,13 +54,13 @@ var searchCmd = &cobra.Command{
 			if err != nil {
 				// Check if it's an obsolete endpoint error
 				if apiErr, ok := err.(*core.APIError); ok && apiErr.StatusCode == 404 {
-					fmt.Println(display.PrintError(fmt.Sprintf("Search failed: %v", err)))
+					fmt.Println(display.Error(fmt.Sprintf("Search failed: %v", err)))
 					fmt.Println()
-					fmt.Println(display.PrintWarning("The API endpoint may be outdated. Try:"))
-					fmt.Println("  xsh endpoints check SearchTimeline")
-					fmt.Println("  xsh endpoints list")
+					fmt.Println(display.Warning("The API endpoint may be outdated. Try:"))
+					fmt.Println(display.Bullet("xsh endpoints check SearchTimeline"))
+					fmt.Println(display.Bullet("xsh endpoints list"))
 				} else {
-					fmt.Println(display.PrintError(fmt.Sprintf("Failed to search: %v", err)))
+					fmt.Println(display.Error(fmt.Sprintf("Failed to search: %v", err)))
 				}
 				os.Exit(core.ExitError)
 				return

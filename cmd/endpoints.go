@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
@@ -38,10 +39,10 @@ var endpointsListCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println(display.PrintSuccess(fmt.Sprintf("Found %d endpoints", len(endpoints))))
-		fmt.Printf("\nLast updated: %s ago\n\n", time.Since(stats.LastUpdated).Round(time.Second))
+		fmt.Println(display.Success(fmt.Sprintf("Found %d endpoints", len(endpoints))))
+		fmt.Println(display.Muted(fmt.Sprintf("Last updated: %s ago", time.Since(stats.LastUpdated).Round(time.Second))))
+		fmt.Println()
 
-		// Group by category
 		categories := map[string][]string{
 			"Timeline":  {"HomeTimeline", "HomeLatestTimeline"},
 			"Search":    {"SearchTimeline"},
@@ -53,17 +54,18 @@ var endpointsListCmd = &cobra.Command{
 		}
 
 		for category, ops := range categories {
-			fmt.Printf("\n%s:\n", category)
+			fmt.Println(display.Subtitle(category))
 			for _, op := range ops {
 				if endpoint, ok := endpoints[op]; ok {
 					isDynamic, status := manager.CheckEndpoint(op)
-					indicator := "●"
+					indicator := display.Muted("●")
 					if isDynamic {
-						indicator = "◉"
+						indicator = display.Primary("◉")
 					}
-					fmt.Printf("  %s %-25s -> %s (%s)\n", indicator, op, endpoint, status)
+					fmt.Println("  " + indicator + " " + lipgloss.NewStyle().Width(25).Render(op) + " " + display.Muted("→") + " " + endpoint + " (" + display.StatusBadge(status) + ")")
 				}
 			}
+			fmt.Println()
 		}
 	},
 }
@@ -75,7 +77,6 @@ var endpointsCheckCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
-			// Check all critical endpoints
 			checkAllEndpoints()
 			return
 		}
@@ -97,18 +98,20 @@ var endpointsCheckCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("Endpoint: %s\n", operation)
-		fmt.Printf("URL: %s/%s\n", core.GraphQLBase, endpoint)
-		fmt.Printf("Status: %s\n", status)
-		
+		fmt.Println(display.Title("Endpoint Check"))
+		fmt.Println(display.KeyValue("Operation:", operation))
+		fmt.Println(display.KeyValue("URL:", fmt.Sprintf("%s/%s", core.GraphQLBase, endpoint)))
+		fmt.Println(display.KeyValue("Status:", display.StatusBadge(status)))
+
 		if len(opFeatures) > 0 {
-			fmt.Printf("\nFeatures (%d):\n", len(opFeatures))
+			fmt.Println()
+			fmt.Println(display.Section(fmt.Sprintf("Features (%d)", len(opFeatures))))
 			for feat, val := range opFeatures {
-				indicator := "✗"
 				if val {
-					indicator = "✓"
+					fmt.Println(display.Bullet(display.Success(feat)))
+				} else {
+					fmt.Println(display.Bullet(display.Error(feat)))
 				}
-				fmt.Printf("  %s %s\n", indicator, feat)
 			}
 		}
 	},
@@ -129,17 +132,15 @@ This will:
 
 The process may take 10-30 seconds depending on network speed.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Refreshing endpoints from X.com...")
-		fmt.Println("This may take a moment...")
+		fmt.Println(display.Action("Refreshing endpoints from", "X.com"))
+		fmt.Println(display.Muted("This may take a moment..."))
 
 		start := time.Now()
-		
-		// Invalidate cache first
+
 		core.InvalidateCache()
-		
-		// Refresh
+
 		if err := core.RefreshEndpoints(); err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Refresh failed: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Refresh failed: %v", err)))
 			os.Exit(core.ExitError)
 			return
 		}
@@ -158,7 +159,7 @@ The process may take 10-30 seconds depending on network speed.`,
 			return
 		}
 
-		fmt.Println(display.PrintSuccess(fmt.Sprintf("Refreshed %d endpoints in %s", stats.TotalCount, duration)))
+		fmt.Println(display.Success(fmt.Sprintf("Refreshed %d endpoints in %s", stats.TotalCount, duration)))
 	},
 }
 
@@ -170,18 +171,17 @@ var endpointsStatusCmd = &cobra.Command{
 		manager := core.GetEndpointManager()
 		stats := manager.GetStats()
 
-		// Check health
 		discovery, err := core.NewEndpointDiscovery(verbose)
 		var healthStatus string
 		var canDiscover bool
-		
+
 		if err != nil {
 			healthStatus = fmt.Sprintf("Discovery unavailable: %v", err)
 			canDiscover = false
 		} else {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			
+
 			cache, err := discovery.GetCachedEndpoints(ctx)
 			if err != nil {
 				healthStatus = fmt.Sprintf("Cache error: %v", err)
@@ -204,17 +204,16 @@ var endpointsStatusCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("Endpoint System Status")
-		fmt.Println("======================")
-		fmt.Printf("Health: %s\n", healthStatus)
-		fmt.Printf("Can auto-discover: %v\n", canDiscover)
-		fmt.Printf("Cached endpoints: %d\n", stats.TotalCount)
-		fmt.Printf("Cached features: %d\n", stats.FeatureCount)
-		fmt.Printf("Cache age: %s\n", stats.CacheAge.Round(time.Second))
-		
+		fmt.Println(display.Title("Endpoint System Status"))
+		fmt.Println(display.KeyValue("Health:", display.StatusBadge(healthStatus)))
+		fmt.Println(display.KeyValue("Auto-discover:", fmt.Sprintf("%v", canDiscover)))
+		fmt.Println(display.KeyValue("Cached endpoints:", fmt.Sprintf("%d", stats.TotalCount)))
+		fmt.Println(display.KeyValue("Cached features:", fmt.Sprintf("%d", stats.FeatureCount)))
+		fmt.Println(display.KeyValue("Cache age:", stats.CacheAge.Round(time.Second).String()))
+
 		if stats.CacheAge > 24*time.Hour {
 			fmt.Println()
-			fmt.Println(display.PrintWarning("Cache is old. Consider running 'xsh endpoints refresh'"))
+			fmt.Println(display.Warning("Cache is old. Consider running 'xsh endpoints refresh'"))
 		}
 	},
 }
@@ -242,7 +241,7 @@ var endpointsUpdateCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println(display.PrintSuccess(fmt.Sprintf("Updated %s -> %s", operation, endpoint)))
+		fmt.Println(display.Success(fmt.Sprintf("Updated %s → %s", operation, endpoint)))
 	},
 }
 
@@ -258,7 +257,7 @@ var endpointsResetCmd = &cobra.Command{
 			var confirm string
 			fmt.Scanln(&confirm)
 			if confirm != "y" && confirm != "Y" {
-				fmt.Println("Aborted.")
+				fmt.Println(display.Warning("Aborted."))
 				return
 			}
 		}
@@ -270,52 +269,52 @@ var endpointsResetCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println(display.PrintSuccess("All endpoints reset to defaults"))
-		fmt.Println("Run 'xsh endpoints refresh' to discover fresh endpoints from X.com")
+		fmt.Println(display.Success("All endpoints reset to defaults"))
+		fmt.Println(display.Info("Run 'xsh endpoints refresh' to discover fresh endpoints from X.com"))
 	},
 }
 
 // checkAllEndpoints checks all critical endpoints
 func checkAllEndpoints() {
 	manager := core.GetEndpointManager()
-	
+
 	criticalOps := []string{
 		"HomeTimeline",
-		"HomeLatestTimeline", 
+		"HomeLatestTimeline",
 		"UserByScreenName",
 		"SearchTimeline",
 		"TweetDetail",
 		"UserTweets",
 	}
 
-	fmt.Println("Checking critical endpoints...")
+	fmt.Println(display.Title("Checking critical endpoints"))
 	fmt.Println()
 
 	allOK := true
 	for _, op := range criticalOps {
 		endpoint := manager.GetEndpoint(op)
 		isDynamic, _ := manager.CheckEndpoint(op)
-		
-		indicator := "○"
+
+		indicator := display.Muted("○")
 		if isDynamic {
-			indicator = "◉"
+			indicator = display.Primary("◉")
 		}
-		
-		status := "OK"
+
+		status := display.Success("OK")
 		if !isDynamic {
-			status = "STATIC"
+			status = display.Warning("STATIC")
 			allOK = false
 		}
-		
-		fmt.Printf("%s %-25s -> %s [%s]\n", indicator, op, endpoint, status)
+
+		fmt.Println("  " + indicator + " " + lipgloss.NewStyle().Width(25).Render(op) + " " + display.Muted("→") + " " + endpoint + " [" + status + "]")
 	}
 
 	fmt.Println()
 	if allOK {
-		fmt.Println(display.PrintSuccess("All critical endpoints are using dynamic discovery"))
+		fmt.Println(display.Success("All critical endpoints are using dynamic discovery"))
 	} else {
-		fmt.Println(display.PrintWarning("Some endpoints using static fallbacks"))
-		fmt.Println("Run 'xsh endpoints refresh' to enable dynamic discovery")
+		fmt.Println(display.Warning("Some endpoints using static fallbacks"))
+		fmt.Println(display.Info("Run 'xsh endpoints refresh' to enable dynamic discovery"))
 	}
 }
 

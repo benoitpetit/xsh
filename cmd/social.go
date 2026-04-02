@@ -27,26 +27,24 @@ var followCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
-		// Get user by handle
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error fetching user: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
 			os.Exit(core.ExitError)
 		}
 		if user == nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("User @%s not found", handle)))
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			os.Exit(core.ExitError)
 		}
 
-		// Follow
 		_, err = core.FollowUser(client, user.ID)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitError)
 		}
 
@@ -55,7 +53,7 @@ var followCmd = &cobra.Command{
 			"handle": handle,
 			"status": "success",
 		}, func() {
-			fmt.Printf("✓ Followed @%s\n", handle)
+			fmt.Println(display.Success(fmt.Sprintf("Followed @%s", handle)))
 		})
 	},
 }
@@ -70,24 +68,24 @@ var unfollowCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error fetching user: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
 			os.Exit(core.ExitError)
 		}
 		if user == nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("User @%s not found", handle)))
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			os.Exit(core.ExitError)
 		}
 
 		_, err = core.UnfollowUser(client, user.ID)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitError)
 		}
 
@@ -96,7 +94,7 @@ var unfollowCmd = &cobra.Command{
 			"handle": handle,
 			"status": "success",
 		}, func() {
-			fmt.Printf("✓ Unfollowed @%s\n", handle)
+			fmt.Println(display.Success(fmt.Sprintf("Unfollowed @%s", handle)))
 		})
 	},
 }
@@ -111,24 +109,24 @@ var blockCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error fetching user: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
 			os.Exit(core.ExitError)
 		}
 		if user == nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("User @%s not found", handle)))
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			os.Exit(core.ExitError)
 		}
 
 		_, err = core.BlockUser(client, user.ID)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitError)
 		}
 
@@ -137,7 +135,7 @@ var blockCmd = &cobra.Command{
 			"handle": handle,
 			"status": "success",
 		}, func() {
-			fmt.Printf("✓ Blocked @%s\n", handle)
+			fmt.Println(display.Success(fmt.Sprintf("Blocked @%s", handle)))
 		})
 	},
 }
@@ -152,24 +150,24 @@ var unblockCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error fetching user: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
 			os.Exit(core.ExitError)
 		}
 		if user == nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("User @%s not found", handle)))
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			os.Exit(core.ExitError)
 		}
 
 		_, err = core.UnblockUser(client, user.ID)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitError)
 		}
 
@@ -178,7 +176,7 @@ var unblockCmd = &cobra.Command{
 			"handle": handle,
 			"status": "success",
 		}, func() {
-			fmt.Printf("✓ Unblocked @%s\n", handle)
+			fmt.Println(display.Success(fmt.Sprintf("Unblocked @%s", handle)))
 		})
 	},
 }
@@ -193,24 +191,24 @@ var muteCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error fetching user: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
 			os.Exit(core.ExitError)
 		}
 		if user == nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("User @%s not found", handle)))
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			os.Exit(core.ExitError)
 		}
 
 		_, err = core.MuteUser(client, user.ID)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitError)
 		}
 
@@ -219,7 +217,7 @@ var muteCmd = &cobra.Command{
 			"handle": handle,
 			"status": "success",
 		}, func() {
-			fmt.Printf("✓ Muted @%s\n", handle)
+			fmt.Println(display.Success(fmt.Sprintf("Muted @%s", handle)))
 		})
 	},
 }
@@ -234,24 +232,24 @@ var unmuteCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error fetching user: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
 			os.Exit(core.ExitError)
 		}
 		if user == nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("User @%s not found", handle)))
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			os.Exit(core.ExitError)
 		}
 
 		_, err = core.UnmuteUser(client, user.ID)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Error: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitError)
 		}
 
@@ -260,7 +258,7 @@ var unmuteCmd = &cobra.Command{
 			"handle": handle,
 			"status": "success",
 		}, func() {
-			fmt.Printf("✓ Unmuted @%s\n", handle)
+			fmt.Println(display.Success(fmt.Sprintf("Unmuted @%s", handle)))
 		})
 	},
 }
@@ -268,7 +266,6 @@ var unmuteCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(socialCmd)
 
-	// Add subcommands to social
 	socialCmd.AddCommand(followCmd)
 	socialCmd.AddCommand(unfollowCmd)
 	socialCmd.AddCommand(blockCmd)
@@ -276,7 +273,6 @@ func init() {
 	socialCmd.AddCommand(muteCmd)
 	socialCmd.AddCommand(unmuteCmd)
 
-	// Also add social commands at root level for direct access
 	rootCmd.AddCommand(followCmd)
 	rootCmd.AddCommand(unfollowCmd)
 	rootCmd.AddCommand(blockCmd)

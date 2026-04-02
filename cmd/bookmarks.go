@@ -18,14 +18,14 @@ var bookmarksFoldersCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		folders, err := core.GetBookmarkFolders(client)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -46,14 +46,14 @@ var bookmarksFolderCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		response, err := core.GetBookmarkFolderTimeline(client, folderID, count, "")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 

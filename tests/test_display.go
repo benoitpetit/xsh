@@ -116,7 +116,7 @@ func TestFormatTweet(t *testing.T) {
 		},
 	}
 
-	result := display.FormatTweet(tweet, "", true)
+	result := display.FormatTweet(tweet, "", true, false)
 
 	if result == "" {
 		t.Error("FormatTweetSimple() returned empty string")

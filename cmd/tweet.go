@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
 	"github.com/benoitpetit/xsh/models"
 	"github.com/benoitpetit/xsh/utils"
+	"github.com/spf13/cobra"
 )
 
 var (
-	tweetThread    bool
-	tweetCount     int
-	exportArticle  string
-	
+	tweetThread   bool
+	tweetCount    int
+	exportArticle string
+
 	// Bookmarks filter flags
 	bookmarksFilter    string
 	bookmarksTopN      int
@@ -52,14 +52,14 @@ For tweets containing articles (long-form content), use --export to save as Mark
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if !utils.ValidateTweetID(args[0]) {
-			fmt.Println(display.PrintError(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
+			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
 			os.Exit(core.ExitError)
 			return
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -67,12 +67,12 @@ For tweets containing articles (long-form content), use --export to save as Mark
 
 		tweets, err := core.GetTweetDetail(client, args[0], tweetCount)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to fetch tweet: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch tweet: %v", err)))
 			return
 		}
 
 		if len(tweets) == 0 {
-			fmt.Println(display.PrintError(fmt.Sprintf("Tweet %s not found", args[0])))
+			fmt.Println(display.Error(fmt.Sprintf("Tweet %s not found", args[0])))
 			os.Exit(core.ExitError)
 			return
 		}
@@ -93,18 +93,18 @@ For tweets containing articles (long-form content), use --export to save as Mark
 		if exportArticle != "" {
 			articleData, err := core.GetArticle(client, args[0])
 			if err != nil || articleData == nil {
-				fmt.Println(display.PrintWarning("No article found in this tweet"))
+				fmt.Println(display.Warning("No article found in this tweet"))
 				os.Exit(core.ExitError)
 				return
 			}
 
 			if err := core.ExportArticleToFile(articleData, focal, exportArticle); err != nil {
-				fmt.Println(display.PrintError(fmt.Sprintf("Failed to export article: %v", err)))
+				fmt.Println(display.Error(fmt.Sprintf("Failed to export article: %v", err)))
 				os.Exit(core.ExitError)
 				return
 			}
 
-			fmt.Println(display.PrintSuccess(fmt.Sprintf("Article exported to %s", exportArticle)))
+			fmt.Println(display.Success(fmt.Sprintf("Article exported to %s", exportArticle)))
 			return
 		}
 
@@ -151,14 +151,14 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		text, valid := utils.ValidateTweetTextWithLimit(args[0], 280)
 		if !valid {
-			fmt.Println(display.PrintError("Tweet text is empty or exceeds 280 characters"))
+			fmt.Println(display.Error("Tweet text is empty or exceeds 280 characters"))
 			os.Exit(core.ExitError)
 			return
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -169,14 +169,14 @@ Examples:
 		images, _ := cmd.Flags().GetStringArray("image")
 
 		if replyTo != "" && !utils.ValidateTweetID(replyTo) {
-			fmt.Println(display.PrintError(fmt.Sprintf("Invalid reply-to tweet ID: %s", replyTo)))
+			fmt.Println(display.Error(fmt.Sprintf("Invalid reply-to tweet ID: %s", replyTo)))
 			os.Exit(core.ExitError)
 			return
 		}
 
 		// Validate max images
 		if len(images) > 4 {
-			fmt.Println(display.PrintError(fmt.Sprintf("Too many images: %d (max 4)", len(images))))
+			fmt.Println(display.Error(fmt.Sprintf("Too many images: %d (max 4)", len(images))))
 			os.Exit(core.ExitError)
 			return
 		}
@@ -185,25 +185,25 @@ Examples:
 		var mediaIDs []string
 		if len(images) > 0 {
 			if verbose {
-				fmt.Printf("Uploading %d image(s)...\n", len(images))
+				fmt.Println(display.Action("Uploading", fmt.Sprintf("%d image(s)", len(images))))
 			}
 			for _, imgPath := range images {
 				mediaID, err := core.UploadMediaFile(client, imgPath)
 				if err != nil {
-					fmt.Println(display.PrintError(fmt.Sprintf("Failed to upload image %s: %v", imgPath, err)))
+					fmt.Println(display.Error(fmt.Sprintf("Failed to upload image %s: %v", imgPath, err)))
 					os.Exit(core.ExitError)
 					return
 				}
 				mediaIDs = append(mediaIDs, mediaID)
 				if verbose {
-					fmt.Printf("  Uploaded: %s -> %s\n", imgPath, mediaID[:8]+"...")
+					fmt.Println(display.Info(fmt.Sprintf("  Uploaded: %s → %s", imgPath, mediaID[:8]+"...")))
 				}
 			}
 		}
 
 		result, err := core.CreateTweet(client, text, replyTo, quote, mediaIDs)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to post tweet: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to post tweet: %v", err)))
 			return
 		}
 
@@ -213,31 +213,15 @@ Examples:
 		}
 		output(outputData, func() {
 			tweetID := extractTweetIDFromResult(result)
+			suffix := ""
+			if len(mediaIDs) > 0 {
+				suffix = fmt.Sprintf(" with %d image(s)", len(mediaIDs))
+			}
 			if tweetID != "" {
-				suffix := ""
-				if len(mediaIDs) > 0 {
-					suffix = fmt.Sprintf(" with %d image(s)", len(mediaIDs))
-				}
-				fmt.Println(display.PrintSuccess(fmt.Sprintf("Tweet posted%s! ID: %s", suffix, tweetID)))
-				fmt.Printf("  URL: https://x.com/i/web/status/%s\n", tweetID)
+				fmt.Println(display.Success(fmt.Sprintf("Tweet posted%s! ID: %s", suffix, tweetID)))
+				fmt.Println(display.Info(fmt.Sprintf("  URL: https://x.com/i/web/status/%s", tweetID)))
 			} else {
-				// Check if it's a "likely success" response (empty ID but no error)
-				if note, ok := result["_note"].(string); ok && note != "" {
-					suffix := ""
-					if len(mediaIDs) > 0 {
-						suffix = fmt.Sprintf(" with %d image(s)", len(mediaIDs))
-					}
-					fmt.Println(display.PrintSuccess(fmt.Sprintf("Tweet posted%s successfully!", suffix)))
-					if verbose {
-						fmt.Printf("  Note: %s\n", note)
-					}
-				} else {
-					suffix := ""
-					if len(mediaIDs) > 0 {
-						suffix = fmt.Sprintf(" with %d image(s)", len(mediaIDs))
-					}
-					fmt.Println(display.PrintSuccess(fmt.Sprintf("Tweet posted%s!", suffix)))
-				}
+				fmt.Println(display.Success(fmt.Sprintf("Tweet posted%s!", suffix)))
 			}
 		})
 	},
@@ -250,14 +234,14 @@ var tweetDeleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if !utils.ValidateTweetID(args[0]) {
-			fmt.Println(display.PrintError(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
+			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
 			os.Exit(core.ExitError)
 			return
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -269,19 +253,19 @@ var tweetDeleteCmd = &cobra.Command{
 			var confirm string
 			fmt.Scanln(&confirm)
 			if confirm != "y" && confirm != "Y" {
-				fmt.Println("Aborted.")
+				fmt.Println(display.Warning("Aborted."))
 				return
 			}
 		}
 
 		result, err := core.DeleteTweet(client, args[0])
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to delete tweet: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to delete tweet: %v", err)))
 			return
 		}
 
 		output(result, func() {
-			fmt.Println(display.PrintSuccess(fmt.Sprintf("Deleted tweet %s", args[0])))
+			fmt.Println(display.Success(fmt.Sprintf("Deleted tweet %s", args[0])))
 		})
 	},
 }
@@ -293,14 +277,14 @@ var tweetLikeCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if !utils.ValidateTweetID(args[0]) {
-			fmt.Println(display.PrintError(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
+			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
 			os.Exit(core.ExitError)
 			return
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -308,12 +292,12 @@ var tweetLikeCmd = &cobra.Command{
 
 		result, err := core.LikeTweet(client, args[0])
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to like tweet: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to like tweet: %v", err)))
 			return
 		}
 
 		output(result, func() {
-			fmt.Println(display.PrintSuccess(fmt.Sprintf("Liked tweet %s", args[0])))
+			fmt.Println(display.Success(fmt.Sprintf("Liked tweet %s", args[0])))
 		})
 	},
 }
@@ -325,14 +309,14 @@ var tweetUnlikeCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if !utils.ValidateTweetID(args[0]) {
-			fmt.Println(display.PrintError(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
+			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
 			os.Exit(core.ExitError)
 			return
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -340,12 +324,12 @@ var tweetUnlikeCmd = &cobra.Command{
 
 		result, err := core.UnlikeTweet(client, args[0])
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to unlike tweet: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to unlike tweet: %v", err)))
 			return
 		}
 
 		output(result, func() {
-			fmt.Println(display.PrintSuccess(fmt.Sprintf("Unliked tweet %s", args[0])))
+			fmt.Println(display.Success(fmt.Sprintf("Unliked tweet %s", args[0])))
 		})
 	},
 }
@@ -357,14 +341,14 @@ var tweetRetweetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if !utils.ValidateTweetID(args[0]) {
-			fmt.Println(display.PrintError(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
+			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
 			os.Exit(core.ExitError)
 			return
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -372,12 +356,12 @@ var tweetRetweetCmd = &cobra.Command{
 
 		result, err := core.Retweet(client, args[0])
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to retweet: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to retweet: %v", err)))
 			return
 		}
 
 		output(result, func() {
-			fmt.Println(display.PrintSuccess(fmt.Sprintf("Retweeted %s", args[0])))
+			fmt.Println(display.Success(fmt.Sprintf("Retweeted %s", args[0])))
 		})
 	},
 }
@@ -389,14 +373,14 @@ var tweetUnretweetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if !utils.ValidateTweetID(args[0]) {
-			fmt.Println(display.PrintError(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
+			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
 			os.Exit(core.ExitError)
 			return
 		}
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -404,12 +388,12 @@ var tweetUnretweetCmd = &cobra.Command{
 
 		result, err := core.Unretweet(client, args[0])
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to unretweet: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to unretweet: %v", err)))
 			return
 		}
 
 		output(result, func() {
-			fmt.Println(display.PrintSuccess(fmt.Sprintf("Unretweeted %s", args[0])))
+			fmt.Println(display.Success(fmt.Sprintf("Unretweeted %s", args[0])))
 		})
 	},
 }
@@ -422,19 +406,19 @@ var tweetBookmarkCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			return
 		}
 		defer client.Close()
 
 		result, err := core.BookmarkTweet(client, args[0])
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to bookmark: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to bookmark: %v", err)))
 			return
 		}
 
 		output(result, func() {
-			fmt.Println(display.PrintSuccess(fmt.Sprintf("Bookmarked tweet %s", args[0])))
+			fmt.Println(display.Success(fmt.Sprintf("Bookmarked tweet %s", args[0])))
 		})
 	},
 }
@@ -447,19 +431,19 @@ var tweetUnbookmarkCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			return
 		}
 		defer client.Close()
 
 		result, err := core.UnbookmarkTweet(client, args[0])
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to unbookmark: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to unbookmark: %v", err)))
 			return
 		}
 
 		output(result, func() {
-			fmt.Println(display.PrintSuccess(fmt.Sprintf("Unbookmarked tweet %s", args[0])))
+			fmt.Println(display.Success(fmt.Sprintf("Unbookmarked tweet %s", args[0])))
 		})
 	},
 }
@@ -471,7 +455,7 @@ var bookmarksCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			return
 		}
 		defer client.Close()
@@ -479,7 +463,7 @@ var bookmarksCmd = &cobra.Command{
 		count, _ := cmd.Flags().GetInt("count")
 		response, err := core.GetBookmarks(client, count, "")
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to fetch bookmarks: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch bookmarks: %v", err)))
 			return
 		}
 

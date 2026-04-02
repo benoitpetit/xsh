@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
+	"github.com/benoitpetit/xsh/display"
 )
 
 // mcpCmd represents the mcp command
@@ -20,7 +21,7 @@ This starts the server using stdio transport for communication with MCP clients
 like Claude Desktop, Claude Code, or other MCP-compatible tools.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := runMCPServer(); err != nil {
-			fmt.Printf("Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 		}
 	},
 }
