@@ -32,7 +32,7 @@ var authStatusCmd = &cobra.Command{
 		creds, err := core.GetCredentials(account)
 		if err != nil {
 			output(map[string]bool{"authenticated": false}, func() {
-				fmt.Println(display.PrintError("Not authenticated"))
+				fmt.Println(display.Error("Not authenticated"))
 			})
 			os.Exit(core.ExitAuthError)
 			return
@@ -46,9 +46,9 @@ var authStatusCmd = &cobra.Command{
 		}
 
 		output(info, func() {
-			fmt.Println(display.PrintSuccess(fmt.Sprintf("Authenticated (token: %s)", info["auth_token"])))
+			fmt.Println(display.Success(fmt.Sprintf("Authenticated (token: %s)", info["auth_token"])))
 			if creds.AccountName != "" {
-				fmt.Printf("  Account: %s\n", creds.AccountName)
+				fmt.Println(display.KeyValue("Account:", creds.AccountName))
 			}
 		})
 	},
@@ -88,89 +88,89 @@ Examples:
 
 		if authBrowser != "" {
 			// Extract from specific browser
-			fmt.Printf("Extracting cookies from %s...\n", authBrowser)
+			fmt.Println(display.Action("Extracting cookies from", authBrowser))
 			creds, err = browser.ExtractFromBrowserVerbose(authBrowser, core.Verbose)
 			browserName = authBrowser
 		} else {
 			// Auto-detect from all browsers
-			fmt.Println("Detecting browsers with Twitter/X cookies...")
+			fmt.Println(display.Action("Detecting browsers with","Twitter/X cookies"))
 			availableBrowsers := browser.ListAvailableBrowsers()
 			
 			if len(availableBrowsers) == 0 {
-				fmt.Println(display.PrintError("No supported browser found."))
-				fmt.Println("\nSupported browsers:")
-				fmt.Println("  - Google Chrome / Chromium")
-				fmt.Println("  - Brave")
-				fmt.Println("  - Microsoft Edge")
-				fmt.Println("  - Firefox")
-				fmt.Println("  - Opera / Vivaldi / Safari (via kooky library)")
+				fmt.Println(display.Error("No supported browser found"))
+				fmt.Println(display.Section("Supported browsers"))
+				fmt.Println(display.Bullet("Google Chrome / Chromium"))
+				fmt.Println(display.Bullet("Brave"))
+				fmt.Println(display.Bullet("Microsoft Edge"))
+				fmt.Println(display.Bullet("Firefox"))
+				fmt.Println(display.Bullet("Opera / Vivaldi / Safari (via kooky library)"))
 				
-				fmt.Println("\nTroubleshooting:")
+				fmt.Println(display.Section("Troubleshooting"))
 				switch runtime.GOOS {
 				case "linux":
-					fmt.Println("  - Browsers are typically in ~/.config/<browser-name>/")
-					fmt.Println("  - Make sure you have read permissions on the browser directories")
+					fmt.Println(display.Bullet("Browsers are typically in ~/.config/<browser-name>/"))
+					fmt.Println(display.Bullet("Make sure you have read permissions on the browser directories"))
 				case "darwin":
-					fmt.Println("  - Browsers are in ~/Library/Application Support/")
-					fmt.Println("  - Grant Full Disk Access to Terminal in System Preferences")
+					fmt.Println(display.Bullet("Browsers are in ~/Library/Application Support/"))
+					fmt.Println(display.Bullet("Grant Full Disk Access to Terminal in System Preferences"))
 				case "windows":
-					fmt.Println("  - Browsers are in %LOCALAPPDATA%")
+					fmt.Println(display.Bullet("Browsers are in %LOCALAPPDATA%"))
 				}
 				
-				fmt.Println("\nRecommended alternative:")
-				fmt.Println("  xsh auth import <cookies.json>  # Export from Cookie Editor extension")
-				fmt.Println("  xsh auth set                    # Manual token entry")
+				fmt.Println(display.Section("Recommended alternatives"))
+				fmt.Println(display.Bullet("xsh auth import <cookies.json>  — Export from Cookie Editor extension"))
+				fmt.Println(display.Bullet("xsh auth set                    — Manual token entry"))
 				os.Exit(core.ExitAuthError)
 				return
 			}
 			
-			fmt.Printf("Found browsers: %v\n", availableBrowsers)
+			fmt.Println(display.Info(fmt.Sprintf("Found browsers: %v", availableBrowsers)))
 			
 			creds, browserName, err = browser.ExtractFromAllBrowsersVerbose(core.Verbose)
 		}
 
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to extract cookies: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to extract cookies: %v", err)))
 			
 			// Provide OS-specific help
-			fmt.Println("\n" + display.StyleBold.Render("Troubleshooting:"))
+			fmt.Println(display.Section("Troubleshooting"))
 			switch runtime.GOOS {
 			case "darwin":
-				fmt.Println("  1. Make sure Chrome/Firefox is not running (locks the database)")
-				fmt.Println("  2. Try granting Full Disk Access to Terminal in System Preferences > Security & Privacy")
-				fmt.Println("  3. Chrome 80+ uses Keychain encryption which may require authentication")
+				fmt.Println(display.Numbered(1, "Make sure Chrome/Firefox is not running (locks the database)"))
+				fmt.Println(display.Numbered(2, "Try granting Full Disk Access to Terminal in System Preferences > Security & Privacy"))
+				fmt.Println(display.Numbered(3, "Chrome 80+ uses Keychain encryption which may require authentication"))
 			case "windows":
-				fmt.Println("  1. Make sure Chrome/Firefox is not running")
-				fmt.Println("  2. Try running as Administrator if access is denied")
-				fmt.Println("  3. Windows Defender or antivirus may block cookie access")
+				fmt.Println(display.Numbered(1, "Make sure Chrome/Firefox is not running"))
+				fmt.Println(display.Numbered(2, "Try running as Administrator if access is denied"))
+				fmt.Println(display.Numbered(3, "Windows Defender or antivirus may block cookie access"))
 			case "linux":
-				fmt.Println("  1. ⚠️  CLOSE CHROME COMPLETELY (cookie database is locked when Chrome is running)")
-				fmt.Println("     Run: killall chrome")
-				fmt.Println("  2. Check file permissions on browser config directories (~/.config/google-chrome)")
-				fmt.Println("  3. Chrome 80+ uses system keyring (libsecret/gnome-keyring) for encryption")
-				fmt.Println("  4. Install required packages:")
-				fmt.Println("     - Fedora: sudo dnf install python3-secretstorage")
-				fmt.Println("     - Ubuntu/Debian: sudo apt install python3-secretstorage")
-				fmt.Println("     - Arch: sudo pacman -S python-secretstorage")
+				fmt.Println(display.Numbered(1, display.Warning("CLOSE CHROME COMPLETELY") + " (cookie database is locked when Chrome is running)"))
+				fmt.Println(display.Bullet("Run: killall chrome"))
+				fmt.Println(display.Numbered(2, "Check file permissions on browser config directories (~/.config/google-chrome)"))
+				fmt.Println(display.Numbered(3, "Chrome 80+ uses system keyring (libsecret/gnome-keyring) for encryption"))
+				fmt.Println(display.Numbered(4, "Install required packages:"))
+				fmt.Println(display.Bullet("Fedora: sudo dnf install python3-secretstorage"))
+				fmt.Println(display.Bullet("Ubuntu/Debian: sudo apt install python3-secretstorage"))
+				fmt.Println(display.Bullet("Arch: sudo pacman -S python-secretstorage"))
 			}
 			
-			fmt.Println("\n" + display.StyleBold.Render("Recommended alternative methods:"))
-			fmt.Println("  1. xsh auth import <cookies.json>  # Export from Cookie Editor extension")
-			fmt.Println("  2. xsh auth set                    # Enter tokens manually")
+			fmt.Println(display.Section("Recommended alternative methods"))
+			fmt.Println(display.Numbered(1, "xsh auth import <cookies.json>  — Export from Cookie Editor extension"))
+			fmt.Println(display.Numbered(2, "xsh auth set                    — Enter tokens manually"))
 			
-			fmt.Println("\n" + display.StyleBold.Render("Cookie Editor method (most reliable):"))
-			fmt.Println("  1. Install 'Cookie Editor' extension in your browser")
-			fmt.Println("  2. Go to x.com and log in")
-			fmt.Println("  3. Open Cookie Editor, click 'Export' → 'JSON'")
-			fmt.Println("  4. Save to a file and run: xsh auth import <file>")
+			fmt.Println(display.Section("Cookie Editor method (most reliable)"))
+			fmt.Println(display.Numbered(1, "Install 'Cookie Editor' extension in your browser"))
+			fmt.Println(display.Numbered(2, "Go to x.com and log in"))
+			fmt.Println(display.Numbered(3, "Open Cookie Editor, click 'Export' → 'JSON'"))
+			fmt.Println(display.Numbered(4, "Save to a file and run: xsh auth import <file>"))
 			
 			os.Exit(core.ExitAuthError)
 			return
 		}
 
 		if creds == nil || !creds.IsValid() {
-			fmt.Println(display.PrintError("Extracted credentials are invalid."))
-			fmt.Println("Make sure you're logged into x.com in your browser.")
+			fmt.Println(display.Error("Extracted credentials are invalid"))
+			fmt.Println(display.Info("Make sure you're logged into x.com in your browser"))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -182,13 +182,13 @@ Examples:
 
 		creds.AccountName = acc
 		if err := core.SaveAuth(creds, acc); err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to save credentials: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to save credentials: %v", err)))
 			os.Exit(core.ExitError)
 			return
 		}
 
-		fmt.Println(display.PrintSuccess(fmt.Sprintf("Authenticated using %s! Saved as account '%s'", browserName, acc)))
-		fmt.Printf("  Token: %s...\n", creds.AuthToken[:8])
+		fmt.Println(display.Success(fmt.Sprintf("Authenticated using %s! Saved as account '%s'", browserName, acc)))
+		fmt.Println(display.KeyValue("Token:", creds.AuthToken[:8]+"..."))
 	},
 }
 
@@ -200,7 +200,7 @@ var authImportCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		creds, err := core.ImportCookiesFromFile(args[0])
 		if err != nil || creds == nil || !creds.IsValid() {
-			fmt.Println(display.PrintError("Could not find auth_token/ct0 in the file. Make sure you exported cookies from x.com with Cookie Editor."))
+			fmt.Println(display.Error("Could not find auth_token/ct0 in the file. Make sure you exported cookies from x.com with Cookie Editor"))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -211,12 +211,12 @@ var authImportCmd = &cobra.Command{
 		}
 
 		if err := core.SaveAuth(creds, acc); err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to save credentials: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to save credentials: %v", err)))
 			os.Exit(core.ExitError)
 			return
 		}
 
-		fmt.Println(display.PrintSuccess(fmt.Sprintf("Imported cookies! Saved as account '%s'", acc)))
+		fmt.Println(display.Success(fmt.Sprintf("Imported cookies! Saved as account '%s'", acc)))
 	},
 }
 
@@ -234,7 +234,7 @@ var authSetCmd = &cobra.Command{
 		fmt.Scanln(&ct0)
 
 		if authToken == "" || ct0 == "" {
-			fmt.Println(display.PrintError("Both auth_token and ct0 are required"))
+			fmt.Println(display.Error("Both auth_token and ct0 are required"))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -251,12 +251,12 @@ var authSetCmd = &cobra.Command{
 		}
 
 		if err := core.SaveAuth(creds, acc); err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to save credentials: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to save credentials: %v", err)))
 			os.Exit(core.ExitError)
 			return
 		}
 
-		fmt.Println(display.PrintSuccess(fmt.Sprintf("Credentials saved as account '%s'", acc)))
+		fmt.Println(display.Success(fmt.Sprintf("Credentials saved as account '%s'", acc)))
 	},
 }
 
@@ -272,10 +272,10 @@ var authAccountsCmd = &cobra.Command{
 
 		output(map[string]interface{}{"accounts": accounts}, func() {
 			if len(accounts) == 0 {
-				fmt.Println(display.PrintWarning("No accounts stored"))
+				fmt.Println(display.Warning("No accounts stored"))
 			} else {
 				for _, acc := range accounts {
-					fmt.Printf("  %s\n", acc)
+					fmt.Println(display.Bullet(acc))
 				}
 			}
 		})
@@ -289,11 +289,11 @@ var authSwitchCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := core.SetDefaultAccount(args[0]); err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Account '%s' not found", args[0])))
+			fmt.Println(display.Error(fmt.Sprintf("Account '%s' not found", args[0])))
 			os.Exit(core.ExitError)
 			return
 		}
-		fmt.Println(display.PrintSuccess(fmt.Sprintf("Switched to account '%s'", args[0])))
+		fmt.Println(display.Success(fmt.Sprintf("Switched to account '%s'", args[0])))
 	},
 }
 
@@ -312,18 +312,18 @@ var authLogoutCmd = &cobra.Command{
 			var confirm string
 			fmt.Scanln(&confirm)
 			if confirm != "y" && confirm != "Y" {
-				fmt.Println("Aborted.")
+				fmt.Println(display.Warning("Aborted."))
 				return
 			}
 		}
 
 		if err := core.RemoveAuth(acc); err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to remove account: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to remove account: %v", err)))
 			os.Exit(core.ExitError)
 			return
 		}
 
-		fmt.Println(display.PrintSuccess(fmt.Sprintf("Removed account '%s'", acc)))
+		fmt.Println(display.Success(fmt.Sprintf("Removed account '%s'", acc)))
 	},
 }
 
@@ -334,7 +334,7 @@ var authWhoamiCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.PrintError(err.Error()))
+			fmt.Println(display.Error(err.Error()))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -343,7 +343,7 @@ var authWhoamiCmd = &cobra.Command{
 		// Get current user by verifying credentials
 		creds, _ := core.GetCredentials(account)
 		if creds == nil {
-			fmt.Println(display.PrintError("Not authenticated"))
+			fmt.Println(display.Error("Not authenticated"))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -352,7 +352,7 @@ var authWhoamiCmd = &cobra.Command{
 		// We'll use the home timeline to verify
 		response, err := core.GetHomeTimeline(client, "for-you", 1, "")
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to verify credentials: %v", err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to verify credentials: %v", err)))
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -362,11 +362,11 @@ var authWhoamiCmd = &cobra.Command{
 			"account":       creds.AccountName,
 			"auth_token":    creds.AuthToken[:8] + "...",
 		}, func() {
-			fmt.Println(display.PrintSuccess("Authenticated"))
-			fmt.Printf("  Account: %s\n", creds.AccountName)
-			fmt.Printf("  Token: %s...\n", creds.AuthToken[:8])
+			fmt.Println(display.Success("Authenticated"))
+			fmt.Println(display.KeyValue("Account:", creds.AccountName))
+			fmt.Println(display.KeyValue("Token:", creds.AuthToken[:8]+"..."))
 			if len(response.Tweets) > 0 {
-				fmt.Printf("  API Status: OK (timeline accessible)\n")
+				fmt.Println(display.KeyValue("API Status:", "OK (timeline accessible)"))
 			}
 		})
 	},

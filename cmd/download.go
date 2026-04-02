@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/benoitpetit/xsh/core"
+	"github.com/benoitpetit/xsh/display"
 	"github.com/spf13/cobra"
 )
 
@@ -20,14 +21,14 @@ var downloadCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		files, err := core.DownloadTweetMedia(client, tweetID, outputDir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -37,11 +38,11 @@ var downloadCmd = &cobra.Command{
 			"count":    len(files),
 		}, func() {
 			if len(files) == 0 {
-				fmt.Println("No media found in tweet")
+				fmt.Println(display.Warning("No media found in tweet"))
 			} else {
-				fmt.Printf("✓ Downloaded %d file(s)\n", len(files))
+				fmt.Println(display.Success(fmt.Sprintf("Downloaded %d file(s)", len(files))))
 				for _, f := range files {
-					fmt.Printf("  %s\n", f)
+					fmt.Println(display.Info(fmt.Sprintf("  %s", f)))
 				}
 			}
 		})

@@ -43,7 +43,7 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 			// Read from file
 			content, err := os.ReadFile(composeFile)
 			if err != nil {
-				fmt.Printf("Error reading file: %v\n", err)
+				fmt.Println(display.Error(fmt.Sprintf("Error reading file: %v", err)))
 				os.Exit(1)
 				return
 			}
@@ -54,7 +54,7 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 		}
 
 		if len(tweets) == 0 {
-			fmt.Println("No tweets to post.")
+			fmt.Println(display.Warning("No tweets to post"))
 			return
 		}
 
@@ -64,7 +64,7 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 
 		if composeDryRun {
 			fmt.Println()
-			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#8899A6")).Render("Dry run mode - no tweets posted."))
+			fmt.Println(display.Muted("Dry run mode - no tweets posted."))
 			return
 		}
 
@@ -74,7 +74,7 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 		var confirm string
 		fmt.Scanln(&confirm)
 		if confirm != "y" && confirm != "Y" {
-			fmt.Println("Aborted.")
+			fmt.Println(display.Warning("Aborted."))
 			return
 		}
 
@@ -87,11 +87,8 @@ func interactiveCompose() []string {
 	var tweets []string
 	reader := bufio.NewReader(os.Stdin)
 
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#1DA1F2"))
-	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8899A6"))
-
-	fmt.Println(titleStyle.Render("📝 Thread Composer"))
-	fmt.Println(helpStyle.Render("Enter your tweets. Leave empty to finish. Use --- for new tweet."))
+	fmt.Println(display.Title("📝 Thread Composer"))
+	fmt.Println(display.Muted("Enter your tweets. Leave empty to finish. Use --- for new tweet."))
 	fmt.Println()
 
 	tweetNum := 1
@@ -128,8 +125,7 @@ func interactiveCompose() []string {
 
 		// Check length
 		if currentTweet.Len() > 280 {
-			warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F"))
-			fmt.Printf("  %s (%d/280)\n", warningStyle.Render("⚠️ Warning: Tweet too long"), currentTweet.Len())
+			fmt.Println(display.Warning(fmt.Sprintf("  Tweet too long (%d/280)", currentTweet.Len())))
 		}
 	}
 
@@ -187,25 +183,27 @@ func parseThreadFile(content string) []string {
 }
 
 func previewThread(tweets []string) {
-	titleStyle := lipgloss.NewStyle().Bold(true)
-	tweetStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1).Width(60)
-	countStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8899A6"))
+	tweetStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(display.ColorMuted).
+		Padding(1).
+		Width(60)
 
-	fmt.Println(titleStyle.Render(fmt.Sprintf("Thread Preview (%d tweets):", len(tweets))))
+	fmt.Println(display.Subtitle(fmt.Sprintf("Thread Preview (%d tweets)", len(tweets))))
 	fmt.Println()
 
 	for i, tweet := range tweets {
 		charCount := len([]rune(tweet))
 		var countStr string
 		if charCount > 280 {
-			countStr = lipgloss.NewStyle().Foreground(lipgloss.Color("#F4212E")).Render(fmt.Sprintf("%d/280", charCount))
+			countStr = lipgloss.NewStyle().Foreground(display.ColorError).Render(fmt.Sprintf("%d/280", charCount))
 		} else if charCount > 250 {
-			countStr = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F")).Render(fmt.Sprintf("%d/280", charCount))
+			countStr = lipgloss.NewStyle().Foreground(display.ColorWarning).Render(fmt.Sprintf("%d/280", charCount))
 		} else {
-			countStr = lipgloss.NewStyle().Foreground(lipgloss.Color("#00BA7C")).Render(fmt.Sprintf("%d/280", charCount))
+			countStr = lipgloss.NewStyle().Foreground(display.ColorSuccess).Render(fmt.Sprintf("%d/280", charCount))
 		}
 
-		fmt.Printf("Tweet %d %s\n", i+1, countStyle.Render(countStr))
+		fmt.Println(display.Bold(fmt.Sprintf("Tweet %d", i+1)) + " " + countStr)
 		fmt.Println(tweetStyle.Render(tweet))
 		fmt.Println()
 	}
@@ -214,7 +212,7 @@ func previewThread(tweets []string) {
 func postThread(tweets []string) {
 	client, err := getClient("")
 	if err != nil {
-		fmt.Println(display.PrintError(err.Error()))
+		fmt.Println(display.Error(err.Error()))
 		os.Exit(core.ExitAuthError)
 		return
 	}
@@ -231,7 +229,7 @@ func postThread(tweets []string) {
 
 		result, err := core.CreateTweet(client, text, lastTweetID, "", nil)
 		if err != nil {
-			fmt.Println(display.PrintError(fmt.Sprintf("Failed to post tweet %d: %v", i+1, err)))
+			fmt.Println(display.Error(fmt.Sprintf("Failed to post tweet %d: %v", i+1, err)))
 			return
 		}
 
@@ -253,11 +251,11 @@ func postThread(tweets []string) {
 			lastTweetID = extractTweetID(result)
 		}
 
-		fmt.Printf("✓ Posted tweet %d/%d\n", i+1, len(tweets))
+		fmt.Println(display.Success(fmt.Sprintf("Posted tweet %d/%d", i+1, len(tweets))))
 	}
 
 	fmt.Println()
-	fmt.Println(display.PrintSuccess(fmt.Sprintf("Thread posted! (%d tweets)", len(tweets))))
+	fmt.Println(display.Success(fmt.Sprintf("Thread posted! (%d tweets)", len(tweets))))
 }
 
 func extractTweetID(result map[string]interface{}) string {

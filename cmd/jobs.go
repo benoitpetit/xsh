@@ -38,7 +38,7 @@ var jobsSearchCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
@@ -60,7 +60,7 @@ var jobsSearchCmd = &cobra.Command{
 				cursor,
 			)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 				os.Exit(1)
 			}
 
@@ -93,19 +93,19 @@ var jobsViewCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		job, err := core.GetJobDetail(client, jobID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
 		if job == nil {
-			fmt.Fprintf(os.Stderr, "Job %s not found\n", jobID)
+			fmt.Println(display.Error(fmt.Sprintf("Job %s not found", jobID)))
 			os.Exit(1)
 		}
 

@@ -93,6 +93,8 @@ func TestGraphQLEndpointsCount(t *testing.T) {
 		"HomeTimeline",
 		"HomeLatestTimeline",
 		"SearchTimeline",
+		"ExplorePage",
+		"Trends",
 		"TweetDetail",
 		"UserByScreenName",
 		"UserTweets",
@@ -104,6 +106,9 @@ func TestGraphQLEndpointsCount(t *testing.T) {
 		"DeleteRetweet",
 		"CreateBookmark",
 		"DeleteBookmark",
+		"ListsManagementPageTimeline",
+		"PinTimeline",
+		"UnpinTimeline",
 	}
 
 	for _, endpoint := range requiredEndpoints {

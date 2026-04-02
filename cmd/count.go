@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"github.com/benoitpetit/xsh/display"
 )
 
 var (
@@ -35,7 +35,7 @@ Supports both direct text input and file input.`,
 			// From file
 			content, err := os.ReadFile(countFile)
 			if err != nil {
-				fmt.Printf("Error reading file: %v\n", err)
+				fmt.Println(display.Error(fmt.Sprintf("Error reading file: %v", err)))
 				os.Exit(1)
 				return
 			}
@@ -54,7 +54,7 @@ Supports both direct text input and file input.`,
 		}
 
 		if text == "" {
-			fmt.Println("No text provided. Use arguments, --file, or pipe text to stdin.")
+			fmt.Println(display.Error("No text provided. Use arguments, --file, or pipe text to stdin."))
 			os.Exit(1)
 			return
 		}
@@ -69,38 +69,30 @@ Supports both direct text input and file input.`,
 		limit := 280
 		remaining := limit - charCount
 
-		// Styles
-		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#1DA1F2"))
-		labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#8899A6"))
-		valueStyle := lipgloss.NewStyle().Bold(true)
-		warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F"))
-		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#F4212E"))
-		successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00BA7C"))
-
 		// Display stats
-		fmt.Println(titleStyle.Render("📝 Tweet Character Count"))
+		fmt.Println(display.Title("📝 Tweet Character Count"))
 		fmt.Println()
 
 		// Main counter
 		var status string
 		if remaining < 0 {
-			status = errorStyle.Render(fmt.Sprintf("%d / %d (%d over limit)", charCount, limit, -remaining))
+			status = display.Error(fmt.Sprintf("%d / %d (%d over limit)", charCount, limit, -remaining))
 		} else if remaining < 20 {
-			status = warningStyle.Render(fmt.Sprintf("%d / %d (%d remaining)", charCount, limit, remaining))
+			status = display.Warning(fmt.Sprintf("%d / %d (%d remaining)", charCount, limit, remaining))
 		} else {
-			status = successStyle.Render(fmt.Sprintf("%d / %d (%d remaining)", charCount, limit, remaining))
+			status = display.Success(fmt.Sprintf("%d / %d (%d remaining)", charCount, limit, remaining))
 		}
-		fmt.Printf("%s %s\n", labelStyle.Render("Characters:"), status)
+		fmt.Println(display.KeyValue("Characters:", status))
 
 		// Additional stats
-		fmt.Printf("%s %s\n", labelStyle.Render("Words:      "), valueStyle.Render(fmt.Sprintf("%d", wordCount)))
-		fmt.Printf("%s %s\n", labelStyle.Render("Lines:      "), valueStyle.Render(fmt.Sprintf("%d", lineCount)))
-		fmt.Printf("%s %s\n", labelStyle.Render("Bytes:      "), valueStyle.Render(fmt.Sprintf("%d", byteCount)))
+		fmt.Println(display.KeyValue("Words:", fmt.Sprintf("%d", wordCount)))
+		fmt.Println(display.KeyValue("Lines:", fmt.Sprintf("%d", lineCount)))
+		fmt.Println(display.KeyValue("Bytes:", fmt.Sprintf("%d", byteCount)))
 
 		// Preview mode
 		if countPreview {
 			fmt.Println()
-			fmt.Println(titleStyle.Render("Preview:"))
+			fmt.Println(display.Subtitle("Preview:"))
 			fmt.Println()
 
 			preview := formatPreview(text, countWidth)
@@ -109,7 +101,7 @@ Supports both direct text input and file input.`,
 			// Show URL preview if contains URLs
 			if containsURL(text) {
 				fmt.Println()
-				fmt.Println(labelStyle.Render("Note: URLs will be shortened to 23 characters by Twitter"))
+				fmt.Println(display.Info("Note: URLs will be shortened to 23 characters by Twitter"))
 			}
 		}
 

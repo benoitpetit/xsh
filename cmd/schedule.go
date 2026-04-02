@@ -24,12 +24,12 @@ var scheduleCmd = &cobra.Command{
 		// Parse the schedule time
 		scheduleTime, err := parseScheduleTime(atStr)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error parsing time: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error parsing time: %v", err)))
 			os.Exit(1)
 		}
 
 		if scheduleTime.Before(time.Now()) {
-			fmt.Fprintf(os.Stderr, "Error: Schedule time must be in the future\n")
+			fmt.Println(display.Error("Schedule time must be in the future"))
 			os.Exit(1)
 		}
 
@@ -37,19 +37,19 @@ var scheduleCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		result, err := core.CreateScheduledTweet(client, text, executeAt, nil)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
 		output(result, func() {
-			fmt.Printf("✓ Tweet scheduled for %s\n", scheduleTime.Format("2006-01-02 15:04"))
+			fmt.Println(display.Success(fmt.Sprintf("Tweet scheduled for %s", scheduleTime.Format("2006-01-02 15:04"))))
 		})
 	},
 }
@@ -61,14 +61,14 @@ var scheduledCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		tweets, err := core.GetScheduledTweets(client)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -88,14 +88,14 @@ var unscheduleCmd = &cobra.Command{
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.DeleteScheduledTweet(client, scheduledTweetID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(1)
 		}
 
@@ -104,7 +104,7 @@ var unscheduleCmd = &cobra.Command{
 			"scheduled_tweet_id": scheduledTweetID,
 			"status":             "success",
 		}, func() {
-			fmt.Printf("✓ Cancelled scheduled tweet %s\n", scheduledTweetID)
+			fmt.Println(display.Success(fmt.Sprintf("Cancelled scheduled tweet %s", scheduledTweetID)))
 		})
 	},
 }

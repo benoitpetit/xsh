@@ -56,6 +56,13 @@ type XClient struct {
 	proxy                string
 	client               *http.Client
 	authRefreshAttempted bool
+
+	// Test hooks
+	requestWithOperationHook func(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error)
+	refreshEndpointsHook     func() error
+	invalidateCacheHook      func()
+	readDelayHook            func()
+	writeDelayHook           func()
 }
 
 // NewXClient creates a new XClient with randomized Chrome fingerprint
@@ -134,6 +141,9 @@ func (c *XClient) getHTTPClient() (*http.Client, error) {
 	if c.client == nil {
 		// Use uTLS for advanced TLS fingerprinting
 		proxy := c.proxy
+		if proxy == "" {
+			proxy = os.Getenv("CLIX_PROXY")
+		}
 		if proxy == "" {
 			proxy = os.Getenv("X_PROXY")
 		}
@@ -439,7 +449,13 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 			if attempt == 0 {
 				if refreshed := c.TryRefreshCredentials(); refreshed {
 					// Update headers and cookies with refreshed credentials
-					headers, err = c.getHeaders()
+					if operation != "" {
+						headers, err = c.getHeadersForOperation(operation, referer)
+					} else if referer != "" {
+						headers, err = c.getHeadersWithReferer(referer)
+					} else {
+						headers, err = c.getHeaders()
+					}
 					if err != nil {
 						return nil, err
 					}
@@ -461,7 +477,13 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 			if attempt == 0 {
 				if refreshed := c.TryRefreshCredentials(); refreshed {
 					// Update headers and cookies with refreshed credentials
-					headers, err = c.getHeaders()
+					if operation != "" {
+						headers, err = c.getHeadersForOperation(operation, referer)
+					} else if referer != "" {
+						headers, err = c.getHeadersWithReferer(referer)
+					} else {
+						headers, err = c.getHeaders()
+					}
 					if err != nil {
 						return nil, err
 					}
@@ -550,7 +572,7 @@ func (c *XClient) graphqlRequest(
 				"features":     resolvedFeatures,
 				"fieldToggles": DefaultFieldToggles,
 			}
-			result, err = c.requestWithOperation("GET", urlStr, params, nil, 3, referer, operation)
+			result, err = c.executeRequestWithOperation("GET", urlStr, params, nil, 3, referer, operation)
 		} else {
 			// Extract query ID from endpoint (part before /)
 			queryID := endpoint
@@ -573,7 +595,7 @@ func (c *XClient) graphqlRequest(
 					"queryId":   queryID,
 				}
 			}
-			result, err = c.requestWithOperation("POST", urlStr, nil, jsonData, 3, referer, operation)
+			result, err = c.executeRequestWithOperation("POST", urlStr, nil, jsonData, 3, referer, operation)
 
 			if Verbose {
 				jsonBytes, _ := json.Marshal(jsonData)
@@ -588,20 +610,7 @@ func (c *XClient) graphqlRequest(
 					// First attempt: invalidate cache, refresh endpoints from X.com, and retry
 					logVerbose("HTTP 404 for '%s' — operation IDs may be stale, "+
 						"refreshing endpoints from X.com and retrying...", operation)
-					InvalidateCache()
-
-					// Trigger endpoint discovery to fetch fresh endpoints
-					discovery, discErr := NewEndpointDiscovery(Verbose)
-					if discErr == nil {
-						ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-						_, discErr = discovery.DiscoverEndpoints(ctx)
-						cancel()
-						if discErr != nil {
-							logVerbose("Failed to discover fresh endpoints: %v", discErr)
-						} else {
-							logVerbose("Successfully refreshed endpoints from X.com")
-						}
-					}
+					c.refreshEndpointsForRetry(operation)
 
 					// Refresh features if they came from cache
 					if features == nil {
@@ -621,14 +630,46 @@ func (c *XClient) graphqlRequest(
 					ResponseData: err.Error(),
 				}
 			}
+
+			if isGraphQLUnprocessableError(err) {
+				if attempt == 0 {
+					logVerbose("HTTP 422 for '%s' — endpoint/variables may be stale, refreshing endpoints and retrying...", operation)
+					c.refreshEndpointsForRetry(operation)
+
+					if features == nil {
+						resolvedFeatures = c.getOpFeatures(operation)
+					}
+					continue
+				}
+			}
 			return nil, err
+		}
+
+		if isGraphQLEndpointNotFoundResponse(result) {
+			if attempt == 0 {
+				logVerbose("GraphQL response indicates obsolete endpoint for '%s' — refreshing endpoints and retrying...", operation)
+				c.refreshEndpointsForRetry(operation)
+
+				if features == nil {
+					resolvedFeatures = c.getOpFeatures(operation)
+				}
+				continue
+			}
+
+			return nil, &APIError{
+				Message: fmt.Sprintf(
+					"GraphQL endpoint '%s' appears obsolete after refresh (response indicates query not found)",
+					operation,
+				),
+				StatusCode: 404,
+			}
 		}
 
 		// Success - apply delay like Python
 		if method == "GET" {
-			utils.Delay(0, 0)
+			c.applyReadDelay()
 		} else {
-			utils.WriteDelay()
+			c.applyWriteDelay()
 		}
 		return result, nil
 	}
@@ -636,6 +677,92 @@ func (c *XClient) graphqlRequest(
 	return nil, &APIError{
 		Message: fmt.Sprintf("Unreachable: graphqlRequest retry loop for '%s'", operation),
 	}
+}
+
+func (c *XClient) executeRequestWithOperation(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error) {
+	if c.requestWithOperationHook != nil {
+		return c.requestWithOperationHook(method, urlStr, params, jsonData, maxRetries, referer, operation)
+	}
+	return c.requestWithOperation(method, urlStr, params, jsonData, maxRetries, referer, operation)
+}
+
+func (c *XClient) refreshEndpointsForRetry(operation string) {
+	if c.invalidateCacheHook != nil {
+		c.invalidateCacheHook()
+	} else {
+		InvalidateCache()
+	}
+
+	if c.refreshEndpointsHook != nil {
+		if err := c.refreshEndpointsHook(); err != nil {
+			logVerbose("Failed to refresh endpoints for '%s': %v", operation, err)
+		}
+		return
+	}
+
+	discovery, err := NewEndpointDiscovery(Verbose)
+	if err != nil {
+		logVerbose("Failed to initialize endpoint discovery for '%s': %v", operation, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if _, err := discovery.DiscoverEndpoints(ctx); err != nil {
+		logVerbose("Failed to discover fresh endpoints for '%s': %v", operation, err)
+	}
+}
+
+func (c *XClient) applyReadDelay() {
+	if c.readDelayHook != nil {
+		c.readDelayHook()
+		return
+	}
+	utils.Delay(0, 0)
+}
+
+func (c *XClient) applyWriteDelay() {
+	if c.writeDelayHook != nil {
+		c.writeDelayHook()
+		return
+	}
+	utils.WriteDelay()
+}
+
+func isGraphQLEndpointNotFoundResponse(result map[string]interface{}) bool {
+	if result == nil {
+		return false
+	}
+
+	errors, ok := result["errors"].([]interface{})
+	if !ok || len(errors) == 0 {
+		return false
+	}
+
+	for _, item := range errors {
+		errObj, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		msg, _ := errObj["message"].(string)
+		if msg == "" {
+			continue
+		}
+
+		lower := strings.ToLower(msg)
+		if strings.Contains(lower, "query not found") || strings.Contains(lower, "not found") || strings.Contains(lower, "operation not found") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isGraphQLUnprocessableError(err error) bool {
+	apiErr, ok := err.(*APIError)
+	return ok && apiErr.StatusCode == 422
 }
 
 // getOpFeatures gets operation-specific features from cache

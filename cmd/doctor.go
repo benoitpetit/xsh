@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/benoitpetit/xsh/core"
+	"github.com/benoitpetit/xsh/display"
 	"github.com/spf13/cobra"
 )
 
@@ -28,19 +29,10 @@ var doctorCmd = &cobra.Command{
 
 		var checks []CheckResult
 
-		// Check 1: Authentication
 		checks = append(checks, checkAuth())
-
-		// Check 2: Endpoints cache
 		checks = append(checks, checkEndpoints())
-
-		// Check 3: Network connectivity
 		checks = append(checks, checkNetwork())
-
-		// Check 4: TLS/HTTP client
 		checks = append(checks, checkTLS())
-
-		// Check 5: System info
 		checks = append(checks, checkSystem())
 
 		if jsonOutput || isYAMLMode() {
@@ -51,7 +43,6 @@ var doctorCmd = &cobra.Command{
 			printChecks(checks)
 		}
 
-		// Exit with error if any critical checks failed
 		for _, c := range checks {
 			if c.Status == "fail" && c.Name == "Auth" {
 				os.Exit(core.ExitAuthError)
@@ -135,7 +126,6 @@ func checkNetwork() CheckResult {
 }
 
 func checkTLS() CheckResult {
-	// Try to create a uTLS client
 	client, err := core.NewXClient(nil, "", "")
 	if err != nil {
 		return CheckResult{
@@ -162,23 +152,21 @@ func checkSystem() CheckResult {
 }
 
 func printChecks(checks []CheckResult) {
-	fmt.Println("Running diagnostics...")
+	fmt.Println()
+	fmt.Println(display.Title("Diagnostics"))
+	fmt.Println(display.Separator(40))
 	fmt.Println()
 
+	headers := []string{"Check", "Status", "Detail"}
+	var rows []display.TableRow
 	for _, c := range checks {
-		symbol := "✓"
-		if c.Status == "fail" {
-			symbol = "✗"
-		} else if c.Status == "warn" {
-			symbol = "⚠"
-		}
-
-		fmt.Printf("%s %s: %s\n", symbol, c.Name, c.Detail)
+		status := display.StatusBadge(c.Status)
+		rows = append(rows, display.TableRow{c.Name, status, c.Detail})
 	}
+	fmt.Println(display.SimpleTable(headers, rows))
 
 	fmt.Println()
 
-	// Summary
 	pass := 0
 	fail := 0
 	warn := 0
@@ -194,12 +182,13 @@ func printChecks(checks []CheckResult) {
 	}
 
 	if fail > 0 {
-		fmt.Printf("Found %d issue(s)\n", fail)
+		fmt.Println(display.Error(fmt.Sprintf("Found %d issue(s)", fail)))
 	} else if warn > 0 {
-		fmt.Printf("All checks passed with %d warning(s)\n", warn)
+		fmt.Println(display.Warning(fmt.Sprintf("All checks passed with %d warning(s)", warn)))
 	} else {
-		fmt.Println("All checks passed!")
+		fmt.Println(display.Success("All checks passed!"))
 	}
+	fmt.Println()
 }
 
 func init() {

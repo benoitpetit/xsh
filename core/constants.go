@@ -11,82 +11,89 @@ const (
 // Bearer token (public, embedded in Twitter web app)
 const BearerToken = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 
-// GraphQL operation IDs - extracted from X.com JS bundles (updated 2025-03-11)
+// GraphQL operation IDs - extracted from X.com JS bundles (updated 2026-04-02)
 // These are fallback values. The actual endpoints are fetched dynamically from X.com
 // and cached in ~/.config/xsh/graphql_ops.json
 var GraphQLEndpoints = map[string]string{
 	// Read operations - Timeline
-	"HomeTimeline":               "gXtpuBkna6SRLFFKaT2OTg/HomeTimeline",
-	"HomeLatestTimeline":         "JVzDMxTXbT9bRXSpUR16CQ/HomeLatestTimeline",
-	
+	"HomeTimeline":       "gXtpuBkna6SRLFFKaT2OTg/HomeTimeline",
+	"HomeLatestTimeline": "JVzDMxTXbT9bRXSpUR16CQ/HomeLatestTimeline",
+
 	// Read operations - Search
-	"SearchTimeline":             "OFvapAUD5xrCWn9xcD0A6A/SearchTimeline",
-	
+	"SearchTimeline": "OFvapAUD5xrCWn9xcD0A6A/SearchTimeline",
+
 	// Read operations - Tweets
-	"TweetDetail":                "1eAGnXrtvTBUePpQfTXZzA/TweetDetail",
-	"TweetResultByRestId":        "tcA4FFMIjGSDv48Cu_FS5Q/TweetResultByRestId",
-	"TweetResultsByRestIds":      "M441-7OPnT7o_TzVwteU3Q/TweetResultsByRestIds",
-	
+	"TweetDetail":           "1eAGnXrtvTBUePpQfTXZzA/TweetDetail",
+	"TweetResultByRestId":   "tcA4FFMIjGSDv48Cu_FS5Q/TweetResultByRestId",
+	"TweetResultsByRestIds": "M441-7OPnT7o_TzVwteU3Q/TweetResultsByRestIds",
+
 	// Read operations - Users
-	"UserByScreenName":           "pLsOiyHJ1eFwPJlNmLp4Bg/UserByScreenName",
-	"UserByRestId":               "FJ17ptkJuQAZGWilcySi5w/UserByRestId",
-	"UsersByRestIds":             "8OKmcyotfczJb44QTTu5tQ/UsersByRestIds",
-	"UsersByScreenNames":         "Ats5GnHiQxT-Nnzw09raMw/UsersByScreenNames",
-	
+	"UserByScreenName":   "pLsOiyHJ1eFwPJlNmLp4Bg/UserByScreenName",
+	"UserByRestId":       "FJ17ptkJuQAZGWilcySi5w/UserByRestId",
+	"UsersByRestIds":     "8OKmcyotfczJb44QTTu5tQ/UsersByRestIds",
+	"UsersByScreenNames": "Ats5GnHiQxT-Nnzw09raMw/UsersByScreenNames",
+
 	// Read operations - User Timelines
-	"UserTweets":                 "5M8UuGym7_VyIEggQIyjxQ/UserTweets",
-	"UserTweetsAndReplies":       "C3YpYjTsQZznJIdyy2JKuQ/UserTweetsAndReplies",
-	"UserMedia":                  "mWo2yKjZEaqK7_vKox_67Q/UserMedia",
-	"Likes":                      "dv5-II7_Bup_PHish7p6fw/Likes",
-	
+	"UserTweets":           "5M8UuGym7_VyIEggQIyjxQ/UserTweets",
+	"UserTweetsAndReplies": "C3YpYjTsQZznJIdyy2JKuQ/UserTweetsAndReplies",
+	"UserMedia":            "mWo2yKjZEaqK7_vKox_67Q/UserMedia",
+	"Likes":                "dv5-II7_Bup_PHish7p6fw/Likes",
+
 	// Read operations - Followers/Following
-	"Followers":                  "8sIMO3RbSCdvk2QzxcPpIg/Followers",
-	"Following":                  "lEJDj0bTio9-s0hSukCD9Q/Following",
-	"FollowersYouKnow":           "fBi9FJP1haBdGoZuVfZVzQ/FollowersYouKnow",
-	"BlueVerifiedFollowers":      "ZH16zF8R8YAJAAfIGbef9A/BlueVerifiedFollowers",
-	
+	"Followers":             "8sIMO3RbSCdvk2QzxcPpIg/Followers",
+	"Following":             "lEJDj0bTio9-s0hSukCD9Q/Following",
+	"FollowersYouKnow":      "fBi9FJP1haBdGoZuVfZVzQ/FollowersYouKnow",
+	"BlueVerifiedFollowers": "ZH16zF8R8YAJAAfIGbef9A/BlueVerifiedFollowers",
+
 	// Read operations - Bookmarks
-	"Bookmarks":                  "uKP9v_I31k0_VSBmlpq2Xg/Bookmarks",
-	"BookmarkSearchTimeline":     "vBCEp1KR36nwY3u2K-2nEA/BookmarkSearchTimeline",
-	
+	"Bookmarks":              "uKP9v_I31k0_VSBmlpq2Xg/Bookmarks",
+	"BookmarkSearchTimeline": "vBCEp1KR36nwY3u2K-2nEA/BookmarkSearchTimeline",
+
 	// Read operations - Lists
-	"ListLatestTweetsTimeline":   "gNXkRRRV67cSRJkmpgGPnA/ListLatestTweetsTimeline",
-	"ListByRestId":               "bSE1lqLBnovM86uu4p4Iqg/ListByRestId",
-	"ListMembers":                "fqecRWCF4EcSAOs5yXh7Ig/ListMembers",
-	"ListMemberships":            "cRsrj8HASXYzxaf90wMDPQ/ListMemberships",
-	
-	// Write operations - Tweets
-	"CreateTweet":                "RXKQMYyEqEjGgWpcSP6LBw/CreateTweet",
-	"CreateNoteTweet":            "4e-YHiuiNDaITMxa29cerw/CreateNoteTweet",
-	"DeleteTweet":                "nxpZCY2K-I6QoFHAHeojFQ/DeleteTweet",
-	
+	"ListLatestTweetsTimeline":    "gNXkRRRV67cSRJkmpgGPnA/ListLatestTweetsTimeline",
+	"ListsManagementPageTimeline": "qXWhKTaNeJianB02_JovCg/ListsManagementPageTimeline",
+	"ListByRestId":                "bSE1lqLBnovM86uu4p4Iqg/ListByRestId",
+	"ListMembers":                 "fqecRWCF4EcSAOs5yXh7Ig/ListMembers",
+	"ListMemberships":             "cRsrj8HASXYzxaf90wMDPQ/ListMemberships",
+
+	// Read operations - Explore/Trends
+	"ExplorePage": "Z6s1tFEq4BveGOj0N80z8g/ExplorePage",
+	"Trends":      "Z6s1tFEq4BveGOj0N80z8g/ExplorePage",
+
+	// Write operations - Tweets (updated 2026-04-02 from dynamic cache)
+	"CreateTweet":     "BLx8gngFhHE5eBgLBCT_0Q/CreateTweet",
+	"CreateNoteTweet": "4e-YHiuiNDaITMxa29cerw/CreateNoteTweet",
+	"DeleteTweet":     "nxpZCY2K-I6QoFHAHeojFQ/DeleteTweet",
+
 	// Write operations - Likes
-	"FavoriteTweet":              "lI07N6Otwv1PhnEgXILM7A/FavoriteTweet",
-	"UnfavoriteTweet":            "ZYKSe-w7KEslx3JhSIk5LA/UnfavoriteTweet",
-	
+	"FavoriteTweet":   "lI07N6Otwv1PhnEgXILM7A/FavoriteTweet",
+	"UnfavoriteTweet": "ZYKSe-w7KEslx3JhSIk5LA/UnfavoriteTweet",
+
 	// Write operations - Retweets
-	"CreateRetweet":              "mbRO74GrOvSfRcJnlMapnQ/CreateRetweet",
-	"DeleteRetweet":              "ZyZigVsNiFO6v1dEks1eWg/DeleteRetweet",
-	
+	"CreateRetweet": "mbRO74GrOvSfRcJnlMapnQ/CreateRetweet",
+	"DeleteRetweet": "ZyZigVsNiFO6v1dEks1eWg/DeleteRetweet",
+
 	// Write operations - Bookmarks
-	"CreateBookmark":             "aoDbu3RHznuiSkQ9aNM67Q/CreateBookmark",
-	"DeleteBookmark":             "Wlmlj2-xzyS1GN3a6cj-mQ/DeleteBookmark",
-	
+	"CreateBookmark": "aoDbu3RHznuiSkQ9aNM67Q/CreateBookmark",
+	"DeleteBookmark": "Wlmlj2-xzyS1GN3a6cj-mQ/DeleteBookmark",
+
 	// Write operations - Lists
-	"CreateList":                 "QXil-VE8uEJPfUKFiO36Bg/CreateList",
-	"UpdateList":                 "qE2QVWL84jqa6CmH-m-D3w/UpdateList",
-	"DeleteList":                 "UnN9Th1BDbeLjpgjGSpL3Q/DeleteList",
-	"ListAddMember":              "nAi8BAjn1xQOyCH0hWZpPA/ListAddMember",
-	"ListRemoveMember":           "pGMiwtWRMx08r4XCYxai4Q/ListRemoveMember",
-	
+	"CreateList":       "QXil-VE8uEJPfUKFiO36Bg/CreateList",
+	"UpdateList":       "qE2QVWL84jqa6CmH-m-D3w/UpdateList",
+	"DeleteList":       "UnN9Th1BDbeLjpgjGSpL3Q/DeleteList",
+	"ListAddMember":    "nAi8BAjn1xQOyCH0hWZpPA/ListAddMember",
+	"ListRemoveMember": "pGMiwtWRMx08r4XCYxai4Q/ListRemoveMember",
+	"PinTimeline":      "t-vQkLuhUq-GvXLbRXXMFA/PinTimeline",
+	"UnpinTimeline":    "agrJf0pu-b_3p53wUjZEFA/UnpinTimeline",
+
 	// Write operations - Follow
-	"FollowUser":                 "iNZ4xPly3JveJqEshzJdLA/FollowUser",
-	"UnfollowUser":               "tTT1x7v4h9zLVzT1/BA/UnfollowUser",
-	
+	"FollowUser":   "iNZ4xPly3JveJqEshzJdLA/FollowUser",
+	"UnfollowUser": "tTT1x7v4h9zLVzT1/BA/UnfollowUser",
+
 	// Other operations
-	"Viewer":                     "zWQLM9HIVahRSUvzUH4lDw/Viewer",
-	"BlockedAccountsAll":         "tnGJ8xjxfnv032LSOpKYWQ/BlockedAccountsAll",
-	"MutedAccounts":              "CI5MBQ8KdnNx87ZXOfTsBg/MutedAccounts",
+	"Viewer":             "zWQLM9HIVahRSUvzUH4lDw/Viewer",
+	"BlockedAccountsAll": "tnGJ8xjxfnv032LSOpKYWQ/BlockedAccountsAll",
+	"MutedAccounts":      "CI5MBQ8KdnNx87ZXOfTsBg/MutedAccounts",
 }
 
 // DefaultFeatures for GraphQL requests
@@ -123,19 +130,19 @@ var DefaultFieldToggles = map[string]bool{
 
 // Request defaults
 const (
-	DefaultCount       = 20
-	MaxCount           = 100
-	DefaultDelaySec    = 1.5
-	MinWriteDelaySec   = 1.5
-	MaxWriteDelaySec   = 4.0
+	DefaultCount     = 20
+	MaxCount         = 100
+	DefaultDelaySec  = 1.5
+	MinWriteDelaySec = 1.5
+	MaxWriteDelaySec = 4.0
 )
 
 // Exit codes
 const (
-	ExitSuccess     = 0
-	ExitError       = 1
-	ExitAuthError   = 2
-	ExitRateLimit   = 3
+	ExitSuccess   = 0
+	ExitError     = 1
+	ExitAuthError = 2
+	ExitRateLimit = 3
 )
 
 // Config paths
