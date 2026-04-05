@@ -7,8 +7,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/spf13/cobra"
+	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -36,7 +37,7 @@ Supports both direct text input and file input.`,
 			content, err := os.ReadFile(countFile)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Error reading file: %v", err)))
-				os.Exit(1)
+				os.Exit(core.ExitError)
 				return
 			}
 			text = string(content)
@@ -55,7 +56,7 @@ Supports both direct text input and file input.`,
 
 		if text == "" {
 			fmt.Println(display.Error("No text provided. Use arguments, --file, or pipe text to stdin."))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 			return
 		}
 
@@ -107,7 +108,7 @@ Supports both direct text input and file input.`,
 
 		// Exit with error if over limit
 		if remaining < 0 {
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 	},
 }
@@ -175,5 +176,5 @@ func init() {
 
 	countCmd.Flags().StringVarP(&countFile, "file", "f", "", "Read text from file")
 	countCmd.Flags().BoolVarP(&countPreview, "preview", "p", false, "Show formatted preview")
-	countCmd.Flags().IntVarP(&countWidth, "width", "w", 60, "Preview width for wrapping")
+	countCmd.Flags().IntVar(&countWidth, "width", 60, "Preview width for wrapping")
 }

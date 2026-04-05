@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -260,22 +261,27 @@ func IsWriteOperation(operation string) bool {
 // These are typically POST operations like CreateBookmark, FavoriteTweet, etc.
 func isWriteOperation(operation string) bool {
 	writeOps := map[string]bool{
-		"CreateBookmark":   true,
-		"DeleteBookmark":   true,
-		"FavoriteTweet":    true,
-		"UnfavoriteTweet":  true,
-		"CreateRetweet":    true,
-		"DeleteRetweet":    true,
-		"CreateTweet":      true,
-		"CreateNoteTweet":  true,
-		"DeleteTweet":      true,
-		"FollowUser":       true,
-		"UnfollowUser":     true,
-		"CreateList":       true,
-		"UpdateList":       true,
-		"DeleteList":       true,
-		"ListAddMember":    true,
-		"ListRemoveMember": true,
+		"CreateBookmark":          true,
+		"DeleteBookmark":          true,
+		"FavoriteTweet":           true,
+		"UnfavoriteTweet":         true,
+		"CreateRetweet":           true,
+		"DeleteRetweet":           true,
+		"CreateTweet":             true,
+		"CreateNoteTweet":         true,
+		"DeleteTweet":             true,
+		"FollowUser":              true,
+		"UnfollowUser":            true,
+		"CreateList":              true,
+		"UpdateList":              true,
+		"DeleteList":              true,
+		"ListAddMember":           true,
+		"ListRemoveMember":        true,
+		"DMMessageDeleteMutation": true,
+		"CreateScheduledTweet":    true,
+		"DeleteScheduledTweet":    true,
+		"JoinCommunity":           true,
+		"LeaveCommunity":          true,
 	}
 	return writeOps[operation]
 }
@@ -426,6 +432,26 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 		}
 
 		logVerbose("Response status: %d", resp.StatusCode)
+
+		// Track rate limit headers
+		if operation != "" {
+			if rlLimit := resp.Header.Get("x-rate-limit-limit"); rlLimit != "" {
+				info := &RateLimitInfo{
+					Endpoint:  operation,
+					UpdatedAt: time.Now(),
+				}
+				if v, err := strconv.Atoi(rlLimit); err == nil {
+					info.Limit = v
+				}
+				if v, err := strconv.Atoi(resp.Header.Get("x-rate-limit-remaining")); err == nil {
+					info.Remaining = v
+				}
+				if v, err := strconv.ParseInt(resp.Header.Get("x-rate-limit-reset"), 10, 64); err == nil {
+					info.Reset = time.Unix(v, 0)
+				}
+				rateLimitStore.Update(operation, info)
+			}
+		}
 		if Verbose && len(respBody) > 0 {
 			// Truncate if too long
 			preview := string(respBody)
@@ -797,6 +823,11 @@ func (c *XClient) Close() {
 	}
 }
 
+// RestGet makes an authenticated GET request to a REST API endpoint (v1.1 or v2)
+func (c *XClient) RestGet(urlStr string, params map[string]interface{}) (map[string]interface{}, error) {
+	return c.requestWithOperation("GET", urlStr, params, nil, 3, BaseURL+"/notifications", "Notifications")
+}
+
 // RestPost makes a POST request to the REST API v1.1 (used for media upload, social actions)
 func (c *XClient) RestPost(urlStr string, data map[string]string) (map[string]interface{}, error) {
 	return c.RestPostWithOptions(urlStr, data, nil, 30)
@@ -838,8 +869,8 @@ func (c *XClient) RestPostWithOptions(urlStr string, data map[string]string, jso
 		body = strings.NewReader(formData.Encode())
 	}
 
-	// Cross-origin uploads (e.g. upload.twitter.com from x.com)
-	if strings.Contains(urlStr, "upload.twitter.com") {
+	// Cross-origin requests (e.g. upload.twitter.com, caps.twitter.com from x.com)
+	if strings.Contains(urlStr, "upload.twitter.com") || strings.Contains(urlStr, "caps.twitter.com") {
 		headers["sec-fetch-site"] = "same-site"
 	}
 
@@ -907,175 +938,4 @@ func (c *XClient) RestPostWithOptions(urlStr string, data map[string]string, jso
 		}
 		return nil, &APIError{Message: fmt.Sprintf("REST API error: HTTP %d", resp.StatusCode), StatusCode: resp.StatusCode, ResponseData: msg}
 	}
-}
-
-// GraphQLPostRaw makes a GraphQL POST request with a hardcoded query ID
-func (c *XClient) GraphQLPostRaw(queryID, operationName string, variables map[string]interface{}) (map[string]interface{}, error) {
-	urlStr := GraphQLBase + "/" + queryID + "/" + operationName
-
-	jsonData := map[string]interface{}{
-		"variables": variables,
-		"queryId":   queryID,
-	}
-
-	return c.restPostGraphQL(urlStr, jsonData)
-}
-
-// GraphQLGetRaw makes a GraphQL GET request with a hardcoded query ID
-func (c *XClient) GraphQLGetRaw(queryID, operationName string, variables map[string]interface{}) (map[string]interface{}, error) {
-	urlStr := GraphQLBase + "/" + queryID + "/" + operationName
-
-	// Build query params
-	params := map[string]string{}
-	if variables != nil {
-		varsJSON, _ := json.Marshal(variables)
-		params["variables"] = string(varsJSON)
-	}
-
-	return c.restGetGraphQL(urlStr, params)
-}
-
-// restPostGraphQL makes a POST request for GraphQL operations
-func (c *XClient) restPostGraphQL(urlStr string, jsonData map[string]interface{}) (map[string]interface{}, error) {
-	creds, err := c.getCredentials()
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := json.Marshal(jsonData)
-	if err != nil {
-		return nil, err
-	}
-
-	headers := map[string]string{
-		"authorization":         "Bearer " + BearerToken,
-		"x-csrf-token":          creds.Ct0,
-		"x-twitter-auth-type":   "OAuth2Session",
-		"x-twitter-active-user": "yes",
-		"content-type":          "application/json",
-		"user-agent":            GetUserAgent(),
-		"origin":                BaseURL,
-		"referer":               BaseURL + "/home",
-	}
-
-	cookies := creds.GetSanitizedCookies()
-
-	req, err := http.NewRequest("POST", urlStr, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	var cookieParts []string
-	for k, v := range cookies {
-		cookieParts = append(cookieParts, fmt.Sprintf("%s=%s", k, v))
-	}
-	if len(cookieParts) > 0 {
-		req.Header.Set("Cookie", strings.Join(cookieParts, "; "))
-	}
-
-	client, err := c.getHTTPClient()
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, &APIError{Message: fmt.Sprintf("HTTP %d", resp.StatusCode), StatusCode: resp.StatusCode}
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-// restGetGraphQL makes a GET request for GraphQL operations
-func (c *XClient) restGetGraphQL(urlStr string, params map[string]string) (map[string]interface{}, error) {
-	creds, err := c.getCredentials()
-	if err != nil {
-		return nil, err
-	}
-
-	// Build query string
-	if len(params) > 0 {
-		u, _ := url.Parse(urlStr)
-		q := u.Query()
-		for k, v := range params {
-			q.Set(k, v)
-		}
-		u.RawQuery = q.Encode()
-		urlStr = u.String()
-	}
-
-	headers := map[string]string{
-		"authorization":         "Bearer " + BearerToken,
-		"x-csrf-token":          creds.Ct0,
-		"x-twitter-auth-type":   "OAuth2Session",
-		"x-twitter-active-user": "yes",
-		"user-agent":            GetUserAgent(),
-		"origin":                BaseURL,
-		"referer":               BaseURL + "/home",
-	}
-
-	cookies := creds.GetSanitizedCookies()
-
-	req, err := http.NewRequest("GET", urlStr, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	var cookieParts []string
-	for k, v := range cookies {
-		cookieParts = append(cookieParts, fmt.Sprintf("%s=%s", k, v))
-	}
-	if len(cookieParts) > 0 {
-		req.Header.Set("Cookie", strings.Join(cookieParts, "; "))
-	}
-
-	client, err := c.getHTTPClient()
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, &APIError{Message: fmt.Sprintf("HTTP %d", resp.StatusCode), StatusCode: resp.StatusCode}
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }

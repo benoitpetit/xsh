@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -34,43 +34,45 @@ Use --location for city/country or --woeid for specific location ID.`,
 		}
 		defer client.Close()
 
-		// Get trends
-		trends, err := core.GetTrends(client, trendsWOEID)
-		if err != nil {
-			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch trends: %v", err)))
-			return
-		}
-
-		if isJSONMode() || isYAMLMode() {
-			output(trends, func() {})
-			return
-		}
-
-		// Display trends
-		fmt.Println(display.Title("🔥 Trending Topics"))
-		if trendsLocation != "" {
-			fmt.Println(display.Muted(fmt.Sprintf("   Location: %s", trendsLocation)))
-		} else if trendsWOEID != 0 {
-			fmt.Println(display.Muted(fmt.Sprintf("   WOEID: %d", trendsWOEID)))
-		} else {
-			fmt.Println(display.Muted("   Worldwide"))
-		}
-		fmt.Println()
-
-		for i, trend := range trends {
-			line := display.Numbered(i+1, display.Bold(trend.Name))
-			if trend.TweetVolume > 0 {
-				volume := formatVolume(trend.TweetVolume)
-				line = line + " " + display.Muted(volume)
+		runWithWatch(func() error {
+			// Get trends
+			trends, err := core.GetTrends(client, trendsWOEID)
+			if err != nil {
+				return fmt.Errorf("failed to fetch trends: %w", err)
 			}
-			if trend.IsPromoted {
-				line = line + " " + display.Warning("· Promoted")
-			}
-			fmt.Println(line)
-		}
 
-		fmt.Println()
-		fmt.Println(display.Muted(fmt.Sprintf("Showing top %d trends", len(trends))))
+			if isJSONMode() || isYAMLMode() {
+				output(trends, func() {})
+				return nil
+			}
+
+			// Display trends
+			fmt.Println(display.Title("Trending Topics"))
+			if trendsLocation != "" {
+				fmt.Println(display.Muted(fmt.Sprintf("   Location: %s", trendsLocation)))
+			} else if trendsWOEID != 0 {
+				fmt.Println(display.Muted(fmt.Sprintf("   WOEID: %d", trendsWOEID)))
+			} else {
+				fmt.Println(display.Muted("   Worldwide"))
+			}
+			fmt.Println()
+
+			for i, trend := range trends {
+				line := display.Numbered(i+1, display.Bold(trend.Name))
+				if trend.TweetVolume > 0 {
+					volume := formatVolume(trend.TweetVolume)
+					line = line + " " + display.Muted(volume)
+				}
+				if trend.IsPromoted {
+					line = line + " " + display.Warning("· Promoted")
+				}
+				fmt.Println(line)
+			}
+
+			fmt.Println()
+			fmt.Println(display.Muted(fmt.Sprintf("Showing top %d trends", len(trends))))
+			return nil
+		})
 	},
 }
 
@@ -87,5 +89,5 @@ func init() {
 	rootCmd.AddCommand(trendsCmd)
 
 	trendsCmd.Flags().StringVarP(&trendsLocation, "location", "l", "", "Location name (e.g., 'Paris', 'France')")
-	trendsCmd.Flags().IntVarP(&trendsWOEID, "woeid", "w", 0, "Where On Earth ID (e.g., 1 for worldwide, 615702 for Paris)")
+	trendsCmd.Flags().IntVar(&trendsWOEID, "woeid", 0, "Where On Earth ID (e.g., 1 for worldwide, 615702 for Paris)")
 }

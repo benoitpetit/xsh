@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
 	"github.com/benoitpetit/xsh/models"
 	"github.com/benoitpetit/xsh/utils"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -46,45 +46,33 @@ var searchCmd = &cobra.Command{
 		}
 		defer client.Close()
 
-		var allTweets []*models.Tweet
-		cursor := searchCursor
+		runWithWatch(func() error {
+			var allTweets []*models.Tweet
+			cursor := searchCursor
 
-		for i := 0; i < searchPages; i++ {
-			response, err := core.SearchTweets(client, query, searchType, searchCount, cursor)
-			if err != nil {
-				// Check if it's an obsolete endpoint error
-				if apiErr, ok := err.(*core.APIError); ok && apiErr.StatusCode == 404 {
-					fmt.Println(display.Error(fmt.Sprintf("Search failed: %v", err)))
-					fmt.Println()
-					fmt.Println(display.Warning("The API endpoint may be outdated. Try:"))
-					fmt.Println(display.Bullet("xsh endpoints check SearchTimeline"))
-					fmt.Println(display.Bullet("xsh endpoints list"))
-				} else {
-					fmt.Println(display.Error(fmt.Sprintf("Failed to search: %v", err)))
+			for i := 0; i < searchPages; i++ {
+				response, err := core.SearchTweets(client, query, searchType, searchCount, cursor)
+				if err != nil {
+					return err
 				}
-				os.Exit(core.ExitError)
-				return
+				allTweets = append(allTweets, response.Tweets...)
+				cursor = response.CursorBottom
+				if !response.HasMore {
+					break
+				}
 			}
-			allTweets = append(allTweets, response.Tweets...)
-			cursor = response.CursorBottom
-			if !response.HasMore {
-				break
+
+			// Apply filter if specified
+			if searchFilter != "" {
+				cfg, _ := core.LoadConfig()
+				allTweets = utils.FilterTweets(allTweets, searchFilter, searchThreshold, searchTopN, &cfg.Filter)
 			}
-		}
 
-		// Apply filter if specified
-		if searchFilter != "" {
-			cfg, _ := core.LoadConfig()
-			allTweets = utils.FilterTweets(allTweets, searchFilter, searchThreshold, searchTopN, &cfg.Filter)
-		}
-
-		if isYAMLMode() {
-			outputYAML(allTweets)
-		} else if isJSONMode() {
-			outputJSON(allTweets)
-		} else {
-			fmt.Println(display.FormatTweetList(allTweets))
-		}
+			output(allTweets, func() {
+				fmt.Println(display.FormatTweetList(allTweets))
+			})
+			return nil
+		})
 	},
 }
 

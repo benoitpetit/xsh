@@ -5,12 +5,6 @@ import (
 	"github.com/benoitpetit/xsh/models"
 )
 
-// Hardcoded Query IDs for bookmark folders
-const (
-	QueryBookmarkFolders      = "i78YDd0Tza-dV4SYs58kRg"
-	QueryBookmarkFolderTL     = "hNY7X2xE2N7HVF6Qb_mu6w"
-)
-
 // BookmarkFolder represents a bookmark folder
 type BookmarkFolder struct {
 	ID   string `json:"id"`
@@ -29,7 +23,7 @@ func GetBookmarkFolders(client *XClient) ([]BookmarkFolder, error) {
 			variables["cursor"] = cursor
 		}
 
-		data, err := client.GraphQLGetRaw(QueryBookmarkFolders, "BookmarkFoldersSlice", variables)
+		data, err := client.GraphQLGet("BookmarkFoldersSlice", variables)
 		if err != nil {
 			return folders, err
 		}
@@ -117,7 +111,7 @@ func GetBookmarkFolderTimeline(client *XClient, folderID string, count int, curs
 		variables["cursor"] = cursor
 	}
 
-	data, err := client.GraphQLGetRaw(QueryBookmarkFolderTL, "BookmarkFolderTimeline", variables)
+	data, err := client.GraphQLGet("BookmarkFolderTimeline", variables)
 	if err != nil {
 		return nil, err
 	}

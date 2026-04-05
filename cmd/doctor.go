@@ -48,7 +48,7 @@ var doctorCmd = &cobra.Command{
 				os.Exit(core.ExitAuthError)
 			}
 			if c.Status == "fail" && c.Name == "Network" {
-				os.Exit(1)
+				os.Exit(core.ExitError)
 			}
 		}
 	},

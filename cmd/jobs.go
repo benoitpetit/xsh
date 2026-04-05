@@ -61,7 +61,7 @@ var jobsSearchCmd = &cobra.Command{
 			)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-				os.Exit(1)
+				os.Exit(core.ExitError)
 			}
 
 			for _, job := range response.Jobs {
@@ -101,12 +101,12 @@ var jobsViewCmd = &cobra.Command{
 		job, err := core.GetJobDetail(client, jobID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		if job == nil {
 			fmt.Println(display.Error(fmt.Sprintf("Job %s not found", jobID)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(job, func() {

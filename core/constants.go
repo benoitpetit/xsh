@@ -48,6 +48,8 @@ var GraphQLEndpoints = map[string]string{
 	// Read operations - Bookmarks
 	"Bookmarks":              "uKP9v_I31k0_VSBmlpq2Xg/Bookmarks",
 	"BookmarkSearchTimeline": "vBCEp1KR36nwY3u2K-2nEA/BookmarkSearchTimeline",
+	"BookmarkFoldersSlice":   "i78YDd0Tza-dV4SYs58kRg/BookmarkFoldersSlice",
+	"BookmarkFolderTimeline": "hNY7X2xE2N7HVF6Qb_mu6w/BookmarkFolderTimeline",
 
 	// Read operations - Lists
 	"ListLatestTweetsTimeline":    "gNXkRRRV67cSRJkmpgGPnA/ListLatestTweetsTimeline",
@@ -55,6 +57,10 @@ var GraphQLEndpoints = map[string]string{
 	"ListByRestId":                "bSE1lqLBnovM86uu4p4Iqg/ListByRestId",
 	"ListMembers":                 "fqecRWCF4EcSAOs5yXh7Ig/ListMembers",
 	"ListMemberships":             "cRsrj8HASXYzxaf90wMDPQ/ListMemberships",
+
+	// Read operations - Jobs
+	"JobSearchQueryScreenJobsQuery": "jVMK9qcOUB5xQQdSLr5ECg/JobSearchQueryScreenJobsQuery",
+	"JobScreenQuery":                "8uZH_OBKTFNIMzTJaV5lbQ/JobScreenQuery",
 
 	// Read operations - Explore/Trends
 	"ExplorePage": "Z6s1tFEq4BveGOj0N80z8g/ExplorePage",
@@ -77,6 +83,14 @@ var GraphQLEndpoints = map[string]string{
 	"CreateBookmark": "aoDbu3RHznuiSkQ9aNM67Q/CreateBookmark",
 	"DeleteBookmark": "Wlmlj2-xzyS1GN3a6cj-mQ/DeleteBookmark",
 
+	// Write operations - DMs
+	"DMMessageDeleteMutation": "BJ6DtxA2llfjnRoRjaiIiw/DMMessageDeleteMutation",
+
+	// Write operations - Scheduled Tweets
+	"CreateScheduledTweet": "LCVzRQGxOaGnOnYH01NQXg/CreateScheduledTweet",
+	"FetchScheduledTweets": "ITtjAzvlZni2wWXwf295Qg/FetchScheduledTweets",
+	"DeleteScheduledTweet": "CTOVqej0JBXAZSwkp1US0g/DeleteScheduledTweet",
+
 	// Write operations - Lists
 	"CreateList":       "QXil-VE8uEJPfUKFiO36Bg/CreateList",
 	"UpdateList":       "qE2QVWL84jqa6CmH-m-D3w/UpdateList",
@@ -88,12 +102,28 @@ var GraphQLEndpoints = map[string]string{
 
 	// Write operations - Follow
 	"FollowUser":   "iNZ4xPly3JveJqEshzJdLA/FollowUser",
-	"UnfollowUser": "tTT1x7v4h9zLVzT1/BA/UnfollowUser",
+	"UnfollowUser": "tTT1x7v4h9zLVzT1BA/UnfollowUser",
 
 	// Other operations
 	"Viewer":             "zWQLM9HIVahRSUvzUH4lDw/Viewer",
 	"BlockedAccountsAll": "tnGJ8xjxfnv032LSOpKYWQ/BlockedAccountsAll",
 	"MutedAccounts":      "CI5MBQ8KdnNx87ZXOfTsBg/MutedAccounts",
+
+	// Read operations - Communities
+	"CommunitiesMainPageTimeline": "ZYMHvNRSCYjfaxcK_XBIOQ/CommunitiesMainPageTimeline",
+	"CommunityByRestId":           "nNjM4SaF_W1Hk0JQ8pOPQg/CommunityByRestId",
+	"CommunityTweetsTimeline":     "aeJsV55JMPw15_-N4VCnPA/CommunityTweetsTimeline",
+	"JoinCommunity":               "bTM1mhHSML-sKB9EjT0RRg/JoinCommunity",
+	"LeaveCommunity":              "OoS6Nd__MZ0LHAiBbmc3gQ/LeaveCommunity",
+
+	// Read operations - Spaces
+	"AudioSpaceById":   "Uv5R_x2bBDPMVxfGjkzxtA/AudioSpaceById",
+	"AudioSpaceSearch": "NTq79TuSz6fHj8lQaferJw/AudioSpaceSearch",
+
+	// Notifications: uses REST API v2 (/i/api/2/notifications/all.json), not GraphQL
+
+	// Read operations - Quotes
+	"TweetQuotes": "kv6oBLVLyPi0JWVqrY4kJQ/TweetQuotes",
 }
 
 // DefaultFeatures for GraphQL requests
@@ -120,7 +150,7 @@ var DefaultFeatures = map[string]bool{
 	"rweb_video_timestamps_enabled":                                           true,
 	"longform_notetweets_rich_text_read_enabled":                              true,
 	"longform_notetweets_inline_media_enabled":                                true,
-	"responsive_web_enhance_cards_enabled":                                    false,
+	"responsive_web_enhance_cards_enabled":                                    true,
 }
 
 // DefaultFieldToggles for GraphQL requests
