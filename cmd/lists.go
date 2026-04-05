@@ -32,7 +32,7 @@ var listsCmd = &cobra.Command{
 		lists, err := core.GetUserLists(client)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(lists, func() {
@@ -60,7 +60,7 @@ var listViewCmd = &cobra.Command{
 		response, err := core.GetListTweets(client, listID, count, "")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(response.Tweets, func() {
@@ -87,7 +87,7 @@ var listCreateCmd = &cobra.Command{
 		result, err := core.CreateList(client, name, listDescription, listPrivate)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(result, func() {
@@ -125,7 +125,7 @@ var listDeleteCmd = &cobra.Command{
 		_, err = core.DeleteList(client, listID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -157,7 +157,7 @@ var listMembersCmd = &cobra.Command{
 		users, _, err := core.GetListMembers(client, listID, count, "")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(users, func() {
@@ -186,17 +186,17 @@ var listAddMemberCmd = &cobra.Command{
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		_, err = core.AddListMember(client, listID, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -230,17 +230,17 @@ var listRemoveMemberCmd = &cobra.Command{
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		_, err = core.RemoveListMember(client, listID, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -272,7 +272,7 @@ var listPinCmd = &cobra.Command{
 		_, err = core.PinList(client, listID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -303,7 +303,7 @@ var listUnpinCmd = &cobra.Command{
 		_, err = core.UnpinList(client, listID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(map[string]string{

@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/benoitpetit/xsh/core"
+	"github.com/benoitpetit/xsh/display"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
-	"github.com/benoitpetit/xsh/core"
-	"github.com/benoitpetit/xsh/display"
 )
 
 // mcpCmd represents the mcp command
@@ -54,7 +54,7 @@ func createTool(name, description string, params map[string]interface{}) mcp.Too
 		"type":       "object",
 		"properties": params,
 	}
-	
+
 	// Extract required params
 	var required []string
 	for k, v := range params {
@@ -68,7 +68,7 @@ func createTool(name, description string, params map[string]interface{}) mcp.Too
 	if len(required) > 0 {
 		schema["required"] = required
 	}
-	
+
 	return mcp.NewTool(name, description, schema)
 }
 
@@ -390,7 +390,7 @@ func handlePostTweet(arguments map[string]interface{}) (*mcp.CallToolResult, err
 	}
 	defer client.Close()
 
-	result, err := core.CreateTweet(client, text, replyTo, quote, nil)
+	result, err := core.CreateTweet(client, text, replyTo, quote, nil, "")
 	if err != nil {
 		return errorResult(err), nil
 	}

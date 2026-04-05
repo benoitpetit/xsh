@@ -23,28 +23,28 @@ func GetDMInbox(client *XClient) ([]models.DMConversation, error) {
 	url := fmt.Sprintf("%s/inbox_initial_state.json", DMAPIBase)
 
 	params := map[string]string{
-		"nsfw_filtering_enabled":                "false",
-		"filter_low_quality":                    "false",
-		"include_quality":                       "all",
-		"include_profile_interstitial_type":     "1",
-		"include_blocking":                      "1",
-		"include_blocked_by":                    "1",
-		"dm_secret_conversations_enabled":       "false",
-		"krs_registration_enabled":              "true",
-		"cards_platform":                        "Web-12",
-		"include_cards":                         "1",
-		"include_ext_alt_text":                  "true",
-		"include_quote_count":                   "true",
-		"include_reply_count":                   "1",
-		"tweet_mode":                            "extended",
-		"include_ext_collab_control":            "true",
-		"include_ext_is_blue_verified":          "1",
-		"include_ext_has_nft_avatar":            "1",
-		"include_ext_vibe_tag":                  "1",
-		"include_ext_sensitive_media_warning":   "true",
-		"include_ext_media_color":               "true",
-		"include_ext_media_availability":        "true",
-		"include_ext_has_birdwatch_notes":       "1",
+		"nsfw_filtering_enabled":              "false",
+		"filter_low_quality":                  "false",
+		"include_quality":                     "all",
+		"include_profile_interstitial_type":   "1",
+		"include_blocking":                    "1",
+		"include_blocked_by":                  "1",
+		"dm_secret_conversations_enabled":     "false",
+		"krs_registration_enabled":            "true",
+		"cards_platform":                      "Web-12",
+		"include_cards":                       "1",
+		"include_ext_alt_text":                "true",
+		"include_quote_count":                 "true",
+		"include_reply_count":                 "1",
+		"tweet_mode":                          "extended",
+		"include_ext_collab_control":          "true",
+		"include_ext_is_blue_verified":        "1",
+		"include_ext_has_nft_avatar":          "1",
+		"include_ext_vibe_tag":                "1",
+		"include_ext_sensitive_media_warning": "true",
+		"include_ext_media_color":             "true",
+		"include_ext_media_availability":      "true",
+		"include_ext_has_birdwatch_notes":     "1",
 	}
 
 	// Make the request
@@ -206,15 +206,11 @@ func SendDM(client *XClient, userID, text string) (map[string]interface{}, error
 
 // DeleteDM deletes a DM message
 func DeleteDM(client *XClient, messageID string) (map[string]interface{}, error) {
-	// Uses hardcoded GraphQL query ID
-	queryID := "BJ6DtxA2llfjnRoRjaiIiw"
-	operationName := "DMMessageDeleteMutation"
-
 	variables := map[string]interface{}{
 		"messageId": messageID,
 	}
 
-	return client.GraphQLPostRaw(queryID, operationName, variables)
+	return client.GraphQLPost("DMMessageDeleteMutation", variables)
 }
 
 // restGetWithParams makes a GET request with query parameters

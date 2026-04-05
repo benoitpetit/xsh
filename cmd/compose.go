@@ -7,10 +7,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -44,7 +44,7 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 			content, err := os.ReadFile(composeFile)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Error reading file: %v", err)))
-				os.Exit(1)
+				os.Exit(core.ExitError)
 				return
 			}
 			tweets = parseThreadFile(string(content))
@@ -227,7 +227,7 @@ func postThread(tweets []string) {
 			text = string(runes[:277]) + "..."
 		}
 
-		result, err := core.CreateTweet(client, text, lastTweetID, "", nil)
+		result, err := core.CreateTweet(client, text, lastTweetID, "", nil, "")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to post tweet %d: %v", i+1, err)))
 			return
@@ -277,8 +277,6 @@ func extractTweetID(result map[string]interface{}) string {
 	}
 	return ""
 }
-
-
 
 func init() {
 	rootCmd.AddCommand(composeCmd)

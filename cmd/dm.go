@@ -33,7 +33,7 @@ var dmInboxCmd = &cobra.Command{
 		conversations, err := core.GetDMInbox(client)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(conversations, func() {
@@ -62,17 +62,17 @@ var dmSendCmd = &cobra.Command{
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		result, err := core.SendDM(client, user.ID, message)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(result, func() {
@@ -110,7 +110,7 @@ var dmDeleteCmd = &cobra.Command{
 		_, err = core.DeleteDM(client, messageID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(map[string]string{

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
 	"github.com/benoitpetit/xsh/models"
 	"github.com/benoitpetit/xsh/utils"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -36,48 +36,45 @@ var feedCmd = &cobra.Command{
 		}
 		defer client.Close()
 
-		allTweets := []*models.Tweet{}
-		cursor := feedCursor
+		runWithWatch(func() error {
+			allTweets := []*models.Tweet{}
+			cursor := feedCursor
 
-		// Like Python: fetch count tweets per page, for pages iterations
-		for i := 0; i < feedPages; i++ {
-			response, err := core.GetHomeTimeline(client, feedType, feedCount, cursor)
-			if err != nil {
-				fmt.Println(display.Error(fmt.Sprintf("Failed to fetch timeline: %v", err)))
-				os.Exit(core.ExitError)
-				return
+			// Like Python: fetch count tweets per page, for pages iterations
+			for i := 0; i < feedPages; i++ {
+				response, err := core.GetHomeTimeline(client, feedType, feedCount, cursor)
+				if err != nil {
+					return fmt.Errorf("failed to fetch timeline: %w", err)
+				}
+				allTweets = append(allTweets, response.Tweets...)
+				cursor = response.CursorBottom
+				if !response.HasMore {
+					break
+				}
 			}
-			allTweets = append(allTweets, response.Tweets...)
-			cursor = response.CursorBottom
-			if !response.HasMore {
-				break
+
+			// Print cursor for next page if available (only on single run)
+			if cursor != "" && !isJSONMode() && !isWatchMode() {
+				fmt.Fprintln(os.Stderr, display.Info(fmt.Sprintf("Next cursor: %s", cursor)))
 			}
-		}
 
-		// Print cursor for next page if available
-		if cursor != "" && !isJSONMode() {
-			fmt.Fprintln(os.Stderr, display.Info(fmt.Sprintf("Next cursor: %s", cursor)))
-		}
+			// Truncate to exact count requested (API may return more than requested)
+			totalRequested := feedCount * feedPages
+			if len(allTweets) > totalRequested {
+				allTweets = allTweets[:totalRequested]
+			}
 
-		// Truncate to exact count requested (API may return more than requested)
-		totalRequested := feedCount * feedPages
-		if len(allTweets) > totalRequested {
-			allTweets = allTweets[:totalRequested]
-		}
+			// Apply filter if specified
+			if feedFilter != "" {
+				cfg, _ := core.LoadConfig()
+				allTweets = utils.FilterTweets(allTweets, feedFilter, feedThreshold, feedTopN, &cfg.Filter)
+			}
 
-		// Apply filter if specified
-		if feedFilter != "" {
-			cfg, _ := core.LoadConfig()
-			allTweets = utils.FilterTweets(allTweets, feedFilter, feedThreshold, feedTopN, &cfg.Filter)
-		}
-
-		if isYAMLMode() {
-			outputYAML(allTweets)
-		} else if isJSONMode() {
-			outputJSON(allTweets)
-		} else {
-			fmt.Println(display.FormatTweetList(allTweets))
-		}
+			output(allTweets, func() {
+				fmt.Println(display.FormatTweetList(allTweets))
+			})
+			return nil
+		})
 	},
 }
 

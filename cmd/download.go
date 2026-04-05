@@ -29,7 +29,7 @@ var downloadCmd = &cobra.Command{
 		files, err := core.DownloadTweetMedia(client, tweetID, outputDir)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(map[string]interface{}{

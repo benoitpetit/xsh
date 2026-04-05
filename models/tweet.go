@@ -8,6 +8,30 @@ import (
 	"time"
 )
 
+// PollChoice represents a single choice in a poll
+type PollChoice struct {
+	Label string  `json:"label"`
+	Votes int     `json:"votes"`
+	Pct   float64 `json:"pct"` // Percentage (0-100)
+}
+
+// Poll represents poll data attached to a tweet
+type Poll struct {
+	Choices  []PollChoice `json:"choices"`
+	EndTime  *time.Time   `json:"end_time,omitempty"`
+	Status   string       `json:"status"` // "Open", "Closed"
+	Duration int          `json:"duration_minutes,omitempty"`
+}
+
+// TotalVotes returns the total number of votes across all choices
+func (p *Poll) TotalVotes() int {
+	total := 0
+	for _, c := range p.Choices {
+		total += c.Votes
+	}
+	return total
+}
+
 // TweetMedia represents a media attachment on a tweet
 type TweetMedia struct {
 	Type       string `json:"type"` // photo, video, animated_gif
@@ -37,6 +61,7 @@ type Tweet struct {
 	CreatedAt      *time.Time      `json:"created_at,omitempty"`
 	Engagement     TweetEngagement `json:"engagement"`
 	Media          []TweetMedia    `json:"media"`
+	Poll           *Poll           `json:"poll,omitempty"`
 	QuotedTweet    *Tweet          `json:"quoted_tweet,omitempty"`
 	ReplyToID      string          `json:"reply_to_id,omitempty"`
 	ReplyToHandle  string          `json:"reply_to_handle,omitempty"`
@@ -71,13 +96,13 @@ func GetString(m map[string]interface{}, key string) string {
 // extractUserFromAnywhere deeply searches for user info in the data structure
 func extractUserFromAnywhere(data map[string]interface{}) (handle, name, id string) {
 	var findUser func(m map[string]interface{})
-	
+
 	findUser = func(m map[string]interface{}) {
 		// If we already found everything, stop
 		if handle != "" && name != "" {
 			return
 		}
-		
+
 		// Check if this map has user info
 		if h := GetString(m, "screen_name"); h != "" && handle == "" {
 			handle = h
@@ -91,7 +116,7 @@ func extractUserFromAnywhere(data map[string]interface{}) (handle, name, id stri
 		if i := GetString(m, "id_str"); i != "" && id == "" {
 			id = i
 		}
-		
+
 		// Recursively search in nested maps
 		for _, v := range m {
 			switch val := v.(type) {
@@ -106,7 +131,7 @@ func extractUserFromAnywhere(data map[string]interface{}) (handle, name, id stri
 			}
 		}
 	}
-	
+
 	findUser(data)
 	return
 }
@@ -343,6 +368,9 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 		}
 	}
 
+	// Parse poll from card data
+	poll := parsePollFromCard(tweetData)
+
 	return &Tweet{
 		ID:             restID,
 		Text:           text,
@@ -353,6 +381,7 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 		CreatedAt:      createdAt,
 		Engagement:     engagement,
 		Media:          mediaList,
+		Poll:           poll,
 		QuotedTweet:    quoted,
 		ReplyToID:      GetString(legacy, "in_reply_to_status_id_str"),
 		ReplyToHandle:  GetString(legacy, "in_reply_to_screen_name"),
@@ -361,4 +390,113 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 		Source:         GetString(tweetData, "source"),
 		IsRetweet:      false,
 	}
+}
+
+// parsePollFromCard extracts poll data from the tweet's card object.
+// Twitter returns poll data in card.legacy.binding_values with card names
+// like "poll2choice_text_only", "poll3choice_text_only", "poll4choice_text_only".
+func parsePollFromCard(tweetData map[string]interface{}) *Poll {
+	// Try card.legacy first, then card directly
+	var bindingValues []interface{}
+	var cardName string
+
+	if card, ok := tweetData["card"].(map[string]interface{}); ok {
+		if legacy, ok := card["legacy"].(map[string]interface{}); ok {
+			cardName = GetString(legacy, "name")
+			bindingValues, _ = legacy["binding_values"].([]interface{})
+		}
+		// Fallback: card data directly on card object
+		if bindingValues == nil {
+			cardName = GetString(card, "name")
+			bindingValues, _ = card["binding_values"].([]interface{})
+		}
+	}
+
+	// Only process poll cards
+	if !strings.HasPrefix(cardName, "poll") || bindingValues == nil {
+		return nil
+	}
+
+	// Build a lookup map from binding_values array
+	// Each entry is: {"key": "choice1_label", "value": {"string_value": "Yes", "type": "STRING"}}
+	values := make(map[string]string)
+	for _, item := range bindingValues {
+		entry, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		key := GetString(entry, "key")
+		if val, ok := entry["value"].(map[string]interface{}); ok {
+			values[key] = GetString(val, "string_value")
+		}
+	}
+
+	// Determine number of choices (poll2choice, poll3choice, poll4choice)
+	maxChoices := 4
+	if strings.Contains(cardName, "2choice") {
+		maxChoices = 2
+	} else if strings.Contains(cardName, "3choice") {
+		maxChoices = 3
+	}
+
+	var choices []PollChoice
+	for i := 1; i <= maxChoices; i++ {
+		label := values[fmt.Sprintf("choice%d_label", i)]
+		if label == "" {
+			break
+		}
+		votes := 0
+		if countStr := values[fmt.Sprintf("choice%d_count", i)]; countStr != "" {
+			if n, err := strconv.Atoi(countStr); err == nil {
+				votes = n
+			}
+		}
+		choices = append(choices, PollChoice{
+			Label: label,
+			Votes: votes,
+		})
+	}
+
+	if len(choices) == 0 {
+		return nil
+	}
+
+	// Calculate percentages
+	total := 0
+	for _, c := range choices {
+		total += c.Votes
+	}
+	if total > 0 {
+		for i := range choices {
+			choices[i].Pct = float64(choices[i].Votes) / float64(total) * 100
+		}
+	}
+
+	// Parse end time
+	poll := &Poll{
+		Choices: choices,
+		Status:  "Open",
+	}
+
+	if endStr := values["end_datetime_utc"]; endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			poll.EndTime = &t
+			if time.Now().After(t) {
+				poll.Status = "Closed"
+			}
+		}
+	}
+	// Also check "counts_are_final" which indicates a finished poll
+	if values["counts_are_final"] == "true" {
+		poll.Status = "Closed"
+	}
+
+	// Parse duration
+	if durStr := values["duration_minutes"]; durStr != "" {
+		if d, err := strconv.Atoi(durStr); err == nil {
+			poll.Duration = d
+		}
+	}
+
+	return poll
 }

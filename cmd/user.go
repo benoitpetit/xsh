@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
 	"github.com/benoitpetit/xsh/utils"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -95,15 +95,16 @@ var userTweetsCmd = &cobra.Command{
 			return
 		}
 
-		response, err := core.GetUserTweets(client, user.ID, userCount, "", userReplies)
-		if err != nil {
-			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch tweets: %v", err)))
-			os.Exit(core.ExitError)
-			return
-		}
+		runWithWatch(func() error {
+			response, err := core.GetUserTweets(client, user.ID, userCount, "", userReplies)
+			if err != nil {
+				return fmt.Errorf("failed to fetch tweets: %w", err)
+			}
 
-		output(response.Tweets, func() {
-			fmt.Println(display.FormatTweetList(response.Tweets))
+			output(response.Tweets, func() {
+				fmt.Println(display.FormatTweetList(response.Tweets))
+			})
+			return nil
 		})
 	},
 }
@@ -141,15 +142,16 @@ var userLikesCmd = &cobra.Command{
 			return
 		}
 
-		response, err := core.GetUserLikes(client, user.ID, userCount, "")
-		if err != nil {
-			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch likes: %v", err)))
-			os.Exit(core.ExitError)
-			return
-		}
+		runWithWatch(func() error {
+			response, err := core.GetUserLikes(client, user.ID, userCount, "")
+			if err != nil {
+				return fmt.Errorf("failed to fetch likes: %w", err)
+			}
 
-		output(response.Tweets, func() {
-			fmt.Println(display.FormatTweetList(response.Tweets))
+			output(response.Tweets, func() {
+				fmt.Println(display.FormatTweetList(response.Tweets))
+			})
+			return nil
 		})
 	},
 }
@@ -248,7 +250,7 @@ var userFollowingCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(userCmd)
-	
+
 	// Add subcommands to user command only (not to root)
 	userCmd.AddCommand(userTweetsCmd)
 	userCmd.AddCommand(userLikesCmd)
