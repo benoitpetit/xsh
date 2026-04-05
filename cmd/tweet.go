@@ -140,14 +140,16 @@ var tweetPostCmd = &cobra.Command{
 	Use:   "post [text]",
 	Short: "Post a new tweet",
 	Args:  cobra.ExactArgs(1),
-	Long: `Post a new tweet, optionally with images (up to 4).
+	Long: `Post a new tweet, optionally with images (up to 4) or a poll.
 
 Examples:
   xsh tweet post "Hello world!"
   xsh tweet post "Check this out" --image photo.jpg
   xsh tweet post "My photos" -i img1.jpg -i img2.jpg -i img3.jpg
   xsh tweet post "Replying" --reply-to 1234567890
-  xsh tweet post "Quoting" --quote https://x.com/user/status/1234567890`,
+  xsh tweet post "Quoting" --quote https://x.com/user/status/1234567890
+  xsh tweet post "What's better?" --poll "Option A" --poll "Option B"
+  xsh tweet post "Vote!" --poll "Yes" --poll "No" --poll "Maybe" --poll-duration 1440`,
 	Run: func(cmd *cobra.Command, args []string) {
 		text, valid := utils.ValidateTweetTextWithLimit(args[0], 280)
 		if !valid {
@@ -167,9 +169,25 @@ Examples:
 		replyTo, _ := cmd.Flags().GetString("reply-to")
 		quote, _ := cmd.Flags().GetString("quote")
 		images, _ := cmd.Flags().GetStringArray("image")
+		pollChoices, _ := cmd.Flags().GetStringArray("poll")
+		pollDuration, _ := cmd.Flags().GetInt("poll-duration")
 
 		if replyTo != "" && !utils.ValidateTweetID(replyTo) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid reply-to tweet ID: %s", replyTo)))
+			os.Exit(core.ExitError)
+			return
+		}
+
+		// Validate poll choices
+		if len(pollChoices) > 0 && (len(pollChoices) < 2 || len(pollChoices) > 4) {
+			fmt.Println(display.Error("Polls require 2-4 choices"))
+			os.Exit(core.ExitError)
+			return
+		}
+
+		// Images and polls are mutually exclusive
+		if len(pollChoices) > 0 && len(images) > 0 {
+			fmt.Println(display.Error("Cannot attach both images and a poll to the same tweet"))
 			os.Exit(core.ExitError)
 			return
 		}
@@ -201,7 +219,25 @@ Examples:
 			}
 		}
 
-		result, err := core.CreateTweet(client, text, replyTo, quote, mediaIDs)
+		// Create poll card if poll choices provided
+		var cardURI string
+		if len(pollChoices) > 0 {
+			if verbose {
+				fmt.Println(display.Action("Creating", fmt.Sprintf("poll with %d choices", len(pollChoices))))
+			}
+			uri, err := core.CreatePollCard(client, pollChoices, pollDuration)
+			if err != nil {
+				fmt.Println(display.Error(fmt.Sprintf("Failed to create poll: %v", err)))
+				os.Exit(core.ExitError)
+				return
+			}
+			cardURI = uri
+			if verbose {
+				fmt.Println(display.Info(fmt.Sprintf("  Poll card: %s", cardURI)))
+			}
+		}
+
+		result, err := core.CreateTweet(client, text, replyTo, quote, mediaIDs, cardURI)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to post tweet: %v", err)))
 			return
@@ -216,6 +252,8 @@ Examples:
 			suffix := ""
 			if len(mediaIDs) > 0 {
 				suffix = fmt.Sprintf(" with %d image(s)", len(mediaIDs))
+			} else if len(pollChoices) > 0 {
+				suffix = fmt.Sprintf(" with %d-choice poll", len(pollChoices))
 			}
 			if tweetID != "" {
 				fmt.Println(display.Success(fmt.Sprintf("Tweet posted%s! ID: %s", suffix, tweetID)))
@@ -404,6 +442,12 @@ var tweetBookmarkCmd = &cobra.Command{
 	Short: "Bookmark a tweet",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		if !utils.ValidateTweetID(args[0]) {
+			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
+			os.Exit(core.ExitError)
+			return
+		}
+
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
@@ -429,6 +473,12 @@ var tweetUnbookmarkCmd = &cobra.Command{
 	Short: "Remove a bookmark",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		if !utils.ValidateTweetID(args[0]) {
+			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
+			os.Exit(core.ExitError)
+			return
+		}
+
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
@@ -529,6 +579,8 @@ func init() {
 	tweetPostCmd.Flags().String("reply-to", "", "Tweet ID to reply to")
 	tweetPostCmd.Flags().String("quote", "", "Tweet URL to quote")
 	tweetPostCmd.Flags().StringArrayP("image", "i", nil, "Image to attach (can be used multiple times, max 4)")
+	tweetPostCmd.Flags().StringArrayP("poll", "p", nil, "Poll choice (use 2-4 times for poll options)")
+	tweetPostCmd.Flags().Int("poll-duration", 1440, "Poll duration in minutes (default 1440 = 24h, max 10080 = 7 days)")
 	tweetDeleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 	bookmarksCmd.Flags().IntP("count", "n", 20, "Number of tweets")
 	bookmarksCmd.Flags().StringVar(&bookmarksFilter, "filter", "", "Filter: all, top, score")

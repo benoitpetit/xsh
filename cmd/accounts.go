@@ -19,7 +19,7 @@ var accountsCmd = &cobra.Command{
 		accounts, err := core.ListAccounts()
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to list accounts: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		if len(accounts) == 0 {
@@ -91,7 +91,7 @@ The cookie file should be in JSON format exported from x.com with 'auth_token' a
 			cwd, err := os.Getwd()
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to get working directory: %v", err)))
-				os.Exit(1)
+				os.Exit(core.ExitError)
 			}
 			cookieFile = filepath.Join(cwd, cookieFile)
 		}
@@ -99,7 +99,7 @@ The cookie file should be in JSON format exported from x.com with 'auth_token' a
 		// Check file exists
 		if _, err := os.Stat(cookieFile); os.IsNotExist(err) {
 			fmt.Println(display.Error(fmt.Sprintf("Cookie file not found: %s", cookieFile)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		// Import cookies

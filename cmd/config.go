@@ -105,7 +105,7 @@ var configGetCmd = &cobra.Command{
 			fmt.Println(display.Error(fmt.Sprintf("Unknown config key: %s", key)))
 			fmt.Println(display.Section("\nAvailable keys:"))
 			printAvailableKeys()
-			os.Exit(1)
+			os.Exit(core.ExitError)
 			return
 		}
 
@@ -150,13 +150,13 @@ Available keys:
 
 		if err := setConfigValue(cfg, key, value); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to set config: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 			return
 		}
 
 		if err := cfg.Save(); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to save config: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 			return
 		}
 
@@ -186,7 +186,7 @@ var configResetCmd = &cobra.Command{
 		cfg := core.DefaultConfig()
 		if err := cfg.Save(); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to save config: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 			return
 		}
 

@@ -26,7 +26,7 @@ var bookmarksFoldersCmd = &cobra.Command{
 		folders, err := core.GetBookmarkFolders(client)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(folders, func() {
@@ -54,7 +54,7 @@ var bookmarksFolderCmd = &cobra.Command{
 		response, err := core.GetBookmarkFolderTimeline(client, folderID, count, "")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(response.Tweets, func() {

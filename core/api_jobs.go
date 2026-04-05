@@ -5,12 +5,6 @@ import (
 	"github.com/benoitpetit/xsh/models"
 )
 
-// Hardcoded Query IDs for jobs API
-const (
-	QueryJobSearch = "jVMK9qcOUB5xQQdSLr5ECg"
-	QueryJobDetail = "8uZH_OBKTFNIMzTJaV5lbQ"
-)
-
 // SearchJobs searches for job listings on Twitter/X
 func SearchJobs(
 	client *XClient,
@@ -61,7 +55,7 @@ func SearchJobs(
 		variables["cursor"] = cursor
 	}
 
-	data, err := client.GraphQLGetRaw(QueryJobSearch, "JobSearchQueryScreenJobsQuery", variables)
+	data, err := client.GraphQLGet("JobSearchQueryScreenJobsQuery", variables)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +112,7 @@ func GetJobDetail(client *XClient, jobID string) (*models.Job, error) {
 		"loggedIn": true,
 	}
 
-	data, err := client.GraphQLGetRaw(QueryJobDetail, "JobScreenQuery", variables)
+	data, err := client.GraphQLGet("JobScreenQuery", variables)
 	if err != nil {
 		return nil, err
 	}

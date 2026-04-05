@@ -5,20 +5,13 @@ import (
 	"fmt"
 )
 
-// Hardcoded Query IDs for scheduled tweets (not present in JS bundles)
-const (
-	QueryCreateScheduledTweet = "LCVzRQGxOaGnOnYH01NQXg"
-	QueryFetchScheduledTweets = "ITtjAzvlZni2wWXwf295Qg"
-	QueryDeleteScheduledTweet = "CTOVqej0JBXAZSwkp1US0g"
-)
-
 // ScheduledTweet represents a scheduled tweet
 type ScheduledTweet struct {
-	ID       string   `json:"id"`
-	Text     string   `json:"text"`
-	ExecuteAt int64   `json:"execute_at"` // Unix timestamp
-	State    string   `json:"state"`
-	MediaIDs []string `json:"media_ids"`
+	ID        string   `json:"id"`
+	Text      string   `json:"text"`
+	ExecuteAt int64    `json:"execute_at"` // Unix timestamp
+	State     string   `json:"state"`
+	MediaIDs  []string `json:"media_ids"`
 }
 
 // CreateScheduledTweet schedules a tweet for future posting
@@ -33,7 +26,7 @@ func CreateScheduledTweet(client *XClient, text string, executeAt int64, mediaID
 		"execute_at": executeAt,
 	}
 
-	return client.GraphQLPostRaw(QueryCreateScheduledTweet, "CreateScheduledTweet", variables)
+	return client.GraphQLPost("CreateScheduledTweet", variables)
 }
 
 // GetScheduledTweets lists all scheduled tweets
@@ -43,7 +36,7 @@ func GetScheduledTweets(client *XClient) ([]ScheduledTweet, error) {
 		"ascending": true,
 	}
 
-	data, err := client.GraphQLPostRaw(QueryFetchScheduledTweets, "FetchScheduledTweets", variables)
+	data, err := client.GraphQLPost("FetchScheduledTweets", variables)
 	if err != nil {
 		return tweets, err
 	}
@@ -132,5 +125,5 @@ func DeleteScheduledTweet(client *XClient, scheduledTweetID string) (map[string]
 		"scheduled_tweet_id": scheduledTweetID,
 	}
 
-	return client.GraphQLPostRaw(QueryDeleteScheduledTweet, "DeleteScheduledTweet", variables)
+	return client.GraphQLPost("DeleteScheduledTweet", variables)
 }

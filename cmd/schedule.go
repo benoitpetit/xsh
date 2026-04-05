@@ -25,12 +25,12 @@ var scheduleCmd = &cobra.Command{
 		scheduleTime, err := parseScheduleTime(atStr)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error parsing time: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		if scheduleTime.Before(time.Now()) {
 			fmt.Println(display.Error("Schedule time must be in the future"))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		executeAt := scheduleTime.Unix()
@@ -45,7 +45,7 @@ var scheduleCmd = &cobra.Command{
 		result, err := core.CreateScheduledTweet(client, text, executeAt, nil)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(result, func() {
@@ -69,7 +69,7 @@ var scheduledCmd = &cobra.Command{
 		tweets, err := core.GetScheduledTweets(client)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(tweets, func() {
@@ -96,7 +96,7 @@ var unscheduleCmd = &cobra.Command{
 		_, err = core.DeleteScheduledTweet(client, scheduledTweetID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(map[string]string{

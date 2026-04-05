@@ -27,7 +27,7 @@ var tweetsBatchCmd = &cobra.Command{
 		tweets, err := core.GetTweetsByIDs(client, args)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(tweets, func() {
@@ -57,7 +57,7 @@ var usersBatchCmd = &cobra.Command{
 		users, err := core.GetUsersByHandles(client, args)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		output(users, func() {
