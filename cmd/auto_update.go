@@ -63,7 +63,7 @@ JS bundles that your browser downloads when visiting x.com.`,
 		discovery, err := core.NewEndpointDiscovery(verbose)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error initializing endpoint discovery: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		var previousCache *core.EndpointCache
@@ -77,7 +77,7 @@ JS bundles that your browser downloads when visiting x.com.`,
 		cache, err := discovery.DiscoverEndpoints(ctx)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Auto-update failed: %v", err)))
-			os.Exit(1)
+			os.Exit(core.ExitError)
 		}
 
 		after := manager.ListEndpoints()

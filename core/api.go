@@ -456,7 +456,7 @@ func GetListTweets(client *XClient, listID string, count int, cursor string) (*m
 }
 
 // CreateTweet creates a new tweet
-func CreateTweet(client *XClient, text, replyToID, quoteTweetURL string, mediaIDs []string) (map[string]interface{}, error) {
+func CreateTweet(client *XClient, text, replyToID, quoteTweetURL string, mediaIDs []string, cardURI string) (map[string]interface{}, error) {
 	variables := map[string]interface{}{
 		"tweet_text":              text,
 		"dark_request":            false,
@@ -484,6 +484,10 @@ func CreateTweet(client *XClient, text, replyToID, quoteTweetURL string, mediaID
 
 	if quoteTweetURL != "" {
 		variables["attachment_url"] = quoteTweetURL
+	}
+
+	if cardURI != "" {
+		variables["card_uri"] = cardURI
 	}
 
 	if Verbose {

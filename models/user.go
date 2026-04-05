@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -108,23 +109,7 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 }
 
 func replaceAll(s, old, new string) string {
-	result := ""
-	for {
-		i := 0
-		for i <= len(s)-len(old) {
-			if s[i:i+len(old)] == old {
-				result += new
-				s = s[i+len(old):]
-				break
-			}
-			i++
-		}
-		if i > len(s)-len(old) {
-			result += s
-			break
-		}
-	}
-	return result
+	return strings.ReplaceAll(s, old, new)
 }
 
 func getInt(m map[string]interface{}, key string) int {
