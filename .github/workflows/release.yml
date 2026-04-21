@@ -17,9 +17,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: core
+
     strategy:
       matrix:
         include:
@@ -53,7 +51,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.24"
-          cache-dependency-path: core/go.sum
+          cache-dependency-path: go.sum
 
       - name: Build
         env:
@@ -69,12 +67,8 @@ jobs:
           # Also create compressed archive as alternative
           if [[ "${{ matrix.goos }}" == "windows" ]]; then
             zip "$output.zip" "$output"
-            mv "$output" ../
-            mv "$output.zip" ../
           else
             tar czf "$output.tar.gz" "$output"
-            mv "$output" ../
-            mv "$output.tar.gz" ../
           fi
 
       - name: Upload Binary Artifact

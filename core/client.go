@@ -57,6 +57,7 @@ type XClient struct {
 	proxy                string
 	client               *http.Client
 	authRefreshAttempted bool
+	chromeTarget         TLSFingerprintType
 
 	// Test hooks
 	requestWithOperationHook func(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error)
@@ -66,20 +67,19 @@ type XClient struct {
 	writeDelayHook           func()
 }
 
-// NewXClient creates a new XClient with randomized Chrome fingerprint
+// NewXClient creates a new XClient with a consistent Chrome fingerprint
 func NewXClient(credentials *AuthCredentials, account, proxy string) (*XClient, error) {
-	// Select a random Chrome version for this session
-	chromeVersion := selectRandomChromeVersion()
-	SyncChromeVersion(chromeVersion)
+	chromeVersion := BestChromeTarget()
 
 	if Verbose {
-		logVerbose("Using Chrome version for TLS: %s", chromeVersion)
+		logVerbose("Using Chrome version: %s", chromeVersion)
 	}
 
 	return &XClient{
-		credentials: credentials,
-		account:     account,
-		proxy:       proxy,
+		credentials:  credentials,
+		account:      account,
+		proxy:        proxy,
+		chromeTarget: chromeVersion,
 	}, nil
 }
 
@@ -152,7 +152,7 @@ func (c *XClient) getHTTPClient() (*http.Client, error) {
 			proxy = os.Getenv("TWITTER_PROXY")
 		}
 
-		client, err := newUTLSHTTPClient(proxy)
+		client, err := newUTLSHTTPClient(proxy, c.chromeTarget)
 		if err != nil {
 			return nil, err
 		}
@@ -208,6 +208,21 @@ func needsTransactionID(operation string) bool {
 	return ops[operation]
 }
 
+// userAgent returns the User-Agent string for this client
+func (c *XClient) userAgent() string {
+	return GetUserAgentForVersion(c.chromeTarget)
+}
+
+// secChUa returns the sec-ch-ua header for this client
+func (c *XClient) secChUa() string {
+	return GetSecChUaForVersion(c.chromeTarget)
+}
+
+// secChUaFullVersionList returns the sec-ch-ua-full-version-list header for this client
+func (c *XClient) secChUaFullVersionList() string {
+	return GetSecChUaFullVersionListForVersion(c.chromeTarget)
+}
+
 // getHeadersWithReferer builds request headers with a custom referer
 func (c *XClient) getHeadersWithReferer(referer string) (map[string]string, error) {
 	creds, err := c.getCredentials()
@@ -223,18 +238,18 @@ func (c *XClient) getHeadersWithReferer(referer string) (map[string]string, erro
 		"content-type":                "application/json",
 		"origin":                      BaseURL,
 		"referer":                     referer,
-		"sec-ch-ua":                   GetSecChUa(),
+		"sec-ch-ua":                   c.secChUa(),
 		"sec-ch-ua-mobile":            "?0",
 		"sec-ch-ua-platform":          getSecChUaPlatform(),
 		"sec-ch-ua-arch":              getSecChUaArch(),
 		"sec-ch-ua-bitness":           "\"64\"",
-		"sec-ch-ua-full-version-list": GetSecChUaFullVersionList(),
+		"sec-ch-ua-full-version-list": c.secChUaFullVersionList(),
 		"sec-ch-ua-model":             "\"\"",
 		"sec-ch-ua-platform-version":  getSecChUaPlatformVersion(),
 		"sec-fetch-dest":              "empty",
 		"sec-fetch-mode":              "cors",
 		"sec-fetch-site":              "same-origin",
-		"user-agent":                  GetUserAgent(),
+		"user-agent":                  c.userAgent(),
 		"x-csrf-token":                creds.Ct0,
 		"x-twitter-active-user":       "yes",
 		"x-twitter-auth-type":         "OAuth2Session",
@@ -847,7 +862,7 @@ func (c *XClient) RestPostWithOptions(urlStr string, data map[string]string, jso
 		"x-twitter-auth-type":       "OAuth2Session",
 		"x-twitter-active-user":     "yes",
 		"x-twitter-client-language": "en",
-		"user-agent":                GetUserAgent(),
+		"user-agent":                c.userAgent(),
 		"origin":                    BaseURL,
 		"referer":                   BaseURL + "/home",
 	}

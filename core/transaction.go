@@ -393,6 +393,4 @@ func InitializeTransactionGenerator(client *http.Client) error {
 	return tg.Initialize(client)
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
+// math/rand is auto-seeded since Go 1.20; no init needed.
