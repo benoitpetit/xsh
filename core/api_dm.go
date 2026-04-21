@@ -240,7 +240,7 @@ func (c *XClient) restGetWithParams(urlStr string, params map[string]string) (ma
 	}
 
 	// Headers
-	req.Header.Set("User-Agent", GetUserAgent())
+	req.Header.Set("User-Agent", c.userAgent())
 	req.Header.Set("Authorization", "Bearer "+BearerToken)
 	req.Header.Set("X-Csrf-Token", creds.Ct0)
 	req.Header.Set("Accept", "application/json")

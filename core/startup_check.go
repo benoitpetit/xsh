@@ -57,6 +57,7 @@ func (sc *StartupChecker) QuickCheckEndpoints() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	client.authRefreshAttempted = true // Don't refresh credentials during startup check
 	defer client.Close()
 
 	obsolete := []string{}

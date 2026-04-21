@@ -214,7 +214,7 @@ func makeUploadRequestWithTimeout(client *XClient, data url.Values, _ int) (map[
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", GetUserAgent())
+	req.Header.Set("User-Agent", client.userAgent())
 	req.Header.Set("Authorization", "Bearer "+BearerToken)
 	req.Header.Set("X-Csrf-Token", creds.Ct0)
 	req.Header.Set("Referer", BaseURL+"/compose/tweet")

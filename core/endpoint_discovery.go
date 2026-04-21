@@ -97,7 +97,7 @@ func createDiscoveryHTTPClient() *http.Client {
 		proxy = os.Getenv("TWITTER_PROXY")
 	}
 
-	client, err := newUTLSHTTPClient(proxy)
+	client, err := newUTLSHTTPClient(proxy, BestChromeTarget())
 	if err != nil {
 		// Fallback to standard client if uTLS fails
 		return &http.Client{

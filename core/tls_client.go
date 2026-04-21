@@ -7,14 +7,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	utls "github.com/refraction-networking/utls"
@@ -167,9 +165,10 @@ func (t *uTLSTransport) dialProxy(ctx context.Context, addr, host string) (net.C
 }
 
 // newUTLSHTTPClient creates an HTTP client with real TLS fingerprinting and HTTP/2 support
-func newUTLSHTTPClient(proxy string) (*http.Client, error) {
-	// Select a random Chrome version for rotation
-	chromeVersion := selectRandomChromeVersion()
+func newUTLSHTTPClient(proxy string, chromeVersion TLSFingerprintType) (*http.Client, error) {
+	if chromeVersion == "" {
+		chromeVersion = BestChromeTarget()
+	}
 
 	clientHelloID, ok := chromeClientHelloIDs[chromeVersion]
 	if !ok {
@@ -252,38 +251,9 @@ func getChromeCipherSuites() []uint16 {
 	}
 }
 
-// selectRandomChromeVersion returns a random Chrome version for rotation
-func selectRandomChromeVersion() TLSFingerprintType {
-	versions := []TLSFingerprintType{
-		Chrome127,
-		Chrome126,
-		Chrome124,
-		Chrome123,
-	}
-	return versions[rand.Intn(len(versions))]
-}
-
 // BestChromeTarget returns the best available Chrome target
 func BestChromeTarget() TLSFingerprintType {
 	return Chrome127
-}
-
-// chromeTargetMutex protects the current target
-var chromeTargetMutex sync.RWMutex
-var currentChromeTarget TLSFingerprintType = Chrome127
-
-// SyncChromeVersion updates the global Chrome version for headers
-func SyncChromeVersion(version TLSFingerprintType) {
-	chromeTargetMutex.Lock()
-	currentChromeTarget = version
-	chromeTargetMutex.Unlock()
-}
-
-// GetCurrentChromeTarget returns the current Chrome target for headers
-func GetCurrentChromeTarget() TLSFingerprintType {
-	chromeTargetMutex.RLock()
-	defer chromeTargetMutex.RUnlock()
-	return currentChromeTarget
 }
 
 // GetUserAgentForVersion returns a Chrome User-Agent string for the given version
@@ -308,8 +278,7 @@ func GetUserAgentForVersion(version TLSFingerprintType) string {
 
 // GetUserAgent returns the current User-Agent string
 func GetUserAgent() string {
-	target := GetCurrentChromeTarget()
-	return GetUserAgentForVersion(target)
+	return GetUserAgentForVersion(BestChromeTarget())
 }
 
 // GetPlatform returns the platform string for sec-ch-ua-platform
@@ -346,7 +315,11 @@ func GetPlatformVersion() string {
 
 // GetSecChUa returns the current sec-ch-ua header
 func GetSecChUa() string {
-	target := GetCurrentChromeTarget()
+	return GetSecChUaForVersion(BestChromeTarget())
+}
+
+// GetSecChUaForVersion returns the sec-ch-ua header for a specific version
+func GetSecChUaForVersion(target TLSFingerprintType) string {
 	ver := chromeVersionStrings[target]
 	if ver == "" {
 		ver = "127.0.0.0"
@@ -360,7 +333,11 @@ func GetSecChUa() string {
 
 // GetSecChUaFullVersionList returns the full version list header
 func GetSecChUaFullVersionList() string {
-	target := GetCurrentChromeTarget()
+	return GetSecChUaFullVersionListForVersion(BestChromeTarget())
+}
+
+// GetSecChUaFullVersionListForVersion returns the full version list header for a specific version
+func GetSecChUaFullVersionListForVersion(target TLSFingerprintType) string {
 	ver := chromeVersionStrings[target]
 	if ver == "" {
 		ver = "127.0.0.0"
