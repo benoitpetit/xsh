@@ -4,6 +4,7 @@ package browser
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -63,7 +64,7 @@ func ExtractFromAllBrowsers() (*core.AuthCredentials, string, error) {
 // ExtractFromAllBrowsersVerbose tries all browsers with verbose output
 func ExtractFromAllBrowsersVerbose(verbose bool) (*core.AuthCredentials, string, error) {
 	availableBrowsers := ListAvailableBrowsers()
-	
+
 	if len(availableBrowsers) == 0 {
 		return nil, "", fmt.Errorf("no supported browsers found")
 	}
@@ -82,14 +83,22 @@ func ExtractFromAllBrowsersVerbose(verbose bool) (*core.AuthCredentials, string,
 		}(browser)
 	}
 
-	// Return the first successful result
+	// Return the first successful result, but retain failures so the caller can
+	// explain why automatic detection did not work.
+	failures := make([]string, 0, len(availableBrowsers))
 	for i := 0; i < len(availableBrowsers); i++ {
 		result := <-results
 		if result.Error == nil && result.Creds != nil && result.Creds.IsValid() {
 			return result.Creds, result.Browser, nil
 		}
+		if result.Error != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", result.Browser, result.Error))
+		}
 	}
 
+	if len(failures) > 0 {
+		return nil, "", fmt.Errorf("could not extract valid cookies from any browser (%s)", strings.Join(failures, "; "))
+	}
 	return nil, "", fmt.Errorf("could not extract valid cookies from any browser")
 }
 
@@ -142,7 +151,14 @@ func isBraveAvailable() bool {
 	case "darwin":
 		return isPathExists("/Applications/Brave Browser.app")
 	case "linux":
-		return isCommandExists("brave") || isPathExists(os.Getenv("HOME")+"/.config/BraveSoftware")
+		configDir, err := os.UserConfigDir()
+		if err != nil || configDir == "" {
+			configDir = filepath.Join(os.Getenv("HOME"), ".config")
+		}
+		if !isCommandExists("brave") && !isPathExists(filepath.Join(configDir, "BraveSoftware")) {
+			return false
+		}
+		return hasExistingCookieDatabase(discoverChromiumCookiePaths(filepath.Join(configDir, "BraveSoftware/Brave-Browser")))
 	}
 	return false
 }
@@ -180,7 +196,7 @@ func isFirefoxAvailable() bool {
 	case "darwin":
 		return isPathExists(os.Getenv("HOME") + "/Library/Application Support/Firefox")
 	case "linux":
-		return isCommandExists("firefox") || isPathExists(os.Getenv("HOME")+"/.mozilla/firefox")
+		return isCommandExists("firefox") && len(GetDefaultFirefoxPaths()) > 0
 	}
 	return false
 }
@@ -207,8 +223,7 @@ func extractFromBraveVerbose(verbose bool) (*core.AuthCredentials, error) {
 		home, _ := os.UserHomeDir()
 		path = home + "/Library/Application Support/BraveSoftware/Brave-Browser/Default/Cookies"
 	case "linux":
-		home, _ := os.UserHomeDir()
-		path = home + "/.config/BraveSoftware/Brave-Browser/Default/Cookies"
+		path = linuxChromiumCookiePath("brave")
 	}
 
 	extractor := &ChromeCookieExtractor{Name: "Brave", Path: path}
@@ -229,8 +244,7 @@ func extractFromEdgeVerbose(verbose bool) (*core.AuthCredentials, error) {
 		home, _ := os.UserHomeDir()
 		path = home + "/Library/Application Support/Microsoft Edge/Default/Cookies"
 	case "linux":
-		home, _ := os.UserHomeDir()
-		path = home + "/.config/microsoft-edge/Default/Cookies"
+		path = linuxChromiumCookiePath("edge")
 	}
 
 	extractor := &ChromeCookieExtractor{Name: "Edge", Path: path}
@@ -251,8 +265,7 @@ func extractFromChromiumVerbose(verbose bool) (*core.AuthCredentials, error) {
 		home, _ := os.UserHomeDir()
 		path = home + "/Library/Application Support/Chromium/Default/Cookies"
 	case "linux":
-		home, _ := os.UserHomeDir()
-		path = home + "/.config/chromium/Default/Cookies"
+		path = linuxChromiumCookiePath("chromium")
 	}
 
 	extractor := &ChromeCookieExtractor{Name: "Chromium", Path: path}

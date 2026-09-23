@@ -61,19 +61,21 @@ func GetDefaultChromePaths() []string {
 			filepath.Join(localAppData, "Chromium/User Data/Default/Cookies"),
 		}
 	case "linux":
-		paths := []string{
-			// Standard Chrome paths
-			filepath.Join(home, ".config/google-chrome/Default/Cookies"),
-			filepath.Join(home, ".config/google-chrome/Profile 1/Cookies"),
-			filepath.Join(home, ".config/google-chrome/Profile 2/Cookies"),
-			filepath.Join(home, ".config/chromium/Default/Cookies"),
-			filepath.Join(home, ".config/BraveSoftware/Brave-Browser/Default/Cookies"),
-			filepath.Join(home, ".config/microsoft-edge/Default/Cookies"),
-			// Flatpak Chrome
-			filepath.Join(home, ".var/app/com.google.Chrome/config/google-chrome/Default/Cookies"),
-			filepath.Join(home, ".var/app/com.google.Chrome/config/google-chrome/Profile 1/Cookies"),
-			// Snap Chrome (Ubuntu)
-			filepath.Join(home, "snap/chromium/common/chromium/Default/Cookies"),
+		configDir, err := os.UserConfigDir()
+		if err != nil || configDir == "" {
+			configDir = filepath.Join(home, ".config")
+		}
+
+		paths := []string{}
+		for _, userDataDir := range []string{
+			filepath.Join(configDir, "google-chrome"),
+			filepath.Join(configDir, "chromium"),
+			filepath.Join(configDir, "BraveSoftware/Brave-Browser"),
+			filepath.Join(configDir, "microsoft-edge"),
+			filepath.Join(home, ".var/app/com.google.Chrome/config/google-chrome"),
+			filepath.Join(home, "snap/chromium/common/chromium"),
+		} {
+			paths = append(paths, discoverChromiumCookiePaths(userDataDir)...)
 		}
 		return paths
 	}
@@ -171,6 +173,7 @@ func (c *ChromeCookieExtractor) ExtractCookiesVerbose(verbose bool) (*core.AuthC
 
 	cookies := make(map[string]string)
 	var authToken, ct0 string
+	var authTokenDecryptErr, ct0DecryptErr error
 	cookieCount := 0
 
 	for rows.Next() {
@@ -195,6 +198,12 @@ func (c *ChromeCookieExtractor) ExtractCookiesVerbose(verbose bool) (*core.AuthC
 				}
 				// Fallback to plain value
 				decryptedValue = cookie.Value
+				if cookie.Name == "auth_token" {
+					authTokenDecryptErr = err
+				}
+				if cookie.Name == "ct0" {
+					ct0DecryptErr = err
+				}
 			}
 		} else {
 			decryptedValue = cookie.Value
@@ -233,6 +242,9 @@ func (c *ChromeCookieExtractor) ExtractCookiesVerbose(verbose bool) (*core.AuthC
 	}
 
 	if authToken == "" || ct0 == "" {
+		if authTokenDecryptErr != nil || ct0DecryptErr != nil {
+			return nil, fmt.Errorf("could not decrypt Chrome authentication cookies; Chrome Safe Storage is unavailable (install/configure a Secret Service keyring and ensure the session is unlocked): auth_token=%v, ct0=%v", authTokenDecryptErr != nil, ct0DecryptErr != nil)
+		}
 		return nil, fmt.Errorf("auth_token or ct0 not found in Chrome cookies. Make sure you're logged into x.com in Chrome")
 	}
 
@@ -451,6 +463,22 @@ func aesCBCDecrypt(key, iv, ciphertext []byte) (string, error) {
 
 // getChromePasswordFromLibsecret attempts to retrieve Chrome's password from libsecret
 func getChromePasswordFromLibsecret() (string, error) {
+	// secret-tool is the native Secret Service client and does not require a
+	// Python package. Chrome distributions use slightly different attributes,
+	// so try the common variants before falling back to the Python APIs.
+	lookups := [][]string{
+		{"application", "chrome"},
+		{"application", "google-chrome"},
+		{"application", "chromium"},
+		{"service", "Chrome Safe Storage"},
+		{"label", "Chrome Safe Storage"},
+	}
+	for _, lookup := range lookups {
+		if password, err := runSecretToolLookup(lookup...); err == nil && password != "" {
+			return password, nil
+		}
+	}
+
 	// Method 1: Try using Python with secretstorage
 	pythonScript := `
 import sys
@@ -460,7 +488,9 @@ try:
     collection = secretstorage.get_default_collection(conn)
     for item in collection.get_all_items():
         attrs = item.get_attributes()
-        if attrs.get('application') == 'chrome' and 'Safe Storage' in item.get_label():
+        values = ' '.join(str(value).lower() for value in attrs.values())
+        label = item.get_label().lower()
+        if ('chrome' in values or 'chromium' in values or 'safe storage' in label) and ('safe storage' in label or 'chrome' in values or 'chromium' in values):
             secret = item.get_secret()
             if secret:
                 if isinstance(secret, bytes):
@@ -536,6 +566,16 @@ except Exception as e:
 	}
 
 	return "", fmt.Errorf("could not retrieve password from libsecret (tried python3-secretstorage, secret-tool, and dbus)")
+}
+
+func runSecretToolLookup(attributes ...string) (string, error) {
+	args := []string{"lookup"}
+	args = append(args, attributes...)
+	output, err := exec.Command("secret-tool", args...).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 // copyFile copies a file from src to dst

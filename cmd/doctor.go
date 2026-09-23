@@ -15,9 +15,10 @@ import (
 
 // doctorCmd runs diagnostics
 type CheckResult struct {
-	Name   string `json:"name"`
-	Status string `json:"status"` // "pass", "fail", "warn"
-	Detail string `json:"detail"`
+	Name        string `json:"name"`
+	Status      string `json:"status"` // "pass", "fail", "warn"
+	Detail      string `json:"detail"`
+	Remediation string `json:"remediation,omitempty"`
 }
 
 var doctorCmd = &cobra.Command{
@@ -58,51 +59,70 @@ func checkAuth() CheckResult {
 	creds, err := core.GetCredentials("")
 	if err != nil {
 		return CheckResult{
-			Name:   "Auth",
-			Status: "fail",
-			Detail: err.Error(),
+			Name:        "Auth",
+			Status:      "fail",
+			Detail:      err.Error(),
+			Remediation: "xsh auth login",
 		}
 	}
 
 	if !creds.IsValid() {
 		return CheckResult{
-			Name:   "Auth",
-			Status: "fail",
-			Detail: "Invalid credentials",
+			Name:        "Auth",
+			Status:      "fail",
+			Detail:      "Invalid credentials",
+			Remediation: "xsh auth login",
 		}
 	}
 
+	tokenHint := creds.AuthToken
+	if len(tokenHint) > 8 {
+		tokenHint = tokenHint[:8]
+	}
 	return CheckResult{
 		Name:   "Auth",
 		Status: "pass",
-		Detail: fmt.Sprintf("Valid credentials (token: %s...)", creds.AuthToken[:8]),
+		Detail: fmt.Sprintf("Valid credentials (token: %s...)", tokenHint),
 	}
 }
 
 func checkEndpoints() CheckResult {
-	endpoints := core.GetGraphQLEndpoints()
-	count := len(endpoints)
+	return endpointCheckResult(core.GetEndpointManager().GetStats())
+}
 
-	if count == 0 {
+func endpointCheckResult(stats core.EndpointStats) CheckResult {
+
+	if stats.TotalCount == 0 {
 		return CheckResult{
-			Name:   "Endpoints",
-			Status: "warn",
-			Detail: "No cached endpoints found",
+			Name:        "Endpoints",
+			Status:      "warn",
+			Detail:      "No endpoints available",
+			Remediation: "xsh endpoints refresh",
 		}
 	}
 
-	if count < 10 {
+	if stats.DynamicCount == 0 {
 		return CheckResult{
-			Name:   "Endpoints",
-			Status: "warn",
-			Detail: fmt.Sprintf("Only %d endpoints cached", count),
+			Name:        "Endpoints",
+			Status:      "warn",
+			Detail:      fmt.Sprintf("Using %d static fallback endpoints; dynamic discovery has not completed", stats.StaticCount),
+			Remediation: "xsh endpoints refresh",
+		}
+	}
+
+	if stats.DynamicCount < 10 {
+		return CheckResult{
+			Name:        "Endpoints",
+			Status:      "warn",
+			Detail:      fmt.Sprintf("Only %d dynamically discovered endpoints available", stats.DynamicCount),
+			Remediation: "xsh endpoints refresh",
 		}
 	}
 
 	return CheckResult{
 		Name:   "Endpoints",
 		Status: "pass",
-		Detail: fmt.Sprintf("%d endpoints available", count),
+		Detail: fmt.Sprintf("%d dynamic endpoints available (%d total with fallbacks)", stats.DynamicCount, stats.TotalCount),
 	}
 }
 
@@ -111,9 +131,10 @@ func checkNetwork() CheckResult {
 	resp, err := client.Get("https://x.com")
 	if err != nil {
 		return CheckResult{
-			Name:   "Network",
-			Status: "fail",
-			Detail: fmt.Sprintf("Cannot reach x.com: %v", err),
+			Name:        "Network",
+			Status:      "fail",
+			Detail:      fmt.Sprintf("Cannot reach x.com: %v", err),
+			Remediation: "verify DNS/network access, then run: xsh doctor",
 		}
 	}
 	defer resp.Body.Close()
@@ -129,9 +150,10 @@ func checkTLS() CheckResult {
 	client, err := core.NewXClient(nil, "", "")
 	if err != nil {
 		return CheckResult{
-			Name:   "TLS",
-			Status: "warn",
-			Detail: fmt.Sprintf("TLS client initialization: %v", err),
+			Name:        "TLS",
+			Status:      "warn",
+			Detail:      fmt.Sprintf("TLS client initialization: %v", err),
+			Remediation: "check proxy/TLS configuration, then run: xsh doctor",
 		}
 	}
 	defer client.Close()
@@ -181,10 +203,19 @@ func printChecks(checks []CheckResult) {
 		}
 	}
 
+	for _, c := range checks {
+		if c.Remediation != "" && c.Status != "pass" {
+			fmt.Println(display.Info(fmt.Sprintf("%s fix: %s", c.Name, c.Remediation)))
+		}
+	}
+	if warn > 0 || fail > 0 {
+		fmt.Println()
+	}
+
 	if fail > 0 {
 		fmt.Println(display.Error(fmt.Sprintf("Found %d issue(s)", fail)))
 	} else if warn > 0 {
-		fmt.Println(display.Warning(fmt.Sprintf("All checks passed with %d warning(s)", warn)))
+		fmt.Println(display.Warning(fmt.Sprintf("Completed with %d warning(s)", warn)))
 	} else {
 		fmt.Println(display.Success("All checks passed!"))
 	}

@@ -52,8 +52,7 @@ JS bundles that your browser downloads when visiting x.com.`,
 
 		// Invalidate cache if force flag is set
 		if autoUpdateForce {
-			fmt.Println(display.Action("Clearing", "endpoint cache"))
-			core.InvalidateCache()
+			fmt.Println(display.Action("Forcing", "fresh endpoint discovery"))
 			fmt.Println()
 		}
 
