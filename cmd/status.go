@@ -3,11 +3,12 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
+	"github.com/spf13/cobra"
 )
 
 // statusCmd shows system status including endpoint monitoring
@@ -36,12 +37,12 @@ var statusCmd = &cobra.Command{
 
 // systemStatus holds all status information
 type systemStatus struct {
-	Authenticated   bool               `json:"authenticated"`
-	Account         string             `json:"account,omitempty"`
-	EndpointHealth  endpointHealth     `json:"endpoint_health"`
-	CacheStatus     cacheStatus        `json:"cache_status"`
-	Connectivity    connectivityStatus `json:"connectivity"`
-	Timestamp       time.Time          `json:"timestamp"`
+	Authenticated  bool               `json:"authenticated"`
+	Account        string             `json:"account,omitempty"`
+	EndpointHealth endpointHealth     `json:"endpoint_health"`
+	CacheStatus    cacheStatus        `json:"cache_status"`
+	Connectivity   connectivityStatus `json:"connectivity"`
+	Timestamp      time.Time          `json:"timestamp"`
 }
 
 type endpointHealth struct {
@@ -79,9 +80,9 @@ func collectSystemStatus(checkNow bool) *systemStatus {
 	stats := manager.GetStats()
 
 	status.CacheStatus = cacheStatus{
-		Valid:         stats.CacheAge < 24*time.Hour,
+		Valid:         stats.DynamicCount > 0 && stats.CacheAge < 24*time.Hour,
 		Age:           stats.CacheAge,
-		EndpointCount: stats.TotalCount,
+		EndpointCount: stats.DynamicCount,
 		FeatureCount:  stats.FeatureCount,
 	}
 
@@ -114,13 +115,12 @@ func collectSystemStatus(checkNow bool) *systemStatus {
 
 func checkConnectivity() connectivityStatus {
 	conn := connectivityStatus{
-		CanReachX:      true,
-		DiscoveryWorks: true,
+		CanReachX:      false,
+		DiscoveryWorks: false,
 	}
 
 	discovery, err := core.NewEndpointDiscovery(false)
 	if err != nil {
-		conn.DiscoveryWorks = false
 		conn.Message = "Endpoint discovery unavailable"
 		return conn
 	}
@@ -130,11 +130,43 @@ func checkConnectivity() connectivityStatus {
 
 	_, err = discovery.GetCachedEndpoints(ctx)
 	if err != nil {
+		conn.CanReachX = !isDiscoveryNetworkError(err)
 		conn.DiscoveryWorks = false
-		conn.Message = fmt.Sprintf("Cannot reach X.com: %v", err)
+		if conn.CanReachX {
+			conn.Message = fmt.Sprintf("X.com reachable, but endpoint discovery failed: %v", err)
+		} else {
+			conn.Message = fmt.Sprintf("Cannot reach X.com: %v", err)
+		}
+		return conn
 	}
 
+	conn.CanReachX = true
+	conn.DiscoveryWorks = true
+
 	return conn
+}
+
+func isDiscoveryNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errText := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"no such host",
+		"temporary failure in name resolution",
+		"network is unreachable",
+		"connection refused",
+		"connection reset",
+		"i/o timeout",
+		"context deadline exceeded",
+		"tls handshake timeout",
+		"http request failed",
+	} {
+		if strings.Contains(errText, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func displayStatus(s *systemStatus) {
@@ -176,7 +208,11 @@ func displayStatus(s *systemStatus) {
 	} else {
 		fmt.Println(display.KeyValue("Status:", display.Error("Expired")))
 	}
-	fmt.Println(display.KeyValue("Age:", s.CacheStatus.Age.Round(time.Second).String()))
+	if s.CacheStatus.Age > 0 {
+		fmt.Println(display.KeyValue("Age:", s.CacheStatus.Age.Round(time.Second).String()))
+	} else {
+		fmt.Println(display.KeyValue("Age:", "never"))
+	}
 	fmt.Println(display.KeyValue("Endpoints:", fmt.Sprintf("%d", s.CacheStatus.EndpointCount)))
 	fmt.Println(display.KeyValue("Features:", fmt.Sprintf("%d", s.CacheStatus.FeatureCount)))
 	fmt.Println()

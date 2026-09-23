@@ -59,6 +59,9 @@ Get started:
 
 // Execute runs the root command
 func Execute() {
+	// Some command registrations happen in separate init functions. Ensure the
+	// final command tree is grouped after all registrations are complete.
+	ensureCommandGroups()
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(core.ExitError)

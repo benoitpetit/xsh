@@ -112,6 +112,7 @@ func (em *EndpointMonitor) performCheck() {
 	}
 
 	status.EndpointsCount = len(cache.Endpoints)
+	criticalCount := len(criticalEndpointsForCache(cache))
 
 	// Check if cache is stale
 	if cache.IsStale() {
@@ -129,7 +130,7 @@ func (em *EndpointMonitor) performCheck() {
 		status.NeedsUpdate = true
 
 		// Auto-update if more than 30% of critical endpoints fail
-		if float64(len(failedEndpoints))/float64(len(criticalEndpoints)) > 0.3 {
+		if criticalCount > 0 && float64(len(failedEndpoints))/float64(criticalCount) > 0.3 {
 			if em.verbose {
 				log.Printf("[EndpointMonitor] Auto-updating endpoints due to high failure rate")
 			}
@@ -147,16 +148,6 @@ func (em *EndpointMonitor) performCheck() {
 	em.updateStatus(status)
 }
 
-// criticalEndpoints are endpoints to test for health
-var criticalEndpoints = []string{
-	"HomeTimeline",
-	"HomeLatestTimeline",
-	"UserByScreenName",
-	"SearchTimeline",
-	"TweetDetail",
-	"UserTweets",
-}
-
 // testCriticalEndpoints tests a list of critical endpoints
 func (em *EndpointMonitor) testCriticalEndpoints(ctx context.Context, cache *EndpointCache) []string {
 	var failed []string
@@ -166,7 +157,8 @@ func (em *EndpointMonitor) testCriticalEndpoints(ctx context.Context, cache *End
 	// Semaphore for concurrent tests
 	sem := make(chan struct{}, 3)
 
-	for _, op := range criticalEndpoints {
+	operations := criticalEndpointsForCache(cache)
+	for _, op := range operations {
 		wg.Add(1)
 		go func(operation string) {
 			defer wg.Done()

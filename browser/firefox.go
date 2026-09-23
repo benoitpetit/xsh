@@ -42,8 +42,16 @@ func GetDefaultFirefoxPaths() []string {
 		profilesDir := filepath.Join(os.Getenv("APPDATA"), "Mozilla/Firefox/Profiles")
 		paths = findFirefoxProfiles(profilesDir)
 	case "linux":
-		profilesDir := filepath.Join(home, ".mozilla/firefox")
-		paths = findFirefoxProfiles(profilesDir)
+		// Firefox follows XDG_CONFIG_HOME on Linux. Keep the legacy path as a
+		// fallback for installations created before the XDG layout was used.
+		profileDirs := []string{}
+		if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
+			profileDirs = append(profileDirs, filepath.Join(configDir, "mozilla/firefox"))
+		}
+		profileDirs = append(profileDirs, filepath.Join(home, ".mozilla/firefox"))
+		for _, profilesDir := range uniqueStrings(profileDirs) {
+			paths = append(paths, findFirefoxProfiles(profilesDir)...)
+		}
 	}
 
 	return paths
@@ -59,7 +67,7 @@ func findFirefoxProfiles(profilesDir string) []string {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() && strings.HasSuffix(entry.Name(), ".default") || strings.HasSuffix(entry.Name(), ".default-release") {
+		if entry.IsDir() && (strings.HasSuffix(entry.Name(), ".default") || strings.HasSuffix(entry.Name(), ".default-release")) {
 			cookiePath := filepath.Join(profilesDir, entry.Name(), "cookies.sqlite")
 			if _, err := os.Stat(cookiePath); err == nil {
 				paths = append(paths, cookiePath)

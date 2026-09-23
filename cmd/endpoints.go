@@ -6,10 +6,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/spf13/cobra"
 )
 
 // endpointsCmd represents the endpoints command
@@ -137,8 +137,6 @@ The process may take 10-30 seconds depending on network speed.`,
 
 		start := time.Now()
 
-		core.InvalidateCache()
-
 		if err := core.RefreshEndpoints(); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Refresh failed: %v", err)))
 			os.Exit(core.ExitError)
@@ -185,7 +183,7 @@ var endpointsStatusCmd = &cobra.Command{
 			cache, err := discovery.GetCachedEndpoints(ctx)
 			if err != nil {
 				healthStatus = fmt.Sprintf("Cache error: %v", err)
-				canDiscover = true
+				canDiscover = false
 			} else if cache.IsValid() {
 				healthStatus = "OK"
 				canDiscover = true
@@ -207,11 +205,21 @@ var endpointsStatusCmd = &cobra.Command{
 		fmt.Println(display.Title("Endpoint System Status"))
 		fmt.Println(display.KeyValue("Health:", display.StatusBadge(healthStatus)))
 		fmt.Println(display.KeyValue("Auto-discover:", fmt.Sprintf("%v", canDiscover)))
-		fmt.Println(display.KeyValue("Cached endpoints:", fmt.Sprintf("%d", stats.TotalCount)))
+		fmt.Println(display.KeyValue("Available endpoints:", fmt.Sprintf("%d", stats.TotalCount)))
+		fmt.Println(display.KeyValue("Dynamic endpoints:", fmt.Sprintf("%d", stats.DynamicCount)))
+		fmt.Println(display.KeyValue("Static fallbacks:", fmt.Sprintf("%d", stats.StaticCount)))
 		fmt.Println(display.KeyValue("Cached features:", fmt.Sprintf("%d", stats.FeatureCount)))
-		fmt.Println(display.KeyValue("Cache age:", stats.CacheAge.Round(time.Second).String()))
+		if stats.CacheAge > 0 {
+			fmt.Println(display.KeyValue("Cache age:", stats.CacheAge.Round(time.Second).String()))
+		} else {
+			fmt.Println(display.KeyValue("Cache age:", "never"))
+		}
 
-		if stats.CacheAge > 24*time.Hour {
+		if stats.DynamicCount == 0 {
+			fmt.Println()
+			fmt.Println(display.Warning("No dynamically discovered endpoints are available; static fallbacks are in use"))
+			fmt.Println(display.Info("Run 'xsh endpoints refresh' when network access to X.com is available"))
+		} else if stats.CacheAge > 24*time.Hour {
 			fmt.Println()
 			fmt.Println(display.Warning("Cache is old. Consider running 'xsh endpoints refresh'"))
 		}

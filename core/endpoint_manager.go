@@ -46,19 +46,19 @@ func (em *EndpointManager) getCache() *EndpointCache {
 	if em.discovery == nil {
 		return nil
 	}
-	
+
 	// Try to get from memory cache first
 	if cache := em.discovery.GetMemoryCache(); cache != nil && cache.IsValid() {
 		return cache
 	}
-	
+
 	// Try to load from disk
 	cache, err := em.discovery.LoadCache()
 	if err == nil && cache.IsValid() {
 		em.discovery.UpdateMemoryCache(cache)
 		return cache
 	}
-	
+
 	// Return empty cache that will trigger fallback
 	return &EndpointCache{
 		Endpoints:  make(map[string]string),
@@ -70,14 +70,14 @@ func (em *EndpointManager) getCache() *EndpointCache {
 // GetEndpoint returns the endpoint for an operation, with auto-discovery
 func (em *EndpointManager) GetEndpoint(operation string) string {
 	cache := em.getCache()
-	
+
 	// Check dynamic cache first
 	if cache != nil {
 		if endpoint, ok := cache.Endpoints[operation]; ok {
 			return endpoint
 		}
 	}
-	
+
 	// Check static fallback
 	if endpoint, ok := GraphQLEndpoints[operation]; ok {
 		if em.verbose {
@@ -85,14 +85,14 @@ func (em *EndpointManager) GetEndpoint(operation string) string {
 		}
 		return endpoint
 	}
-	
+
 	return operation
 }
 
 // GetEndpointWithRefresh returns endpoint, refreshing if necessary
 func (em *EndpointManager) GetEndpointWithRefresh(ctx context.Context, operation string) (string, error) {
 	endpoint := em.GetEndpoint(operation)
-	
+
 	// Check if we need to refresh
 	cache := em.getCache()
 	if cache == nil || !cache.IsValid() {
@@ -100,23 +100,27 @@ func (em *EndpointManager) GetEndpointWithRefresh(ctx context.Context, operation
 			if em.verbose {
 				log.Println("[EndpointManager] Cache expired, refreshing endpoints...")
 			}
-			
+
 			if _, err := em.discovery.DiscoverEndpoints(ctx); err != nil {
 				// Return existing endpoint even if refresh fails
 				if em.verbose {
 					log.Printf("[EndpointManager] Refresh failed, using cached: %v", err)
 				}
+			} else {
+				// Resolve again so this request uses the freshly discovered ID,
+				// rather than the fallback selected before the refresh.
+				endpoint = em.GetEndpoint(operation)
 			}
 		}
 	}
-	
+
 	return endpoint, nil
 }
 
 // GetOpFeatures returns feature switches for a specific operation
 func (em *EndpointManager) GetOpFeatures(operation string) map[string]bool {
 	result := make(map[string]bool)
-	
+
 	cache := em.getCache()
 	if cache == nil {
 		// Return default features
@@ -125,7 +129,7 @@ func (em *EndpointManager) GetOpFeatures(operation string) map[string]bool {
 		}
 		return result
 	}
-	
+
 	keys, ok := cache.OpFeatures[operation]
 	if !ok || len(keys) == 0 {
 		// Return default features
@@ -134,7 +138,7 @@ func (em *EndpointManager) GetOpFeatures(operation string) map[string]bool {
 		}
 		return result
 	}
-	
+
 	// Get specific features for this operation
 	for _, key := range keys {
 		if val, ok := cache.Features[key]; ok {
@@ -143,7 +147,7 @@ func (em *EndpointManager) GetOpFeatures(operation string) map[string]bool {
 			result[key] = true // Default to true
 		}
 	}
-	
+
 	return result
 }
 
@@ -152,31 +156,31 @@ func (em *EndpointManager) RefreshEndpoints(ctx context.Context) error {
 	if em.discovery == nil {
 		return fmt.Errorf("discovery not available")
 	}
-	
+
 	_, err := em.discovery.DiscoverEndpoints(ctx)
 	if err != nil {
 		return fmt.Errorf("discovery failed: %w", err)
 	}
-	
+
 	if em.verbose {
 		cache := em.getCache()
 		if cache != nil {
 			log.Printf("[EndpointManager] Refreshed %d endpoints", len(cache.Endpoints))
 		}
 	}
-	
+
 	return nil
 }
 
 // CheckAndUpdate checks if endpoints need updating and updates if necessary
 func (em *EndpointManager) CheckAndUpdate(ctx context.Context) error {
 	cache := em.getCache()
-	
+
 	// Check if update needed (cache expired)
 	if cache == nil || !cache.IsValid() {
 		return em.RefreshEndpoints(ctx)
 	}
-	
+
 	return nil
 }
 
@@ -185,7 +189,7 @@ func (em *EndpointManager) UpdateEndpoint(operation, endpoint string) {
 	if em.discovery == nil {
 		return
 	}
-	
+
 	// Update in discovery cache
 	cache := em.getCache()
 	if cache == nil {
@@ -196,17 +200,17 @@ func (em *EndpointManager) UpdateEndpoint(operation, endpoint string) {
 			Timestamp:  time.Now(),
 		}
 	}
-	
+
 	cache.Endpoints[operation] = endpoint
 	cache.Timestamp = time.Now()
-	
+
 	// Save to disk
 	if err := em.discovery.SaveCache(cache); err != nil {
 		log.Printf("[EndpointManager] Warning: failed to save cache: %v", err)
 	}
-	
+
 	em.discovery.UpdateMemoryCache(cache)
-	
+
 	if em.verbose {
 		log.Printf("[EndpointManager] Updated endpoint %s -> %s", operation, endpoint)
 	}
@@ -217,32 +221,32 @@ func (em *EndpointManager) ResetEndpoint(operation string) {
 	if em.discovery == nil {
 		return
 	}
-	
+
 	cache := em.getCache()
 	if cache == nil {
 		return
 	}
-	
+
 	delete(cache.Endpoints, operation)
 	cache.Timestamp = time.Now()
-	
+
 	// Save to disk
 	if err := em.discovery.SaveCache(cache); err != nil {
 		log.Printf("[EndpointManager] Warning: failed to save cache: %v", err)
 	}
-	
+
 	em.discovery.UpdateMemoryCache(cache)
 }
 
 // ListEndpoints returns all current endpoints
 func (em *EndpointManager) ListEndpoints() map[string]string {
 	result := make(map[string]string)
-	
+
 	// Start with static fallbacks
 	for k, v := range GraphQLEndpoints {
 		result[k] = v
 	}
-	
+
 	// Override with dynamic endpoints
 	cache := em.getCache()
 	if cache != nil {
@@ -250,34 +254,52 @@ func (em *EndpointManager) ListEndpoints() map[string]string {
 			result[k] = v
 		}
 	}
-	
+
 	return result
 }
 
 // GetStats returns statistics about endpoints
 func (em *EndpointManager) GetStats() EndpointStats {
 	cache := em.getCache()
-	
+
 	if cache == nil {
 		return EndpointStats{
 			TotalCount:   len(GraphQLEndpoints),
+			StaticCount:  len(GraphQLEndpoints),
+			DynamicCount: 0,
 			FeatureCount: len(DefaultFeatures),
 			LastUpdated:  time.Time{},
 			CacheAge:     0,
 		}
 	}
-	
+
+	staticCount := 0
+	for operation := range GraphQLEndpoints {
+		if _, ok := cache.Endpoints[operation]; !ok {
+			staticCount++
+		}
+	}
+
+	cacheAge := time.Duration(0)
+	if !cache.Timestamp.IsZero() {
+		cacheAge = time.Since(cache.Timestamp)
+	}
+
 	return EndpointStats{
-		TotalCount:   len(cache.Endpoints),
+		TotalCount:   staticCount + len(cache.Endpoints),
+		StaticCount:  staticCount,
+		DynamicCount: len(cache.Endpoints),
 		FeatureCount: len(cache.Features),
 		LastUpdated:  cache.Timestamp,
-		CacheAge:     time.Since(cache.Timestamp),
+		CacheAge:     cacheAge,
 	}
 }
 
 // EndpointStats represents endpoint statistics
 type EndpointStats struct {
 	TotalCount   int           `json:"total_count"`
+	StaticCount  int           `json:"static_count"`
+	DynamicCount int           `json:"dynamic_count"`
 	FeatureCount int           `json:"feature_count"`
 	LastUpdated  time.Time     `json:"last_updated"`
 	CacheAge     time.Duration `json:"cache_age"`
@@ -286,19 +308,19 @@ type EndpointStats struct {
 // CheckEndpoint checks if an endpoint is valid
 func (em *EndpointManager) CheckEndpoint(operation string) (bool, string) {
 	cache := em.getCache()
-	
+
 	// Check if using dynamic endpoint
 	isDynamic := false
 	if cache != nil {
 		_, isDynamic = cache.Endpoints[operation]
 	}
-	
+
 	endpoint := em.GetEndpoint(operation)
-	
+
 	if !isDynamic {
 		return false, fmt.Sprintf("Using static fallback: %s", endpoint)
 	}
-	
+
 	return true, fmt.Sprintf("Using dynamic: %s", endpoint)
 }
 
@@ -341,7 +363,7 @@ func IsEndpointObsolete(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	errStr := strings.ToLower(err.Error())
 	indicators := []string{
 		"query not found",
@@ -352,13 +374,13 @@ func IsEndpointObsolete(err error) bool {
 		"graphql endpoint",
 		"operation not found",
 	}
-	
+
 	for _, indicator := range indicators {
 		if strings.Contains(errStr, indicator) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
