@@ -18,6 +18,14 @@ type ListInfo struct {
 	IsPinned        bool   `json:"is_pinned"`
 }
 
+// ListUpdate contains only fields explicitly selected for a list update.
+// Pointers preserve the difference between an omitted field and false/empty.
+type ListUpdate struct {
+	Name        *string
+	Description *string
+	IsPrivate   *bool
+}
+
 // GetUserLists fetches the authenticated user's lists
 func GetUserLists(client *XClient) ([]ListInfo, error) {
 	lists := []ListInfo{}
@@ -148,6 +156,21 @@ func CreateList(client *XClient, name, description string, isPrivate bool) (map[
 		"description": description,
 	}
 	return client.GraphQLPost("CreateList", variables)
+}
+
+// UpdateList updates the explicitly supplied metadata for a list.
+func UpdateList(client *XClient, listID string, update ListUpdate) (map[string]interface{}, error) {
+	variables := map[string]interface{}{"listId": listID}
+	if update.Name != nil {
+		variables["name"] = *update.Name
+	}
+	if update.Description != nil {
+		variables["description"] = *update.Description
+	}
+	if update.IsPrivate != nil {
+		variables["isPrivate"] = *update.IsPrivate
+	}
+	return client.GraphQLPost("UpdateList", variables)
 }
 
 // DeleteList deletes a list

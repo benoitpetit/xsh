@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
@@ -193,6 +194,78 @@ var listInfoCmd = &cobra.Command{
 			os.Exit(core.ExitError)
 		}
 		output(list, func() { fmt.Println(display.FormatLists([]core.ListInfo{*list})) })
+	},
+}
+
+// listUpdateCmd updates list metadata with an explicit confirmation.
+var listUpdateCmd = &cobra.Command{
+	Use:   "update <list-id>",
+	Short: "Update list metadata",
+	Long:  "Update list metadata. Supply at least one of --name, --description, or --private.",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		name, _ := cmd.Flags().GetString("name")
+		description, _ := cmd.Flags().GetString("description")
+		private, _ := cmd.Flags().GetBool("private")
+		force, _ := cmd.Flags().GetBool("force")
+
+		changed := cmd.Flags().Changed("name") || cmd.Flags().Changed("description") || cmd.Flags().Changed("private")
+		if !changed {
+			fmt.Println(display.Error("At least one update flag is required: --name, --description, or --private"))
+			os.Exit(core.ExitError)
+		}
+		if isJSONMode() && !force {
+			fmt.Println(display.Error("JSON mode requires --force for list updates"))
+			os.Exit(core.ExitError)
+		}
+
+		fields := make([]string, 0, 3)
+		update := core.ListUpdate{}
+		if cmd.Flags().Changed("name") {
+			update.Name = &name
+			fields = append(fields, "name")
+		}
+		if cmd.Flags().Changed("description") {
+			update.Description = &description
+			fields = append(fields, "description")
+		}
+		if cmd.Flags().Changed("private") {
+			update.IsPrivate = &private
+			fields = append(fields, "private")
+		}
+
+		if !force {
+			fmt.Printf("Update list %s (%s)? [y/N] ", args[0], strings.Join(fields, ", "))
+			var response string
+			_, _ = fmt.Scanln(&response)
+			if response != "y" && response != "Y" {
+				fmt.Println(display.Warning("Cancelled"))
+				return
+			}
+		}
+
+		client, err := getClient("")
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
+			os.Exit(core.ExitAuthError)
+		}
+		defer client.Close()
+
+		_, err = core.UpdateList(client, args[0], update)
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
+			os.Exit(core.ExitError)
+		}
+
+		result := map[string]interface{}{
+			"action":  "update",
+			"list_id": args[0],
+			"fields":  fields,
+			"status":  "success",
+		}
+		output(result, func() {
+			fmt.Println(display.Success(fmt.Sprintf("Updated list %s (%s)", args[0], strings.Join(fields, ", "))))
+		})
 	},
 }
 
@@ -388,6 +461,7 @@ func init() {
 	listsCmd.AddCommand(listMembersCmd)
 	listsCmd.AddCommand(listInfoCmd)
 	listsCmd.AddCommand(listMembershipsCmd)
+	listsCmd.AddCommand(listUpdateCmd)
 	listsCmd.AddCommand(listAddMemberCmd)
 	listsCmd.AddCommand(listRemoveMemberCmd)
 	listsCmd.AddCommand(listPinCmd)
@@ -400,4 +474,8 @@ func init() {
 	listDeleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 	listMembersCmd.Flags().IntP("count", "n", 20, "Number of members to fetch")
 	listMembershipsCmd.Flags().IntP("count", "n", 50, "Number of lists to fetch")
+	listUpdateCmd.Flags().String("name", "", "New list name")
+	listUpdateCmd.Flags().String("description", "", "New list description")
+	listUpdateCmd.Flags().Bool("private", false, "Set list visibility to private or public")
+	listUpdateCmd.Flags().BoolP("force", "f", false, "Skip confirmation (required with --json)")
 }
