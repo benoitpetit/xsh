@@ -79,6 +79,7 @@ func findInstructions(data map[string]interface{}) []map[string]interface{} {
 		{"data", "viewer", "blocked_accounts_timeline", "timeline", "instructions"},
 		{"data", "viewer", "muted_accounts_timeline", "timeline", "instructions"},
 		{"data", "viewer", "list_memberships_timeline", "timeline", "instructions"},
+		{"data", "communities_main_page_timeline", "timeline", "instructions"},
 		{"data", "bookmark_timeline_v2", "timeline", "instructions"},
 		{"data", "bookmark_timeline", "timeline", "instructions"},
 		{"data", "search_by_raw_query", "bookmarks_search_timeline", "timeline", "instructions"},
@@ -583,6 +584,45 @@ func CreateTweet(client *XClient, text, replyToID, quoteTweetURL string, mediaID
 	return result, nil
 }
 
+// CreateNoteTweet publishes a long-form post through X's Note Tweet mutation.
+// X currently accepts the same media envelope as CreateTweet and supports up to
+// 25,000 characters for eligible accounts.
+func CreateNoteTweet(client *XClient, text string, mediaIDs []string) (map[string]interface{}, error) {
+	if text == "" {
+		return nil, fmt.Errorf("note tweet content cannot be empty")
+	}
+	if len([]rune(text)) > 25000 {
+		return nil, fmt.Errorf("note tweet content exceeds 25000 characters")
+	}
+
+	mediaEntities := make([]map[string]interface{}, 0, len(mediaIDs))
+	for _, mediaID := range mediaIDs {
+		mediaEntities = append(mediaEntities, map[string]interface{}{
+			"media_id":     mediaID,
+			"tagged_users": []interface{}{},
+		})
+	}
+	variables := map[string]interface{}{
+		"tweet_text":              text,
+		"dark_request":            false,
+		"media":                   map[string]interface{}{"media_entities": mediaEntities, "possibly_sensitive": false},
+		"semantic_annotation_ids": []interface{}{},
+		"includePromotedContent":  false,
+	}
+
+	result, err := client.GraphQLPost("CreateNoteTweet", variables)
+	if err != nil {
+		return nil, err
+	}
+	if errMsg := extractErrorMessage(result); errMsg != "" {
+		return nil, fmt.Errorf("note tweet creation failed: %s", errMsg)
+	}
+	if !isTweetCreated(result) {
+		return nil, fmt.Errorf("note tweet creation failed: API did not return a tweet ID")
+	}
+	return result, nil
+}
+
 // isTweetCreated checks if the response contains a created tweet
 func isTweetCreated(result map[string]interface{}) bool {
 	if result == nil {
@@ -591,8 +631,12 @@ func isTweetCreated(result map[string]interface{}) bool {
 
 	// Check multiple possible response structures
 	if data, ok := result["data"].(map[string]interface{}); ok {
-		// Check create_tweet endpoint
-		if createTweet, ok := data["create_tweet"].(map[string]interface{}); ok {
+		// Check create_tweet and create_note_tweet endpoints
+		for _, operation := range []string{"create_tweet", "create_note_tweet"} {
+			createTweet, ok := data[operation].(map[string]interface{})
+			if !ok {
+				continue
+			}
 			if tweetResults, ok := createTweet["tweet_results"].(map[string]interface{}); ok {
 				if result, ok := tweetResults["result"].(map[string]interface{}); ok {
 					// Check rest_id

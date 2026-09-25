@@ -1,0 +1,36 @@
+{
+  "data": {
+    "communities_main_page_timeline": {
+      "timeline": {
+        "instructions": [
+          {
+            "type": "TimelineAddEntries",
+            "entries": [
+              {
+                "entryId": "community-700",
+                "content": {
+                  "itemContent": {
+                    "community_results": {
+                      "result": {
+                        "rest_id": "700",
+                        "name": "Go Community",
+                        "description": "Go developers",
+                        "member_count": 1234,
+                        "moderator_count": 4,
+                        "role": "NonMember"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "entryId": "cursor-bottom-1",
+                "content": {"cursorType": "Bottom", "value": "communities-next"}
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
