@@ -42,6 +42,7 @@ func TestSuite(t *testing.T) {
 		t.Run("UserProfileURL", TestUserProfileURL)
 		t.Run("TweetFromAPI", TestTweetFromAPIResult)
 		t.Run("UserFromAPI", TestUserFromAPIResult)
+		t.Run("UserFromAPIModernProfile", TestUserFromAPIResultPopulatesModernProfileFields)
 	})
 
 	t.Run("Display", func(t *testing.T) {
