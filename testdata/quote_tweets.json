@@ -1,0 +1,32 @@
+{
+  "data": {
+    "search_by_raw_query": {
+      "search_timeline": {
+        "timeline": {
+          "instructions": [
+            {
+              "type": "TimelineAddEntries",
+              "entries": [
+                {
+                  "entryId": "tweet-300",
+                  "content": {
+                    "itemContent": {
+                      "itemType": "TimelineTweet",
+                      "tweet_results": {
+                        "result": {
+                          "rest_id": "300",
+                          "legacy": {"full_text": "quote tweet"},
+                          "core": {"user_results": {"result": {"rest_id": "u3", "legacy": {"name": "Quoter", "screen_name": "quoter"}}}}
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

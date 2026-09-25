@@ -2,6 +2,8 @@
 package core
 
 import (
+	"net/url"
+
 	"github.com/benoitpetit/xsh/models"
 )
 
@@ -18,7 +20,7 @@ func GetQuoteTweets(client *XClient, tweetID string, count int, cursor string) (
 		variables["cursor"] = cursor
 	}
 
-	data, err := client.GraphQLGet("SearchTimeline", variables)
+	data, err := client.GraphQLPostWithReferer("SearchTimeline", variables, BaseURL+"/search?q="+url.QueryEscape("quoted_tweet_id:"+tweetID))
 	if err != nil {
 		return nil, err
 	}

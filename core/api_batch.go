@@ -21,11 +21,11 @@ func GetTweetsByIDs(client *XClient, tweetIDs []string) ([]*models.Tweet, error)
 	}
 
 	variables := map[string]interface{}{
-		"tweetIds": tweetIDs,
-		"includePromotedContent":               false,
-		"withBirdwatchNotes":                   false,
-		"withVoice":                            true,
-		"withCommunity":                        true,
+		"tweetIds":                               tweetIDs,
+		"includePromotedContent":                 false,
+		"withBirdwatchNotes":                     false,
+		"withVoice":                              true,
+		"withCommunity":                          true,
 		"withQuickPromoteEligibilityTweetFields": false,
 	}
 
@@ -67,6 +67,17 @@ func GetTweetsByIDs(client *XClient, tweetIDs []string) ([]*models.Tweet, error)
 
 // GetUsersByHandles fetches multiple users by their handles
 func GetUsersByHandles(client *XClient, handles []string) ([]*models.User, error) {
+	if len(handles) == 0 {
+		return []*models.User{}, nil
+	}
+
+	if _, ok := GetGraphQLEndpoints()["UsersByScreenNames"]; ok {
+		users, err := getUsersByScreenNames(client, handles)
+		if err == nil {
+			return users, nil
+		}
+	}
+
 	var users []*models.User
 
 	// Process one by one since there's no batch endpoint for user lookup by screen name
@@ -80,6 +91,42 @@ func GetUsersByHandles(client *XClient, handles []string) ([]*models.User, error
 		}
 	}
 
+	return users, nil
+}
+
+func getUsersByScreenNames(client *XClient, handles []string) ([]*models.User, error) {
+	if len(handles) > 100 {
+		handles = handles[:100]
+	}
+	data, err := client.GraphQLGet("UsersByScreenNames", map[string]interface{}{
+		"screenNames": handles,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	users := make([]*models.User, 0)
+	dataMap, ok := data["data"].(map[string]interface{})
+	if !ok {
+		return users, nil
+	}
+	results, ok := dataMap["users"].([]interface{})
+	if !ok {
+		return users, nil
+	}
+	for _, item := range results {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		result, ok := itemMap["result"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if user := models.UserFromAPIResult(result); user != nil {
+			users = append(users, user)
+		}
+	}
 	return users, nil
 }
 
