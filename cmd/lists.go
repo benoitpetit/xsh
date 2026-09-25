@@ -19,7 +19,11 @@ var (
 var listsCmd = &cobra.Command{
 	Use:   "lists",
 	Short: "Manage Twitter lists",
-	Long:  `View, create, and manage your Twitter lists.`,
+	Long: `View, create, and manage your Twitter lists.
+
+Running xsh lists without a subcommand lists your owned and subscribed lists.
+Use xsh lists view <list-id> to read a list timeline and xsh lists members <list-id>
+to inspect its members.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Default: list user's lists
 		client, err := getClient("")
@@ -336,7 +340,6 @@ func init() {
 	listDeleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 	listMembersCmd.Flags().IntP("count", "n", 20, "Number of members to fetch")
 }
-
 
 
 
