@@ -2,6 +2,8 @@
 package core
 
 import (
+	"strings"
+
 	"github.com/benoitpetit/xsh/models"
 )
 
@@ -22,6 +24,46 @@ type Community struct {
 type CommunityRule struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+}
+
+// GetCommunityDiscovery fetches communities shown on the authenticated discovery page.
+func GetCommunityDiscovery(client *XClient, count int, cursor string) ([]*Community, string, error) {
+	variables := map[string]interface{}{"count": count}
+	if cursor != "" {
+		variables["cursor"] = cursor
+	}
+
+	data, err := client.GraphQLGet("CommunitiesMainPageTimeline", variables)
+	if err != nil {
+		return nil, "", err
+	}
+	communities, nextCursor := parseCommunityDiscovery(data)
+	return communities, nextCursor, nil
+}
+
+func parseCommunityDiscovery(data map[string]interface{}) ([]*Community, string) {
+	communities := make([]*Community, 0)
+	var nextCursor string
+
+	for _, instruction := range findInstructions(data) {
+		entries, _ := instruction["entries"].([]interface{})
+		for _, rawEntry := range entries {
+			entry, _ := rawEntry.(map[string]interface{})
+			entryID := getString(entry, "entryId")
+			content, _ := entry["content"].(map[string]interface{})
+			if strings.HasPrefix(entryID, "cursor-bottom") {
+				nextCursor = extractCursor(content)
+				continue
+			}
+			itemContent, _ := content["itemContent"].(map[string]interface{})
+			communityResults, _ := itemContent["community_results"].(map[string]interface{})
+			result, _ := communityResults["result"].(map[string]interface{})
+			if community := parseCommunityResult(result); community != nil && community.ID != "" {
+				communities = append(communities, community)
+			}
+		}
+	}
+	return communities, nextCursor
 }
 
 // GetCommunity fetches a community by ID
@@ -97,16 +139,26 @@ func parseCommunity(data map[string]interface{}) *Community {
 		return community
 	}
 
-	community.ID = getString(result, "id_str")
+	return parseCommunityResult(result)
+}
+
+func parseCommunityResult(result map[string]interface{}) *Community {
+	if len(result) == 0 {
+		return nil
+	}
+	community := &Community{
+		ID:          getString(result, "id_str"),
+		Name:        getString(result, "name"),
+		Description: getString(result, "description"),
+		Role:        getString(result, "role"),
+	}
 	if community.ID == "" {
 		community.ID = getString(result, "rest_id")
 	}
-	community.Name = getString(result, "name")
-	community.Description = getString(result, "description")
-	community.IsNSFW = false
-	if nsfw, ok := result["is_nsfw"].(bool); ok {
-		community.IsNSFW = nsfw
+	if community.ID == "" {
+		community.ID = getString(result, "id")
 	}
+	community.IsNSFW, _ = result["is_nsfw"].(bool)
 
 	// Member count
 	if membersResult, ok := result["member_count"].(float64); ok {
@@ -117,10 +169,6 @@ func parseCommunity(data map[string]interface{}) *Community {
 	}
 
 	// Role
-	if role, ok := result["role"].(string); ok {
-		community.Role = role
-	}
-
 	// Rules
 	if rulesRaw, ok := result["rules"].([]interface{}); ok {
 		for _, r := range rulesRaw {

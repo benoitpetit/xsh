@@ -265,6 +265,79 @@ Examples:
 	},
 }
 
+// tweetNoteCmd publishes a long-form Note Tweet with explicit confirmation.
+var tweetNoteCmd = &cobra.Command{
+	Use:   "note [text]",
+	Short: "Publish a long-form post",
+	Long: `Publish a long-form Note Tweet (up to 25,000 characters for eligible accounts).
+
+Provide the content as an argument or with --file. JSON mode requires --force.
+
+Examples:
+  xsh tweet note "A longer post..."
+  xsh tweet note --file essay.txt --force --json`,
+	Args: cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		file, _ := cmd.Flags().GetString("file")
+		if len(args) == 0 && file == "" {
+			fmt.Println(display.Error("Provide note content or --file"))
+			os.Exit(core.ExitError)
+		}
+		if len(args) > 0 && file != "" {
+			fmt.Println(display.Error("Use either note text or --file, not both"))
+			os.Exit(core.ExitError)
+		}
+
+		content := ""
+		if file != "" {
+			data, err := os.ReadFile(file)
+			if err != nil {
+				fmt.Println(display.Error(fmt.Sprintf("Failed to read note file: %v", err)))
+				os.Exit(core.ExitError)
+			}
+			content = string(data)
+		} else {
+			content = args[0]
+		}
+
+		force, _ := cmd.Flags().GetBool("force")
+		if isJSONMode() && !force {
+			fmt.Println(display.Error("JSON mode requires --force for Note Tweet publication"))
+			os.Exit(core.ExitError)
+		}
+		if !force {
+			fmt.Printf("Publish Note Tweet (%d characters)? [y/N] ", len([]rune(content)))
+			var response string
+			_, _ = fmt.Scanln(&response)
+			if response != "y" && response != "Y" {
+				fmt.Println(display.Warning("Cancelled"))
+				return
+			}
+		}
+
+		client, err := getClient("")
+		if err != nil {
+			fmt.Println(display.Error(err.Error()))
+			os.Exit(core.ExitAuthError)
+		}
+		defer client.Close()
+
+		result, err := core.CreateNoteTweet(client, content, nil)
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Failed to publish Note Tweet: %v", err)))
+			os.Exit(core.ExitError)
+		}
+		output(result, func() {
+			id := extractTweetIDFromResult(result)
+			if id != "" {
+				fmt.Println(display.Success(fmt.Sprintf("Note Tweet published! ID: %s", id)))
+				return
+			}
+			fmt.Println(display.Success("Note Tweet published!"))
+		})
+	},
+}
+
 // tweetDeleteCmd deletes a tweet
 var tweetDeleteCmd = &cobra.Command{
 	Use:   "delete [id]",
@@ -537,7 +610,11 @@ func extractTweetIDFromResult(result map[string]interface{}) string {
 	}
 
 	if data, ok := result["data"].(map[string]interface{}); ok {
-		if createTweet, ok := data["create_tweet"].(map[string]interface{}); ok {
+		for _, operation := range []string{"create_tweet", "create_note_tweet"} {
+			createTweet, ok := data[operation].(map[string]interface{})
+			if !ok {
+				continue
+			}
 			if tweetResults, ok := createTweet["tweet_results"].(map[string]interface{}); ok {
 				if result, ok := tweetResults["result"].(map[string]interface{}); ok {
 					// Try rest_id first
@@ -565,6 +642,7 @@ func init() {
 	// Add subcommands to tweet
 	tweetCmd.AddCommand(tweetViewCmd)
 	tweetCmd.AddCommand(tweetPostCmd)
+	tweetCmd.AddCommand(tweetNoteCmd)
 	tweetCmd.AddCommand(tweetDeleteCmd)
 	tweetCmd.AddCommand(tweetLikeCmd)
 	tweetCmd.AddCommand(tweetUnlikeCmd)
@@ -581,6 +659,8 @@ func init() {
 	tweetPostCmd.Flags().StringArrayP("image", "i", nil, "Image to attach (can be used multiple times, max 4)")
 	tweetPostCmd.Flags().StringArrayP("poll", "p", nil, "Poll choice (use 2-4 times for poll options)")
 	tweetPostCmd.Flags().Int("poll-duration", 1440, "Poll duration in minutes (default 1440 = 24h, max 10080 = 7 days)")
+	tweetNoteCmd.Flags().String("file", "", "Read note content from a file")
+	tweetNoteCmd.Flags().BoolP("force", "f", false, "Skip confirmation (required with --json)")
 	tweetDeleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 	bookmarksCmd.Flags().IntP("count", "n", 20, "Number of tweets")
 	bookmarksCmd.Flags().StringVar(&bookmarksFilter, "filter", "", "Filter: all, top, score")
