@@ -39,6 +39,7 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 	}()
 
 	legacy, _ := result["legacy"].(map[string]interface{})
+	coreProfile, _ := result["core"].(map[string]interface{})
 	restID, _ := result["rest_id"].(string)
 
 	if restID == "" {
@@ -87,12 +88,21 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 	if name == "" {
 		name = GetString(result, "name")
 	}
+	if name == "" {
+		name = GetString(coreProfile, "name")
+	}
 	handle := GetString(legacy, "screen_name")
 	if handle == "" {
 		handle = GetString(result, "screen_name")
 	}
 	if handle == "" {
 		handle = GetString(result, "handle")
+	}
+	if handle == "" {
+		handle = GetString(coreProfile, "screen_name")
+	}
+	if handle == "" {
+		handle = GetString(coreProfile, "handle")
 	}
 	profileBannerURL := GetString(legacy, "profile_banner_url")
 	if profileBannerURL == "" {

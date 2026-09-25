@@ -269,6 +269,27 @@ func TestUserFromAPIResultPopulatesModernProfileFields(t *testing.T) {
 	}
 }
 
+func TestUserFromAPIResultPopulatesCoreProfileFields(t *testing.T) {
+	result := map[string]interface{}{
+		"rest_id": "1200764024172023808",
+		"core": map[string]interface{}{
+			"name":        "Current Name",
+			"screen_name": "current_handle",
+		},
+		"legacy": map[string]interface{}{
+			"description": "Current profile",
+		},
+	}
+
+	user := models.UserFromAPIResult(result)
+	if user == nil {
+		t.Fatal("UserFromAPIResult returned nil")
+	}
+	if user.Name != "Current Name" || user.Handle != "current_handle" {
+		t.Fatalf("profile name/handle = %q/%q, want Current Name/current_handle", user.Name, user.Handle)
+	}
+}
+
 // TestUserFromAPIResultNil tests user parsing with nil data
 func TestUserFromAPIResultNil(t *testing.T) {
 	result := map[string]interface{}{}
