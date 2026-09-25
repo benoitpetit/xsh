@@ -22,13 +22,13 @@ func init() {
 func ensureCommandGroups() {
 	for _, group := range []*cobra.Group{
 		{ID: groupStart, Title: "Getting Started:"},
-		{ID: groupExplore, Title: "Explore:"},
-		{ID: groupPublish, Title: "Publish:"},
+		{ID: groupExplore, Title: "Discover & Read:"},
+		{ID: groupPublish, Title: "Create & Schedule:"},
 		{ID: groupEngage, Title: "Engage:"},
-		{ID: groupOrganize, Title: "Organize:"},
+		{ID: groupOrganize, Title: "Organize & Export:"},
 		{ID: groupMessages, Title: "Messages:"},
 		{ID: groupAutomation, Title: "Automation & Data:"},
-		{ID: groupSystem, Title: "System & Integrations:"},
+		{ID: groupSystem, Title: "System & Maintenance:"},
 	} {
 		if !rootCmd.ContainsGroup(group.ID) {
 			rootCmd.AddGroup(group)
@@ -42,7 +42,7 @@ func ensureCommandGroups() {
 
 	assignCommandGroups(map[string]string{
 		"auth": groupStart, "accounts": groupStart, "switch": groupStart,
-		"import": groupStart, "status": groupStart, "doctor": groupStart,
+		"import": groupStart,
 		"feed": groupExplore, "search": groupExplore, "user": groupExplore,
 		"tweet": groupExplore, "thread": groupExplore, "unroll": groupExplore,
 		"quotes": groupExplore, "pinned": groupExplore, "trends": groupExplore,
@@ -61,6 +61,7 @@ func ensureCommandGroups() {
 		"multi": groupAutomation, "stream": groupAutomation,
 		"tweets": groupAutomation, "users": groupAutomation,
 		"config": groupSystem, "endpoints": groupSystem,
+		"status": groupSystem, "doctor": groupSystem,
 		"auto-update": groupSystem, "ratelimit": groupSystem,
 		"mcp": groupSystem, "version": groupSystem, "completion": groupSystem,
 	})

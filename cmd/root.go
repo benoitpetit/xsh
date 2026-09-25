@@ -46,7 +46,13 @@ Get started:
   xsh feed                     # View your timeline
   xsh tweet view <id>          # View a specific tweet
   xsh search "golang"          # Search for tweets
-  xsh user <handle>            # View user profile`,
+  xsh user <handle>            # View user profile
+
+Examples:
+  xsh feed --count 20
+  xsh tweet post "Hello from xsh"
+  xsh export search "golang" --format json --output results.json
+  xsh endpoints status --json`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
