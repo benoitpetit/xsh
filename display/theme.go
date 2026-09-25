@@ -8,22 +8,15 @@ import (
 // ─── Palette ─────────────────────────────────────────────────────────
 
 var (
-	// Primary accent — Twitter blue
-	ColorPrimary = lipgloss.Color("#1DA1F2")
-	// Success green
-	ColorSuccess = lipgloss.Color("#00BA7C")
-	// Error red
-	ColorError = lipgloss.Color("#F4212E")
-	// Warning yellow
-	ColorWarning = lipgloss.Color("#FFAD1F")
-	// Info cyan
-	ColorInfo = lipgloss.Color("#00BCD4")
-	// Muted gray
-	ColorMuted = lipgloss.Color("#8899A6")
-	// White text
-	ColorText = lipgloss.Color("#FFFFFF")
-	// Dark background for panels
-	ColorPanelBg = lipgloss.Color("#151515")
+	// Neutral accents keep the interface readable without competing with content.
+	ColorPrimary = lipgloss.Color("#C8D0D8")
+	ColorSuccess = lipgloss.Color("#A7C3B1")
+	ColorError   = lipgloss.Color("#C99EA3")
+	ColorWarning = lipgloss.Color("#C8B98F")
+	ColorInfo    = lipgloss.Color("#A9B7C5")
+	ColorMuted   = lipgloss.Color("#7F8994")
+	ColorText    = lipgloss.Color("#E7EBEF")
+	ColorPanelBg = lipgloss.Color("#15191D")
 )
 
 // Legacy aliases for compatibility inside display package
@@ -66,7 +59,7 @@ var (
 
 	// StylePanel creates a subtle bordered panel
 	StylePanel = lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
+			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(ColorMuted).
 			Padding(0, 1)
 )

@@ -71,33 +71,50 @@ func GetUsersByHandles(client *XClient, handles []string) ([]*models.User, error
 		return []*models.User{}, nil
 	}
 
+	uniqueHandles := deduplicateHandles(handles)
+	usersByHandle := make(map[string]*models.User, len(uniqueHandles))
+
 	if _, ok := GetGraphQLEndpoints()["UsersByScreenNames"]; ok {
-		users, err := getUsersByScreenNames(client, handles)
-		if err == nil {
-			return users, nil
+		for start := 0; start < len(uniqueHandles); start += 100 {
+			end := start + 100
+			if end > len(uniqueHandles) {
+				end = len(uniqueHandles)
+			}
+			users, err := getUsersByScreenNames(client, uniqueHandles[start:end])
+			if err != nil {
+				break
+			}
+			for _, user := range users {
+				if user != nil && user.Handle != "" {
+					usersByHandle[strings.ToLower(user.Handle)] = user
+				}
+			}
 		}
 	}
 
-	var users []*models.User
-
-	// Process one by one since there's no batch endpoint for user lookup by screen name
-	for _, handle := range handles {
-		user, err := GetUserByHandle(client, handle)
-		if err != nil {
-			continue // Skip failed lookups
+	// Fill missing results one by one. This also handles a successful but
+	// incomplete batch response, which otherwise would silently lose users.
+	for _, handle := range uniqueHandles {
+		key := strings.ToLower(handle)
+		if _, ok := usersByHandle[key]; ok {
+			continue
 		}
-		if user != nil {
+		user, err := GetUserByHandle(client, handle)
+		if err == nil && user != nil {
+			usersByHandle[key] = user
+		}
+	}
+
+	users := make([]*models.User, 0, len(usersByHandle))
+	for _, handle := range uniqueHandles {
+		if user := usersByHandle[strings.ToLower(handle)]; user != nil {
 			users = append(users, user)
 		}
 	}
-
 	return users, nil
 }
 
 func getUsersByScreenNames(client *XClient, handles []string) ([]*models.User, error) {
-	if len(handles) > 100 {
-		handles = handles[:100]
-	}
 	data, err := client.GraphQLGet("UsersByScreenNames", map[string]interface{}{
 		"screenNames": handles,
 	})
@@ -128,6 +145,23 @@ func getUsersByScreenNames(client *XClient, handles []string) ([]*models.User, e
 		}
 	}
 	return users, nil
+}
+
+func deduplicateHandles(handles []string) []string {
+	seen := make(map[string]struct{}, len(handles))
+	unique := make([]string, 0, len(handles))
+	for _, handle := range handles {
+		key := strings.ToLower(strings.TrimPrefix(handle, "@"))
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, strings.TrimPrefix(handle, "@"))
+	}
+	return unique
 }
 
 // GetUsersByIDs fetches multiple users by their IDs

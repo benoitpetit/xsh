@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,14 +36,18 @@ const (
 
 var (
 	// Regex patterns for extracting data from HTML/JS
-	bundleHrefPattern      = regexp.MustCompile(`href="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
-	bundleSrcPattern       = regexp.MustCompile(`src="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
-	chunkMapPattern        = regexp.MustCompile(`"\+(\{[^}]+\})\[e\]\+"a\.js"`)
-	operationPattern       = regexp.MustCompile("(?s)queryId\\s*:\\s*[\"'`]([A-Za-z0-9_-]+)[\"'`].{0,500}?operationName\\s*:\\s*[\"'`]([A-Za-z0-9_-]+)[\"'`]")
-	featureSwitchesPattern = regexp.MustCompile(`featureSwitches:\s*(\[[^\]]*\])`)
-	scriptSrcPattern       = regexp.MustCompile(`(?is)<script[^>]+src\s*=\s*["']([^"']+\.js(?:\?[^"']*)?)["']`)
-	jsReferencePattern     = regexp.MustCompile("(?i)[\"'`]((?:https?:)?//[^\"'`\\s]+\\.js(?:\\?[^\"'`\\s]*)?|(?:\\.\\.?/|assets/)[^\"'`\\s]+\\.js(?:\\?[^\"'`\\s]*)?)[\"'`]")
-	graphqlURLPattern      = regexp.MustCompile(`(?i)/graphql/([A-Za-z0-9_-]+)/([A-Za-z0-9_-]+)`)
+	bundleHrefPattern             = regexp.MustCompile(`href="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
+	bundleSrcPattern              = regexp.MustCompile(`src="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
+	chunkMapPattern               = regexp.MustCompile(`"\+(\{[^}]+\})\[e\]\+"a\.js"`)
+	operationPattern              = regexp.MustCompile("(?s)queryId\\s*:\\s*[\"'`]([A-Za-z0-9_-]+)[\"'`].{0,500}?operationName\\s*:\\s*[\"'`]([A-Za-z0-9_-]+)[\"'`]")
+	operationRecordPattern        = regexp.MustCompile("(?s)(?:[\"'`]?queryId[\"'`]?\\s*[:=]\\s*[\"'`]([A-Za-z0-9_-]+)[\"'`]).{0,1000}?(?:[\"'`]?operationName[\"'`]?\\s*[:=]\\s*[\"'`]([A-Za-z0-9_-]+)[\"'`])")
+	reverseOperationRecordPattern = regexp.MustCompile("(?s)(?:[\"'`]?operationName[\"'`]?\\s*[:=]\\s*[\"'`]([A-Za-z0-9_-]+)[\"'`]).{0,1000}?(?:[\"'`]?queryId[\"'`]?\\s*[:=]\\s*[\"'`]([A-Za-z0-9_-]+)[\"'`])")
+	queryIDAssignmentPattern      = regexp.MustCompile("(?i)(?:const|let|var)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*[\"'`]([A-Za-z0-9_-]+)[\"'`]")
+	generatedGraphQLURLPattern    = regexp.MustCompile("(?i)[\"'`](?:/i/api)?/graphql/[\"'`]\\s*\\+\\s*([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\+\\s*[\"'`]/([A-Za-z0-9_%-]+)[\"'`]")
+	featureSwitchesPattern        = regexp.MustCompile(`featureSwitches:\s*(\[[^\]]*\])`)
+	scriptSrcPattern              = regexp.MustCompile(`(?is)<script[^>]+src\s*=\s*["']([^"']+\.js(?:\?[^"']*)?)["']`)
+	jsReferencePattern            = regexp.MustCompile("(?i)[\"'`]((?:https?:)?//[^\"'`\\s]+\\.js(?:\\?[^\"'`\\s]*)?|(?:\\.\\.?/|assets/)[^\"'`\\s]+\\.js(?:\\?[^\"'`\\s]*)?)[\"'`]")
+	graphqlURLPattern             = regexp.MustCompile(`(?i)(?:/i/api)?/graphql/([A-Za-z0-9_%-]+)(?:/|%2f)([A-Za-z0-9_%-]+)`)
 
 	// Memory cache for in-session performance
 	memoryCache     *EndpointCache
@@ -53,6 +58,7 @@ var (
 // EndpointCache represents the cached endpoint data
 type EndpointCache struct {
 	Endpoints   map[string]string   `json:"endpoints"`
+	Quarantined map[string]string   `json:"quarantined,omitempty"`
 	Features    map[string]bool     `json:"features"`
 	OpFeatures  map[string][]string `json:"op_features"`
 	Timestamp   time.Time           `json:"timestamp"`
@@ -64,9 +70,10 @@ type EndpointCache struct {
 func GetMemoryCache() *EndpointCache {
 	memoryCacheOnce.Do(func() {
 		memoryCache = &EndpointCache{
-			Endpoints:  make(map[string]string),
-			Features:   make(map[string]bool),
-			OpFeatures: make(map[string][]string),
+			Endpoints:   make(map[string]string),
+			Quarantined: make(map[string]string),
+			Features:    make(map[string]bool),
+			OpFeatures:  make(map[string][]string),
 		}
 	})
 	return memoryCache
@@ -139,11 +146,17 @@ func (ed *EndpointDiscovery) DiscoverEndpoints(ctx context.Context) (*EndpointCa
 	if ed.verbose {
 		log.Println("[EndpointDiscovery] Starting endpoint discovery from X.com...")
 	}
+	if getDiscoveryCredentials() == nil {
+		return nil, fmt.Errorf("authenticated X credentials required for endpoint discovery")
+	}
 
 	// Step 1: Fetch homepage to discover JS bundles
 	html, fingerprint, err := ed.fetchHomepage(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch homepage: %w", err)
+	}
+	if isLoggedOutShell(html) {
+		return nil, fmt.Errorf("X returned a logged-out shell; authenticated endpoint discovery is unavailable")
 	}
 
 	// Step 2: Extract bundle URLs
@@ -164,27 +177,6 @@ func (ed *EndpointDiscovery) DiscoverEndpoints(ctx context.Context) (*EndpointCa
 	// Step 3: Download bundles and extract operations concurrently
 	endpoints, opFeatures := ed.extractOperationsConcurrent(ctx, bundleURLs)
 
-	// X.com can serve the new x-web shell to a uTLS fingerprint while a normal
-	// browser request receives responsive-web, which still contains persisted
-	// GraphQL operation modules. Retry the homepage with a standard HTTP client
-	// only when the first extraction produced no operations.
-	if len(endpoints) == 0 && ed.publicClient != nil {
-		if ed.verbose {
-			log.Println("[EndpointDiscovery] No operations in first shell, retrying with standard HTTP client")
-		}
-		publicHTML, publicFingerprint, publicErr := ed.fetchHomepageWithClient(ctx, ed.publicClient)
-		if publicErr == nil {
-			publicURLs := ed.expandBundleURLs(ctx, ed.extractBundleURLs(publicHTML))
-			publicEndpoints, publicOpFeatures := ed.extractOperationsConcurrent(ctx, publicURLs)
-			if len(publicEndpoints) > 0 {
-				html = publicHTML
-				fingerprint = publicFingerprint
-				endpoints = publicEndpoints
-				opFeatures = publicOpFeatures
-			}
-		}
-	}
-
 	if len(endpoints) == 0 {
 		return nil, fmt.Errorf("no GraphQL operations found in any bundle")
 	}
@@ -195,6 +187,7 @@ func (ed *EndpointDiscovery) DiscoverEndpoints(ctx context.Context) (*EndpointCa
 	// Build cache
 	cache := &EndpointCache{
 		Endpoints:   endpoints,
+		Quarantined: make(map[string]string),
 		Features:    features,
 		OpFeatures:  opFeatures,
 		Timestamp:   time.Now(),
@@ -238,24 +231,6 @@ func (ed *EndpointDiscovery) fetchHomepageWithClient(ctx context.Context, client
 		return "", "", fmt.Errorf("HTTP request failed: %w", err)
 	}
 
-	// A stale locally stored session should not prevent discovery: the public
-	// home page still exposes the responsive-web bundles used by X.com. Retry
-	// once without auth when X rejects the session, while keeping auth for the
-	// normal authenticated path.
-	if resp.StatusCode == http.StatusUnauthorized && creds != nil {
-		resp.Body.Close()
-		if ed.verbose {
-			log.Println("[EndpointDiscovery] Stored session rejected, retrying public home page")
-		}
-		req, err = ed.newHomepageRequest(ctx, false)
-		if err != nil {
-			return "", "", err
-		}
-		resp, err = client.Do(req)
-		if err != nil {
-			return "", "", fmt.Errorf("HTTP request failed: %w", err)
-		}
-	}
 	defer resp.Body.Close()
 
 	if ed.verbose {
@@ -345,11 +320,40 @@ func applyDiscoveryAuth(req *http.Request, creds *AuthCredentials) {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+BearerToken)
-	req.Header.Set("Cookie", "auth_token="+authToken+"; ct0="+ct0)
+	cookies := creds.GetSanitizedCookies()
+	cookieNames := make([]string, 0, len(cookies))
+	for name := range cookies {
+		cookieNames = append(cookieNames, name)
+	}
+	sort.Strings(cookieNames)
+	cookieParts := make([]string, 0, len(cookieNames))
+	for _, name := range cookieNames {
+		if value := cookies[name]; value != "" {
+			cookieParts = append(cookieParts, name+"="+value)
+		}
+	}
+	if len(cookieParts) == 0 {
+		cookieParts = []string{"auth_token=" + authToken, "ct0=" + ct0}
+	}
+	req.Header.Set("Cookie", strings.Join(cookieParts, "; "))
 	req.Header.Set("x-csrf-token", ct0)
 	req.Header.Set("x-twitter-active-user", "yes")
 	req.Header.Set("x-twitter-auth-type", "OAuth2Session")
 	req.Header.Set("x-twitter-client-language", "en")
+}
+
+func isLoggedOutShell(html string) bool {
+	lower := strings.ToLower(html)
+	for _, marker := range []string{
+		"entry-client-logged-out-",
+		"mode=login",
+		"/onboarding/",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // extractBundleURLs extracts JS bundle URLs from HTML
@@ -446,7 +450,8 @@ func (ed *EndpointDiscovery) expandBundleURLs(ctx context.Context, initial []str
 		}
 	}
 
-	for _, bundleURL := range append([]string(nil), urls...) {
+	for index := 0; index < len(urls) && index < maxBundles; index++ {
+		bundleURL := urls[index]
 		js, err := ed.fetchBundle(ctx, bundleURL)
 		if err != nil {
 			if ed.verbose {
@@ -569,11 +574,49 @@ func extractOperationsFromJS(js string) (map[string]string, map[string][]string)
 	endpoints := make(map[string]string)
 	opFeatures := make(map[string][]string)
 
+	addOperation := func(queryID, opName string) {
+		decodedQueryID, err := url.PathUnescape(queryID)
+		if err != nil {
+			return
+		}
+		decodedOpName, err := url.PathUnescape(opName)
+		if err != nil || decodedQueryID == "" || decodedOpName == "" {
+			return
+		}
+		endpoints[decodedOpName] = fmt.Sprintf("%s/%s", decodedQueryID, decodedOpName)
+	}
+
 	// Some bundles expose persisted operations as request URLs instead of the
 	// older queryId/operationName object shape.
 	for _, match := range graphqlURLPattern.FindAllStringSubmatch(js, -1) {
 		if len(match) > 2 {
-			endpoints[match[2]] = fmt.Sprintf("%s/%s", match[1], match[2])
+			addOperation(match[1], match[2])
+		}
+	}
+
+	// Vite/Rollup bundles may quote keys, reverse the record field order, or
+	// construct the persisted GraphQL URL from a local query-id variable.
+	for _, match := range operationRecordPattern.FindAllStringSubmatch(js, -1) {
+		if len(match) > 2 {
+			addOperation(match[1], match[2])
+		}
+	}
+	for _, match := range reverseOperationRecordPattern.FindAllStringSubmatch(js, -1) {
+		if len(match) > 2 {
+			addOperation(match[2], match[1])
+		}
+	}
+	queryIDs := make(map[string]string)
+	for _, match := range queryIDAssignmentPattern.FindAllStringSubmatch(js, -1) {
+		if len(match) > 2 {
+			queryIDs[match[1]] = match[2]
+		}
+	}
+	for _, match := range generatedGraphQLURLPattern.FindAllStringSubmatch(js, -1) {
+		if len(match) > 2 {
+			if queryID, ok := queryIDs[match[1]]; ok {
+				addOperation(queryID, match[2])
+			}
 		}
 	}
 
@@ -722,7 +765,7 @@ func (ed *EndpointDiscovery) GetCachedEndpoints(ctx context.Context) (*EndpointC
 
 // IsValid checks if cache is still valid (not expired)
 func (ec *EndpointCache) IsValid() bool {
-	if ec == nil || len(ec.Endpoints) == 0 {
+	if ec == nil || (len(ec.Endpoints) == 0 && len(ec.Quarantined) == 0) {
 		return false
 	}
 	return time.Since(ec.Timestamp) < CacheTTL
@@ -738,6 +781,9 @@ func (ec *EndpointCache) IsStale() bool {
 
 // GetEndpoint returns the endpoint for an operation
 func (ec *EndpointCache) GetEndpoint(operation string) (string, bool) {
+	if _, quarantined := ec.Quarantined[operation]; quarantined {
+		return "", false
+	}
 	endpoint, ok := ec.Endpoints[operation]
 	return endpoint, ok
 }
@@ -799,6 +845,7 @@ func (ed *EndpointDiscovery) UpdateMemoryCache(cache *EndpointCache) {
 
 	mc := GetMemoryCache()
 	mc.Endpoints = cache.Endpoints
+	mc.Quarantined = cache.Quarantined
 	mc.Features = cache.Features
 	mc.OpFeatures = cache.OpFeatures
 	mc.Timestamp = cache.Timestamp
@@ -822,9 +869,10 @@ func (ed *EndpointDiscovery) GetMemoryCache() *EndpointCache {
 func (ed *EndpointDiscovery) InvalidateCache() {
 	memoryCacheMu.Lock()
 	memoryCache = &EndpointCache{
-		Endpoints:  make(map[string]string),
-		Features:   make(map[string]bool),
-		OpFeatures: make(map[string][]string),
+		Endpoints:   make(map[string]string),
+		Quarantined: make(map[string]string),
+		Features:    make(map[string]bool),
+		OpFeatures:  make(map[string][]string),
 	}
 	memoryCacheMu.Unlock()
 

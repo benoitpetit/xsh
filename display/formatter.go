@@ -193,6 +193,12 @@ func FormatThread(tweets []*models.Tweet, focalID string) string {
 		lastBranch = "└──"
 		indent     = "   "
 	)
+	treeMuted := func(value string) string {
+		if value == "" {
+			return ""
+		}
+		return StyleMuted.Render(value)
+	}
 
 	var b strings.Builder
 
@@ -212,7 +218,7 @@ func FormatThread(tweets []*models.Tweet, focalID string) string {
 		}
 
 		timeStr := Muted(RelativeTime(tweet.CreatedAt))
-		handleLine := fmt.Sprintf("%s%s@%s%s %s", prefix, branchChar, tweet.AuthorHandle, verified, timeStr)
+		handleLine := fmt.Sprintf("%s%s@%s%s %s", treeMuted(prefix), treeMuted(branchChar), tweet.AuthorHandle, verified, timeStr)
 		b.WriteString(handleLine + "\n")
 
 		text := strings.ReplaceAll(tweet.Text, "\n", " ")
@@ -228,7 +234,7 @@ func FormatThread(tweets []*models.Tweet, focalID string) string {
 
 		wrappedLines := wrapText(text, 70)
 		for _, line := range wrappedLines {
-			b.WriteString(textPrefix + line + "\n")
+			b.WriteString(treeMuted(textPrefix) + line + "\n")
 		}
 
 		e := tweet.Engagement
@@ -240,12 +246,12 @@ func FormatThread(tweets []*models.Tweet, focalID string) string {
 			if e.Retweets > 0 {
 				stats = append(stats, StyleInfo.Render(fmt.Sprintf("🔁 %s", FormatNumber(e.Retweets))))
 			}
-			b.WriteString(textPrefix + strings.Join(stats, " ") + "\n")
+			b.WriteString(treeMuted(textPrefix) + strings.Join(stats, " ") + "\n")
 		}
 
 		idStyle := lipgloss.NewStyle().Foreground(colorGray)
-		b.WriteString(textPrefix + idStyle.Render("🆔 "+tweet.ID) + "\n")
-		b.WriteString(textPrefix + "\n")
+		b.WriteString(treeMuted(textPrefix) + idStyle.Render("🆔 "+tweet.ID) + "\n")
+		b.WriteString(treeMuted(textPrefix) + "\n")
 
 		replies := repliesMap[tweet.ID]
 		for i, reply := range replies {

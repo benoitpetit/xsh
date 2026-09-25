@@ -86,21 +86,33 @@ var endpointsCheckCmd = &cobra.Command{
 		endpoint := manager.GetEndpoint(operation)
 		isDynamic, status := manager.CheckEndpoint(operation)
 		opFeatures := manager.GetOpFeatures(operation)
+		quarantined := manager.IsQuarantined(operation)
+		_, hasStaticFallback := core.GraphQLEndpoints[operation]
+		if quarantined || (!isDynamic && !hasStaticFallback) {
+			endpoint = ""
+		}
 
 		if isJSONMode() || isYAMLMode() {
 			output(map[string]interface{}{
-				"operation":  operation,
-				"endpoint":   endpoint,
-				"is_dynamic": isDynamic,
-				"status":     status,
-				"features":   opFeatures,
+				"operation":   operation,
+				"endpoint":    endpoint,
+				"is_dynamic":  isDynamic,
+				"status":      status,
+				"quarantined": quarantined,
+				"features":    opFeatures,
 			}, func() {})
 			return
 		}
 
 		fmt.Println(display.Title("Endpoint Check"))
 		fmt.Println(display.KeyValue("Operation:", operation))
-		fmt.Println(display.KeyValue("URL:", fmt.Sprintf("%s/%s", core.GraphQLBase, endpoint)))
+		if quarantined {
+			fmt.Println(display.KeyValue("URL:", "not selected (quarantined after 404)"))
+		} else if endpoint == "" {
+			fmt.Println(display.KeyValue("URL:", "not available (no verified endpoint)"))
+		} else {
+			fmt.Println(display.KeyValue("URL:", fmt.Sprintf("%s/%s", core.GraphQLBase, endpoint)))
+		}
 		fmt.Println(display.KeyValue("Status:", display.StatusBadge(status)))
 
 		if len(opFeatures) > 0 {
@@ -121,14 +133,17 @@ var endpointsCheckCmd = &cobra.Command{
 var endpointsRefreshCmd = &cobra.Command{
 	Use:   "refresh",
 	Short: "Refresh endpoints from X.com",
-	Long: `Fetches fresh GraphQL endpoints from X.com JavaScript bundles.
+	Long: `Fetches fresh GraphQL endpoints from the authenticated X.com web client.
 
 This will:
-1. Fetch the X.com homepage
-2. Extract JS bundle URLs
-3. Download and parse bundles for GraphQL operations
-4. Extract feature switches from __INITIAL_STATE__
-5. Update the local cache
+1. Fetch the authenticated X.com homepage using the stored session cookies
+2. Extract JS bundle and nested chunk URLs recursively
+3. Download and parse bundles for GraphQL operations and generated URLs
+4. Extract available feature switches
+5. Validate the authenticated shell and update the local cache
+
+A logged-out shell or a missing session is rejected. No public shell is used
+as an authenticated endpoint source.
 
 The process may take 10-30 seconds depending on network speed.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -208,6 +223,7 @@ var endpointsStatusCmd = &cobra.Command{
 		fmt.Println(display.KeyValue("Available endpoints:", fmt.Sprintf("%d", stats.TotalCount)))
 		fmt.Println(display.KeyValue("Dynamic endpoints:", fmt.Sprintf("%d", stats.DynamicCount)))
 		fmt.Println(display.KeyValue("Static fallbacks:", fmt.Sprintf("%d", stats.StaticCount)))
+		fmt.Println(display.KeyValue("Quarantined (404):", fmt.Sprintf("%d", stats.QuarantinedCount)))
 		fmt.Println(display.KeyValue("Cached features:", fmt.Sprintf("%d", stats.FeatureCount)))
 		if stats.CacheAge > 0 {
 			fmt.Println(display.KeyValue("Cache age:", stats.CacheAge.Round(time.Second).String()))
@@ -217,8 +233,8 @@ var endpointsStatusCmd = &cobra.Command{
 
 		if stats.DynamicCount == 0 {
 			fmt.Println()
-			fmt.Println(display.Warning("No dynamically discovered endpoints are available; static fallbacks are in use"))
-			fmt.Println(display.Info("Run 'xsh endpoints refresh' when network access to X.com is available"))
+			fmt.Println(display.Warning("No dynamically discovered endpoints are available; static fallbacks may be in use"))
+			fmt.Println(display.Info("Log in to X and run 'xsh endpoints refresh' when network access is available"))
 		} else if stats.CacheAge > 24*time.Hour {
 			fmt.Println()
 			fmt.Println(display.Warning("Cache is old. Consider running 'xsh endpoints refresh'"))

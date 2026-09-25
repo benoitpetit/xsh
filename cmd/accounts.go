@@ -42,11 +42,11 @@ var accountsCmd = &cobra.Command{
 			if acc == defaultAccount {
 				fmt.Println(display.Bullet(
 					display.Success("●") +
-					display.Bold(acc+" (active)")))
+						display.Bold(acc+" (active)")))
 			} else {
 				fmt.Println(display.Bullet(
 					display.Muted("○") +
-					display.Bold(acc)))
+						display.Bold(acc)))
 			}
 		}
 

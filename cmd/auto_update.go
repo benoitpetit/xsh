@@ -22,16 +22,16 @@ var autoUpdateCmd = &cobra.Command{
 	Use:   "auto-update",
 	Short: "Automatically update obsolete GraphQL endpoints",
 	Long: `Automatically discovers and updates obsolete GraphQL endpoints by extracting
-the latest endpoint IDs from X.com's public JavaScript bundles.
+the latest endpoint IDs from the authenticated X.com web client.
 
 This command will:
 1. Check all configured endpoints for obsolescence (404 errors)
-2. Fetch X.com JavaScript bundles
-3. Extract the latest GraphQL operation IDs
+2. Fetch the authenticated X.com shell and JavaScript bundles
+3. Extract the latest GraphQL operation IDs and nested chunks
 4. Automatically update the endpoint configuration
 
-This approach does NOT require authentication - it uses the same public
-JS bundles that your browser downloads when visiting x.com.`,
+The stored X session is required. A logged-out shell is rejected and is never
+used as a source of authenticated endpoints.`,
 	Example: `  # Auto-update all obsolete endpoints
   xsh auto-update
 

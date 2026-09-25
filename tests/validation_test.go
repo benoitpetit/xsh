@@ -76,11 +76,11 @@ func TestValidateTweetText(t *testing.T) {
 // TestValidateTweetTextWithLimit tests text validation with custom limit
 func TestValidateTweetTextWithLimit(t *testing.T) {
 	tests := []struct {
-		name       string
-		text       string
-		maxLen     int
-		wantValid  bool
-		wantText   string
+		name      string
+		text      string
+		maxLen    int
+		wantValid bool
+		wantText  string
 	}{
 		{"valid", "Hello", 10, true, "Hello"},
 		{"exact limit", "Hello", 5, true, "Hello"},
@@ -104,9 +104,9 @@ func TestValidateTweetTextWithLimit(t *testing.T) {
 // TestValidateTwitterHandle tests handle validation
 func TestValidateTwitterHandle(t *testing.T) {
 	tests := []struct {
-		name          string
-		handle        string
-		wantValid     bool
+		name           string
+		handle         string
+		wantValid      bool
 		wantNormalized string
 	}{
 		{"valid simple", "testuser", true, "testuser"},
@@ -114,7 +114,7 @@ func TestValidateTwitterHandle(t *testing.T) {
 		{"with numbers", "user123", true, "user123"},
 		{"with underscore", "test_user", true, "test_user"},
 		{"max length", "abcdefghijklmno", true, "abcdefghijklmno"}, // 15 chars
-		{"too long", "abcdefghijklmnop", false, ""},               // 16 chars
+		{"too long", "abcdefghijklmnop", false, ""},                // 16 chars
 		{"empty", "", false, ""},
 		{"with dash", "test-user", false, ""},
 		{"with space", "test user", false, ""},
@@ -309,10 +309,10 @@ func TestIsTweetTooLong(t *testing.T) {
 // TestExtractTweetIDFromURL tests URL parsing for tweet IDs
 func TestExtractTweetIDFromURL(t *testing.T) {
 	tests := []struct {
-		name     string
-		url      string
-		wantID   string
-		wantErr  bool
+		name    string
+		url     string
+		wantID  string
+		wantErr bool
 	}{
 		{"x.com status", "https://x.com/user/status/123456789", "123456789", false},
 		{"twitter.com status", "https://twitter.com/user/status/987654321", "987654321", false},
@@ -339,10 +339,10 @@ func TestExtractTweetIDFromURL(t *testing.T) {
 // TestNormalizeTweetID tests tweet ID normalization
 func TestNormalizeTweetID(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		wantID   string
-		wantErr  bool
+		name    string
+		input   string
+		wantID  string
+		wantErr bool
 	}{
 		{"valid ID", "123456789", "123456789", false},
 		{"URL to ID", "https://x.com/user/status/123456789", "123456789", false},

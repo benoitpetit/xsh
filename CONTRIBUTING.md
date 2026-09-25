@@ -4,7 +4,7 @@
 
 ### Prerequisites
 
-- Go 1.23 or later
+- Go 1.24 or later
 - Make (optional)
 
 ### Build
@@ -16,7 +16,7 @@ go build -o xsh main.go
 ### Build with version
 
 ```bash
-go build -ldflags="-s -w -X github.com/benoitpetit/xsh/cmd.Version=1.0.0" -o xsh main.go
+make build VERSION=v0.0.8
 ```
 
 ### Run tests
@@ -35,12 +35,11 @@ go test ./...
 
 ### Automatic Release via GitHub Actions
 
-1. Push to `prod` branch for continuous builds
-2. Create a tag for official releases:
+1. Merge the reviewed changes into `master`
+2. Create the GitHub release with `gh`:
 
 ```bash
-git tag -a v1.0.0 -m "Release version 1.0.0"
-git push origin v1.0.0
+gh release create v0.0.8 --target master --generate-notes
 ```
 
 The GitHub Actions workflow will automatically:

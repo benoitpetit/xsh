@@ -30,6 +30,15 @@ func Delay(minSec, maxSec float64) {
 	time.Sleep(time.Duration(d * float64(time.Second)))
 }
 
+// DelaySeconds sleeps for an explicitly configured delay. Unlike Delay(0, 0),
+// a zero value here means no delay rather than the default read delay.
+func DelaySeconds(seconds float64) {
+	if seconds <= 0 {
+		return
+	}
+	time.Sleep(time.Duration(seconds * float64(time.Second)))
+}
+
 // WriteDelay sleeps for a random duration appropriate for write operations.
 func WriteDelay() {
 	Delay(minWriteDelaySec, maxWriteDelaySec)

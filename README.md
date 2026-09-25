@@ -48,7 +48,7 @@ No API keys required — authenticates directly via browser cookies.
 - **AI-ready** — built-in MCP server compatible with Claude, Cursor, and any MCP client
 - **Multi-account** — manage and switch between multiple Twitter/X accounts
 - **Structured output** — JSON, YAML, and compact modes for scripting and agents
-- **Auto-updating endpoints** — dynamically discovers GraphQL operation IDs from X.com JS bundles
+- **Resilient endpoint discovery** — authenticated recursive discovery of GraphQL operation IDs across modern X.com bundles
 - **Media support** — post up to 4 images per tweet, download media from any tweet
 - **Full coverage** — tweets, DMs, lists, bookmarks, jobs, trends, schedules, relationships, and more
 - **Long-form publishing** — publish Note Tweets from text or a file with explicit confirmation
@@ -264,11 +264,13 @@ xsh user likes <handle> --count 30
 # Followers / following
 xsh user followers <handle> --count 50
 xsh user following <handle> --count 50
+xsh user followers <handle> --cursor <cursor>
 
 # Media and relationship discovery
 xsh user media <handle> --count 50
 xsh user followers-you-know <handle> --count 50
 xsh user blue-verified-followers <handle> --count 50
+xsh user media <handle> --json --cursor <cursor>
 ```
 
 ---
@@ -291,6 +293,7 @@ xsh unmute <handle>
 # Read relationship lists
 xsh social blocked --count 50
 xsh social muted --count 50
+xsh social blocked --json --cursor <cursor>
 ```
 
 ---
@@ -339,6 +342,7 @@ xsh lists memberships
 # View tweets from a list
 xsh lists view <list-id>
 xsh lists view <list-id> --count 50
+xsh lists view <list-id> --json --cursor <cursor>
 
 # Create / delete a list
 xsh lists create "List name"
@@ -346,6 +350,8 @@ xsh lists delete <list-id>
 
 # Manage members
 xsh lists members <list-id>
+xsh lists members <list-id> --cursor <cursor>
+xsh lists memberships --json --cursor <cursor>
 xsh lists add-member <list-id> <handle>
 xsh lists remove-member <list-id> <handle>
 
@@ -526,7 +532,17 @@ xsh search "golang" --yaml
 xsh feed --compact
 
 # Pipe auto-detection: JSON is used automatically when stdout is not a TTY
-xsh feed | jq '.[] | .text'
+xsh feed | jq '.[].text'
+
+# Cursor-enabled user/list commands expose an envelope
+xsh user tweets ben | jq '.items[] | .text'
+
+# Cursor-based commands return an envelope in structured modes:
+# {"items": [...], "next_cursor": "...", "has_more": true}
+# Pass next_cursor back with --cursor to fetch the next page.
+
+# Compact JSON is one line, suitable for pipes and agents
+xsh user followers ben --compact | jq -c .
 
 # Use a specific account
 xsh feed --account work
@@ -632,11 +648,18 @@ views_log_weight = 0.3
 min_score        = 0
 ```
 
+`request.delay` controls the delay after read requests. Keep the default
+`1.5` for normal interactive use; set it to `0` for an explicitly fast local
+workflow. `request.timeout` controls the HTTP client timeout in seconds.
+
 ---
 
 ## Endpoint Management
 
-xsh dynamically discovers GraphQL operation IDs from X.com's JavaScript bundles and caches them locally.
+xsh dynamically discovers GraphQL operation IDs from the authenticated X.com web
+client and caches them locally. Discovery reuses every stored session cookie,
+walks nested Vite/Rollup chunks, and understands persisted GraphQL URLs built at
+runtime.
 
 ```bash
 # List all cached endpoints
@@ -645,7 +668,7 @@ xsh endpoints list
 # Check status of a specific endpoint
 xsh endpoints check HomeTimeline
 
-# Refresh endpoints from X.com (no auth required)
+# Refresh endpoints from the authenticated X.com session
 xsh endpoints refresh
 
 # Show endpoint system status
@@ -657,17 +680,36 @@ xsh endpoints update <operation> <endpoint-id>
 # Reset all endpoints to bundled defaults
 xsh endpoints reset
 
-# Auto-update obsolete endpoints (safe, no auth needed)
+# Auto-update obsolete endpoints (requires an authenticated session)
 xsh auto-update
 xsh auto-update --dry-run   # Check only, don't update
 xsh auto-update --force     # Force refresh (ignore cache)
+```
+
+`endpoints status` reports whether the dynamic cache is available and how many
+operations were quarantined after a definitive 404. When discovery is
+unavailable, xsh keeps the last valid cache and uses static IDs only for
+operations that still have a verified fallback. A stale operation is refreshed
+once; a confirmed 404 is isolated so repeated calls do not trigger discovery
+storms.
+
+Discovery refuses a logged-out `x-web` shell and never treats the public shell
+as an authenticated endpoint source. If refresh fails with an authentication
+or shell error, log in again and retry:
+
+```bash
+xsh auth status
+xsh endpoints refresh --verbose
 ```
 
 Some operation names can remain visible in the endpoint inventory after X
 removes them. `TweetQuotes` currently returns 404, so `xsh quotes` uses the
 stable `SearchTimeline` query instead. `CommunitiesMainPageTimeline` is also
 tracked as a candidate but is not exposed as a discovery command until X
-serves it again.
+serves it again. `Followers` has no verified static fallback and is therefore
+not bundled; it becomes available only if the authenticated discovery finds a
+current operation. `Following` and `FollowersYouKnow` remain separate
+operations and are not interchangeable with `Followers`.
 
 ---
 
@@ -698,11 +740,11 @@ cd xsh
 # Build
 go build -o xsh .
 
-# Run tests
-go test ./tests/...
+# Run the complete test suite
+go test ./...
 
 # Build with version info
-go build -ldflags "-X main.Version=1.0.0" -o xsh .
+make build VERSION=v0.0.8
 ```
 
 ### Project Structure

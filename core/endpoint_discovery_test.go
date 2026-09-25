@@ -1,8 +1,11 @@
 package core
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -100,5 +103,118 @@ func TestCriticalEndpointSelectionUsesCurrentTimelineOperation(t *testing.T) {
 		if operation == "HomeTimeline" || operation == "HomeLatestTimeline" {
 			t.Fatalf("selected obsolete home operation %q", operation)
 		}
+	}
+}
+
+func TestApplyDiscoveryAuthIncludesAllSanitizedStoredCookies(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, HomepageURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	applyDiscoveryAuth(req, &AuthCredentials{
+		AuthToken: "auth-token-value",
+		Ct0:       "csrf-token-value",
+		Cookies: map[string]string{
+			"guest_id":     "guest-value",
+			"cf_clearance": "clearance;value",
+		},
+	})
+
+	cookie := req.Header.Get("Cookie")
+	for _, expected := range []string{
+		"auth_token=auth-token-value",
+		"ct0=csrf-token-value",
+		"guest_id=guest-value",
+		"cf_clearance=clearancevalue",
+	} {
+		if !strings.Contains(cookie, expected) {
+			t.Fatalf("cookie header %q does not contain %q", cookie, expected)
+		}
+	}
+}
+
+func TestLoggedOutXWebShellIsNotAuthenticatedDiscoverySource(t *testing.T) {
+	html := `<script type="module" src="https://abs.twimg.com/x-web/x-web/entry-client-logged-out-DjIH8Of-.js"></script>
+<script>$_TSR={router:{matches:[]}}</script>`
+
+	if !isLoggedOutShell(html) {
+		t.Fatal("logged-out x-web shell was accepted as authenticated")
+	}
+}
+
+func TestExpandBundleURLsTraversesNestedImportsAndCycles(t *testing.T) {
+	bundles := map[string]string{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		js, ok := bundles["http://"+r.Host+r.URL.Path]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript")
+		_, _ = w.Write([]byte(js))
+	}))
+	defer server.Close()
+
+	entry := server.URL + "/entry.js"
+	child := server.URL + "/child.js"
+	grandchild := server.URL + "/grandchild.js"
+	bundles[entry] = `import "./child.js"`
+	bundles[child] = `import "./grandchild.js"`
+	bundles[grandchild] = `import "./entry.js"`
+
+	ed := &EndpointDiscovery{client: server.Client()}
+	got := ed.expandBundleURLs(context.Background(), []string{entry})
+
+	if len(got) != 3 {
+		t.Fatalf("expandBundleURLs() returned %d bundles, want 3: %#v", len(got), got)
+	}
+	for _, want := range []string{entry, child, grandchild} {
+		found := false
+		for _, gotURL := range got {
+			if gotURL == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expandBundleURLs() missing %s: %#v", want, got)
+		}
+	}
+}
+
+func TestExtractOperationsFromJSSupportsQuotedReversedRecords(t *testing.T) {
+	js := `{"operationName":"HomeTimeline","queryId":"abc-123"}`
+
+	got, _ := extractOperationsFromJS(js)
+	if got["HomeTimeline"] != "abc-123/HomeTimeline" {
+		t.Fatalf("quoted operation extraction = %#v, want normalized endpoint", got)
+	}
+}
+
+func TestExtractOperationsFromJSDecodesGraphQLURLSegments(t *testing.T) {
+	js := `fetch("/i/api/graphql/abc-123/HomeTimeline%5F2", {method: "GET"})`
+
+	got, _ := extractOperationsFromJS(js)
+	if got["HomeTimeline_2"] != "abc-123/HomeTimeline_2" {
+		t.Fatalf("encoded URL extraction = %#v, want decoded endpoint", got)
+	}
+}
+
+func TestExtractOperationsFromJSResolvesGeneratedGraphQLURL(t *testing.T) {
+	js := `const queryId = "abc-123"; const url = "/i/api/graphql/" + queryId + "/HomeTimeline";`
+
+	got, _ := extractOperationsFromJS(js)
+	if got["HomeTimeline"] != "abc-123/HomeTimeline" {
+		t.Fatalf("generated URL extraction = %#v, want normalized endpoint", got)
+	}
+}
+
+func TestExtractOperationsFromJSIgnoresRuntimeGraphQLMetadata(t *testing.T) {
+	js := `function record({queryId, operationName}) { return {queryId, operationName}; }`
+
+	got, _ := extractOperationsFromJS(js)
+	if len(got) != 0 {
+		t.Fatalf("runtime metadata produced false endpoints: %#v", got)
 	}
 }

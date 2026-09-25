@@ -14,7 +14,7 @@ const (
 func FollowUser(client *XClient, userID string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/friendships/create.json", APIBaseV1)
 	data := map[string]string{
-		"user_id":                         userID,
+		"user_id":                           userID,
 		"include_profile_interstitial_type": "1",
 	}
 	return client.RestPost(url, data)
@@ -24,7 +24,7 @@ func FollowUser(client *XClient, userID string) (map[string]interface{}, error) 
 func UnfollowUser(client *XClient, userID string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/friendships/destroy.json", APIBaseV1)
 	data := map[string]string{
-		"user_id":                         userID,
+		"user_id":                           userID,
 		"include_profile_interstitial_type": "1",
 	}
 	return client.RestPost(url, data)

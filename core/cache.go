@@ -164,7 +164,7 @@ func (rc *ResponseCache) loadFromDisk(key string) (interface{}, bool) {
 // saveToDisk persists a cache entry to disk
 func (rc *ResponseCache) saveToDisk(key string, entry *CacheEntry) {
 	os.MkdirAll(rc.cacheDir, 0755)
-	
+
 	path := filepath.Join(rc.cacheDir, key+".json")
 	data, err := json.Marshal(entry)
 	if err != nil {

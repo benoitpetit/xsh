@@ -58,6 +58,9 @@ type XClient struct {
 	client               *http.Client
 	authRefreshAttempted bool
 	chromeTarget         TLSFingerprintType
+	readDelay            float64
+	readDelayConfigured  bool
+	requestTimeout       time.Duration
 
 	// Test hooks
 	requestWithOperationHook func(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error)
@@ -65,21 +68,38 @@ type XClient struct {
 	invalidateCacheHook      func()
 	readDelayHook            func()
 	writeDelayHook           func()
+	readDelayFunc            func(float64)
 }
 
 // NewXClient creates a new XClient with a consistent Chrome fingerprint
 func NewXClient(credentials *AuthCredentials, account, proxy string) (*XClient, error) {
+	return NewXClientWithRequestConfig(credentials, account, proxy, RequestConfig{
+		Delay:   DefaultDelaySec,
+		Timeout: 30,
+	})
+}
+
+// NewXClientWithRequestConfig creates a client using explicit request settings.
+// A configured zero delay is preserved and disables read sleeping.
+func NewXClientWithRequestConfig(credentials *AuthCredentials, account, proxy string, request RequestConfig) (*XClient, error) {
 	chromeVersion := BestChromeTarget()
 
 	if Verbose {
 		logVerbose("Using Chrome version: %s", chromeVersion)
 	}
 
+	timeout := time.Duration(request.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
 	return &XClient{
-		credentials:  credentials,
-		account:      account,
-		proxy:        proxy,
-		chromeTarget: chromeVersion,
+		credentials:         credentials,
+		account:             account,
+		proxy:               proxy,
+		chromeTarget:        chromeVersion,
+		readDelay:           request.Delay,
+		readDelayConfigured: true,
+		requestTimeout:      timeout,
 	}, nil
 }
 
@@ -156,6 +176,9 @@ func (c *XClient) getHTTPClient() (*http.Client, error) {
 		if err != nil {
 			return nil, err
 		}
+		if c.requestTimeout > 0 {
+			client.Timeout = c.requestTimeout
+		}
 		c.client = client
 	}
 	return c.client, nil
@@ -201,7 +224,6 @@ func needsTransactionID(operation string) bool {
 		"UserTweetsAndReplies":   true,
 		"TweetDetail":            true,
 		"UserByScreenName":       true,
-		"Followers":              true,
 		"Following":              true,
 		"BookmarkSearchTimeline": true,
 	}
@@ -586,6 +608,12 @@ func (c *XClient) graphqlRequest(
 	if resolvedFeatures == nil {
 		resolvedFeatures = c.getOpFeatures(operation)
 	}
+	if GetEndpointManager().IsQuarantined(operation) {
+		return nil, &APIError{
+			Message:    fmt.Sprintf("GraphQL operation %q is quarantined after a 404; refresh discovery before retrying", operation),
+			StatusCode: http.StatusNotFound,
+		}
+	}
 
 	// Try up to 2 times (like Python: for attempt in range(2))
 	for attempt := 0; attempt < 2; attempt++ {
@@ -648,6 +676,9 @@ func (c *XClient) graphqlRequest(
 			// Check if this is a stale endpoint error (404)
 			if IsEndpointObsolete(err) {
 				if attempt == 0 {
+					if c.invalidateCacheHook == nil && c.refreshEndpointsHook == nil {
+						GetEndpointManager().QuarantineEndpoint(operation, "HTTP 404 or query not found")
+					}
 					// First attempt: invalidate cache, refresh endpoints from X.com, and retry
 					logVerbose("HTTP 404 for '%s' — operation IDs may be stale, "+
 						"refreshing endpoints from X.com and retrying...", operation)
@@ -688,6 +719,9 @@ func (c *XClient) graphqlRequest(
 
 		if isGraphQLEndpointNotFoundResponse(result) {
 			if attempt == 0 {
+				if c.invalidateCacheHook == nil && c.refreshEndpointsHook == nil {
+					GetEndpointManager().QuarantineEndpoint(operation, "GraphQL response reported query not found")
+				}
 				logVerbose("GraphQL response indicates obsolete endpoint for '%s' — refreshing endpoints and retrying...", operation)
 				c.refreshEndpointsForRetry(operation)
 
@@ -728,29 +762,23 @@ func (c *XClient) executeRequestWithOperation(method, urlStr string, params, jso
 }
 
 func (c *XClient) refreshEndpointsForRetry(operation string) {
-	if c.invalidateCacheHook != nil {
-		c.invalidateCacheHook()
-	} else {
-		InvalidateCache()
-	}
-
-	if c.refreshEndpointsHook != nil {
-		if err := c.refreshEndpointsHook(); err != nil {
-			logVerbose("Failed to refresh endpoints for '%s': %v", operation, err)
+	if c.invalidateCacheHook != nil || c.refreshEndpointsHook != nil {
+		// Preserve deterministic retry hooks used by tests and integrations.
+		if c.invalidateCacheHook != nil {
+			c.invalidateCacheHook()
 		}
-		return
-	}
-
-	discovery, err := NewEndpointDiscovery(Verbose)
-	if err != nil {
-		logVerbose("Failed to initialize endpoint discovery for '%s': %v", operation, err)
+		if c.refreshEndpointsHook != nil {
+			if err := c.refreshEndpointsHook(); err != nil {
+				logVerbose("Failed to refresh endpoints for '%s': %v", operation, err)
+			}
+		}
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	if _, err := discovery.DiscoverEndpoints(ctx); err != nil {
+	if err := GetEndpointManager().RefreshForOperation(ctx, operation); err != nil {
 		logVerbose("Failed to discover fresh endpoints for '%s': %v", operation, err)
 	}
 }
@@ -758,6 +786,14 @@ func (c *XClient) refreshEndpointsForRetry(operation string) {
 func (c *XClient) applyReadDelay() {
 	if c.readDelayHook != nil {
 		c.readDelayHook()
+		return
+	}
+	if c.readDelayConfigured {
+		if c.readDelayFunc != nil {
+			c.readDelayFunc(c.readDelay)
+			return
+		}
+		utils.DelaySeconds(c.readDelay)
 		return
 	}
 	utils.Delay(0, 0)
