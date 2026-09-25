@@ -1,0 +1,12 @@
+{
+  "data": {
+    "users": [
+      {
+        "result": {
+          "rest_id": "u4",
+          "legacy": {"name": "Batch User", "screen_name": "batchuser"}
+        }
+      }
+    ]
+  }
+}

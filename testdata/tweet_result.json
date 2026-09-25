@@ -1,0 +1,11 @@
+{
+  "data": {
+    "tweetResult": {
+      "result": {
+        "rest_id": "200",
+        "legacy": {"full_text": "direct tweet"},
+        "core": {"user_results": {"result": {"rest_id": "u2", "legacy": {"name": "Author", "screen_name": "author"}}}}
+      }
+    }
+  }
+}

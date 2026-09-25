@@ -1,0 +1,38 @@
+{
+  "data": {
+    "user": {
+      "result": {
+        "timeline_v2": {
+          "timeline": {
+            "instructions": [
+              {
+                "type": "TimelineAddEntries",
+                "entries": [
+                  {
+                    "entryId": "tweet-100",
+                    "content": {
+                      "itemContent": {
+                        "itemType": "TimelineTweet",
+                        "tweet_results": {
+                          "result": {
+                            "rest_id": "100",
+                            "legacy": {"full_text": "media tweet"},
+                            "core": {"user_results": {"result": {"rest_id": "u1", "legacy": {"name": "Author", "screen_name": "author"}}}}
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "entryId": "cursor-bottom-1",
+                    "content": {"cursorType": "Bottom", "value": "next-media"}
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

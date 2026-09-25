@@ -35,9 +35,9 @@ func extractTweetsFromTimeline(data map[string]interface{}) *models.TimelineResp
 				entryID := getString(entryMap, "entryId")
 				content, _ := entryMap["content"].(map[string]interface{})
 
-				if len(entryID) >= 10 && entryID[:10] == "cursor-top" {
+				if strings.HasPrefix(entryID, "cursor-top") {
 					response.CursorTop = extractCursor(content)
-				} else if len(entryID) >= 14 && entryID[:14] == "cursor-bottom" {
+				} else if strings.HasPrefix(entryID, "cursor-bottom") {
 					response.CursorBottom = extractCursor(content)
 					response.HasMore = response.CursorBottom != ""
 				} else if itemContent, ok := content["itemContent"].(map[string]interface{}); ok {
@@ -327,6 +327,61 @@ func GetUserTweets(client *XClient, userID string, count int, cursor string, inc
 	return extractTweetsFromTimeline(data), nil
 }
 
+// GetUserMedia fetches media posts from a user.
+func GetUserMedia(client *XClient, userID string, count int, cursor string) (*models.TimelineResponse, error) {
+	variables := map[string]interface{}{
+		"userId":                 userID,
+		"count":                  count,
+		"includePromotedContent": false,
+	}
+	if cursor != "" {
+		variables["cursor"] = cursor
+	}
+
+	data, err := client.GraphQLGet("UserMedia", variables)
+	if err != nil {
+		return nil, err
+	}
+
+	return extractTweetsFromTimeline(data), nil
+}
+
+// GetTweetByID fetches a single tweet without loading its conversation thread.
+func GetTweetByID(client *XClient, tweetID string) (*models.Tweet, error) {
+	data, err := client.GraphQLGet("TweetResultByRestId", map[string]interface{}{
+		"tweetId": tweetID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return parseTweetResultByRestID(data), nil
+}
+
+func parseTweetResultByRestID(data map[string]interface{}) *models.Tweet {
+	dataMap, ok := data["data"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	resultMap, ok := dataMap["tweetResult"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	result, ok := resultMap["result"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	if getString(result, "__typename") == "TweetTombstone" {
+		return nil
+	}
+	if getString(result, "__typename") == "TweetWithVisibilityResults" {
+		if wrapped, ok := result["tweet"].(map[string]interface{}); ok {
+			result = wrapped
+		}
+	}
+	return models.TweetFromAPIResult(result)
+}
+
 // GetUserLikes fetches likes from a user
 func GetUserLikes(client *XClient, userID string, count int, cursor string) (*models.TimelineResponse, error) {
 	variables := map[string]interface{}{
@@ -398,7 +453,7 @@ func extractUsersFromTimeline(data map[string]interface{}) ([]*models.User, stri
 					entryID := getString(entryMap, "entryId")
 					content, _ := entryMap["content"].(map[string]interface{})
 
-					if len(entryID) > 14 && entryID[:14] == "cursor-bottom" {
+					if strings.HasPrefix(entryID, "cursor-bottom") {
 						nextCursor = extractCursor(content)
 					} else if itemContent, ok := content["itemContent"].(map[string]interface{}); ok {
 						if userResults, ok := itemContent["user_results"].(map[string]interface{}); ok {

@@ -24,6 +24,7 @@ var userCmd = &cobra.Command{
 		
 Use subcommands for specific actions:
   user tweets <handle>    View user's tweets
+  user media <handle>     View user's media posts
   user likes <handle>     View user's liked tweets  
   user followers <handle> View user's followers
   user following <handle>  View who a user follows`,
@@ -156,6 +157,51 @@ var userLikesCmd = &cobra.Command{
 	},
 }
 
+// userMediaCmd represents the user media subcommand
+var userMediaCmd = &cobra.Command{
+	Use:   "media [handle]",
+	Short: "View a user's media posts",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		client, err := getClient("")
+		if err != nil {
+			fmt.Println(display.Error(err.Error()))
+			os.Exit(core.ExitAuthError)
+			return
+		}
+		defer client.Close()
+
+		handle, valid := utils.ValidateTwitterHandle(args[0])
+		if !valid {
+			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
+			os.Exit(core.ExitError)
+			return
+		}
+		user, err := core.GetUserByHandle(client, handle)
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
+			os.Exit(core.ExitError)
+			return
+		}
+		if user == nil {
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
+			os.Exit(core.ExitError)
+			return
+		}
+
+		runWithWatch(func() error {
+			response, err := core.GetUserMedia(client, user.ID, userCount, "")
+			if err != nil {
+				return fmt.Errorf("failed to fetch media: %w", err)
+			}
+			output(response.Tweets, func() {
+				fmt.Println(display.FormatTweetList(response.Tweets))
+			})
+			return nil
+		})
+	},
+}
+
 // userFollowersCmd represents the user followers subcommand
 var userFollowersCmd = &cobra.Command{
 	Use:   "followers [handle]",
@@ -253,6 +299,7 @@ func init() {
 
 	// Add subcommands to user command only (not to root)
 	userCmd.AddCommand(userTweetsCmd)
+	userCmd.AddCommand(userMediaCmd)
 	userCmd.AddCommand(userLikesCmd)
 	userCmd.AddCommand(userFollowersCmd)
 	userCmd.AddCommand(userFollowingCmd)
@@ -260,6 +307,7 @@ func init() {
 	// Flags
 	userTweetsCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
 	userTweetsCmd.Flags().BoolVar(&userReplies, "replies", false, "Include replies")
+	userMediaCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
 	userLikesCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
 	userFollowersCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of users")
 	userFollowingCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of users")
