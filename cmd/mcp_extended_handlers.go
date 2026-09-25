@@ -2,6 +2,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/models"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -58,6 +60,46 @@ func handleGetLists(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	}
 
 	return serializeResult(lists), nil
+}
+
+func handleGetListInfo(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	listID, _ := args["list_id"].(string)
+	client, err := core.NewXClient(nil, "", "")
+	if err != nil {
+		return errorResult(err), nil
+	}
+	defer client.Close()
+
+	list, err := core.GetListInfo(client, listID)
+	if err != nil {
+		return errorResult(err), nil
+	}
+	return serializeResult(list), nil
+}
+
+func handleGetListMemberships(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	count := 20.0
+	if c, ok := args["count"].(float64); ok {
+		count = c
+	}
+	client, err := core.NewXClient(nil, "", "")
+	if err != nil {
+		return errorResult(err), nil
+	}
+	defer client.Close()
+
+	viewer, err := core.GetViewer(client)
+	if err != nil || viewer == nil {
+		if err == nil {
+			err = fmt.Errorf("unable to resolve current user")
+		}
+		return errorResult(err), nil
+	}
+	lists, nextCursor, err := core.GetListMemberships(client, viewer.ID, int(count), "")
+	if err != nil {
+		return errorResult(err), nil
+	}
+	return serializeResult(map[string]interface{}{"lists": lists, "next_cursor": nextCursor}), nil
 }
 
 func handleGetListTimeline(args map[string]interface{}) (*mcp.CallToolResult, error) {
@@ -215,6 +257,29 @@ func handleGetUserLikes(args map[string]interface{}) (*mcp.CallToolResult, error
 	return serializeResult(response), nil
 }
 
+func handleGetUserMedia(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	handle, _ := args["handle"].(string)
+	count := 20.0
+	if c, ok := args["count"].(float64); ok {
+		count = c
+	}
+	client, err := core.NewXClient(nil, "", "")
+	if err != nil {
+		return errorResult(err), nil
+	}
+	defer client.Close()
+
+	user, err := core.GetUserByHandle(client, handle)
+	if err != nil || user == nil {
+		return errorResultString("User not found"), nil
+	}
+	response, err := core.GetUserMedia(client, user.ID, int(count), "")
+	if err != nil {
+		return errorResult(err), nil
+	}
+	return serializeResult(response), nil
+}
+
 func handleGetFollowers(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	handle, _ := args["handle"].(string)
 	count := 20.0
@@ -273,6 +338,73 @@ func handleGetFollowing(args map[string]interface{}) (*mcp.CallToolResult, error
 		"next_cursor": nextCursor,
 	}
 	return serializeResult(result), nil
+}
+
+func handleGetFollowersYouKnow(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	return handleRelationshipUsers(args, true)
+}
+
+func handleGetBlueVerifiedFollowers(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	return handleRelationshipUsers(args, false)
+}
+
+func handleRelationshipUsers(args map[string]interface{}, followersYouKnow bool) (*mcp.CallToolResult, error) {
+	handle, _ := args["handle"].(string)
+	count := 20.0
+	if c, ok := args["count"].(float64); ok {
+		count = c
+	}
+	client, err := core.NewXClient(nil, "", "")
+	if err != nil {
+		return errorResult(err), nil
+	}
+	defer client.Close()
+	user, err := core.GetUserByHandle(client, handle)
+	if err != nil || user == nil {
+		return errorResultString("User not found"), nil
+	}
+	var users []*models.User
+	var nextCursor string
+	if followersYouKnow {
+		users, nextCursor, err = core.GetFollowersYouKnow(client, user.ID, int(count), "")
+	} else {
+		users, nextCursor, err = core.GetBlueVerifiedFollowers(client, user.ID, int(count), "")
+	}
+	if err != nil {
+		return errorResult(err), nil
+	}
+	return serializeResult(map[string]interface{}{"users": users, "next_cursor": nextCursor}), nil
+}
+
+func handleGetBlockedAccounts(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	return handleViewerRelationshipUsers(args, true)
+}
+
+func handleGetMutedAccounts(args map[string]interface{}) (*mcp.CallToolResult, error) {
+	return handleViewerRelationshipUsers(args, false)
+}
+
+func handleViewerRelationshipUsers(args map[string]interface{}, blocked bool) (*mcp.CallToolResult, error) {
+	count := 50.0
+	if c, ok := args["count"].(float64); ok {
+		count = c
+	}
+	client, err := core.NewXClient(nil, "", "")
+	if err != nil {
+		return errorResult(err), nil
+	}
+	defer client.Close()
+	var users []*models.User
+	var nextCursor string
+	if blocked {
+		users, nextCursor, err = core.GetBlockedAccounts(client, int(count), "")
+	} else {
+		users, nextCursor, err = core.GetMutedAccounts(client, int(count), "")
+	}
+	if err != nil {
+		return errorResult(err), nil
+	}
+	return serializeResult(map[string]interface{}{"users": users, "next_cursor": nextCursor}), nil
 }
 
 func handleDMInbox(args map[string]interface{}) (*mcp.CallToolResult, error) {

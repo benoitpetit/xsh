@@ -58,7 +58,7 @@ func TestMCPTextContent(t *testing.T) {
 
 // TestMCPToolNames verifies all expected MCP tools are defined
 func TestMCPToolNames(t *testing.T) {
-	// 14 base tools + 30 extended unique tools (without unlike/unretweet/unbookmark duplicates)
+	// Base tools plus the extended read/write tools exposed by the MCP server.
 	expectedTools := []string{
 		// Base tools
 		"get_feed",
@@ -79,14 +79,21 @@ func TestMCPToolNames(t *testing.T) {
 		"get_bookmark_folders",
 		"get_bookmark_folder_timeline",
 		"get_lists",
+		"get_list_info",
+		"get_list_memberships",
 		"get_list_timeline",
 		"get_list_members",
 		"get_tweets_batch",
 		"get_users_batch",
 		"get_user_tweets",
 		"get_user_likes",
+		"get_user_media",
 		"get_followers",
 		"get_following",
+		"get_followers_you_know",
+		"get_blue_verified_followers",
+		"get_blocked_accounts",
+		"get_muted_accounts",
 		"dm_inbox",
 		// Extended tools - write
 		"follow",
@@ -113,8 +120,8 @@ func TestMCPToolNames(t *testing.T) {
 		"download_media",
 	}
 
-	if len(expectedTools) != 44 {
-		t.Errorf("Expected 44 MCP tools, got %d", len(expectedTools))
+	if len(expectedTools) != 51 {
+		t.Errorf("Expected 51 MCP tools, got %d", len(expectedTools))
 	}
 
 	// Verify unique names
