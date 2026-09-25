@@ -50,7 +50,9 @@ No API keys required — authenticates directly via browser cookies.
 - **Structured output** — JSON, YAML, and compact modes for scripting and agents
 - **Auto-updating endpoints** — dynamically discovers GraphQL operation IDs from X.com JS bundles
 - **Media support** — post up to 4 images per tweet, download media from any tweet
-- **Full coverage** — tweets, DMs, lists, bookmarks, jobs, trends, schedule, and more
+- **Full coverage** — tweets, DMs, lists, bookmarks, jobs, trends, schedules, relationships, and more
+- **Long-form publishing** — publish Note Tweets from text or a file with explicit confirmation
+- **Endpoint-aware fallbacks** — stale X operations are detected; quote search falls back to `SearchTimeline`
 
 ---
 
@@ -191,6 +193,9 @@ xsh tweet view <id> --count 50
 
 # Post a tweet
 xsh tweet post "Hello world!"
+
+# Publish a long-form Note Tweet (confirmation required)
+xsh tweet note --file essay.txt
 xsh tweet post "With image" --image photo.jpg
 xsh tweet post "Multiple images" -i img1.jpg -i img2.jpg -i img3.jpg
 xsh tweet post "Reply" --reply-to <tweet-id>
@@ -259,6 +264,11 @@ xsh user likes <handle> --count 30
 # Followers / following
 xsh user followers <handle> --count 50
 xsh user following <handle> --count 50
+
+# Media and relationship discovery
+xsh user media <handle> --count 50
+xsh user followers-you-know <handle> --count 50
+xsh user blue-verified-followers <handle> --count 50
 ```
 
 ---
@@ -277,6 +287,10 @@ xsh unblock <handle>
 # Mute / unmute
 xsh mute <handle>
 xsh unmute <handle>
+
+# Read relationship lists
+xsh social blocked --count 50
+xsh social muted --count 50
 ```
 
 ---
@@ -318,6 +332,10 @@ xsh dm delete <message-id>
 # View all your lists
 xsh lists
 
+# Read list metadata and memberships
+xsh lists info <list-id>
+xsh lists memberships
+
 # View tweets from a list
 xsh lists view <list-id>
 xsh lists view <list-id> --count 50
@@ -334,6 +352,10 @@ xsh lists remove-member <list-id> <handle>
 # Pin / unpin
 xsh lists pin <list-id>
 xsh lists unpin <list-id>
+
+# Update metadata (requires confirmation; JSON requires --force)
+xsh lists update <list-id> --name "New name"
+xsh lists update <list-id> --private=false --force --json
 ```
 
 ---
@@ -476,6 +498,16 @@ xsh count "My tweet" --preview
 xsh count --file draft.txt --preview --width 80
 ```
 
+### Read/write safety
+
+Read commands are safe to exercise against a connected account. Commands that
+publish, send, follow, block, mute, bookmark, schedule, delete, or update data
+change remote state. `lists update` requires at least one explicit field and a
+human confirmation; in JSON mode it also requires `--force`. `tweet note`
+accepts text or `--file`, validates the 25,000-character limit, and uses the
+same confirmation rule. Never use `--force` in an automated smoke test unless
+the remote mutation is intentional.
+
 ---
 
 ## Output Formats
@@ -533,10 +565,11 @@ Add to your `claude_desktop_config.json`:
 | Search     | `search`, `search_bookmarks`                                                                                                                               |
 | Tweets     | `get_tweet`, `get_tweet_thread`, `post_tweet`, `delete_tweet`, `get_tweets_batch`                                                                          |
 | Engagement | `like`, `unlike`, `retweet`, `unretweet`, `bookmark`, `unbookmark`                                                                                         |
-| Users      | `get_user`, `get_users_batch`, `get_user_tweets`, `get_user_likes`, `get_followers`, `get_following`                                                       |
+| Users      | `get_user`, `get_users_batch`, `get_user_tweets`, `get_user_likes`, `get_user_media`, `get_followers`, `get_following`, `get_followers_you_know`, `get_blue_verified_followers` |
+| Relationships | `get_blocked_accounts`, `get_muted_accounts`                                                                                                               |
 | Social     | `follow`, `unfollow`, `block`, `unblock`, `mute`, `unmute`                                                                                                 |
 | Bookmarks  | `list_bookmarks`, `get_bookmark_folders`, `get_bookmark_folder`                                                                                            |
-| Lists      | `get_user_lists`, `get_list_timeline`, `get_list_members`, `create_list`, `delete_list`, `add_list_member`, `remove_list_member`, `pin_list`, `unpin_list` |
+| Lists      | `get_user_lists`, `get_list_info`, `get_list_memberships`, `get_list_timeline`, `get_list_members`, `create_list`, `delete_list`, `add_list_member`, `remove_list_member`, `pin_list`, `unpin_list` |
 | DMs        | `dm_inbox`, `send_dm`, `delete_dm`                                                                                                                         |
 | Scheduled  | `schedule_tweet`, `get_scheduled_tweets`, `delete_scheduled_tweet`                                                                                         |
 | Trends     | `get_trending`                                                                                                                                             |
@@ -629,6 +662,12 @@ xsh auto-update
 xsh auto-update --dry-run   # Check only, don't update
 xsh auto-update --force     # Force refresh (ignore cache)
 ```
+
+Some operation names can remain visible in the endpoint inventory after X
+removes them. `TweetQuotes` currently returns 404, so `xsh quotes` uses the
+stable `SearchTimeline` query instead. `CommunitiesMainPageTimeline` is also
+tracked as a candidate but is not exposed as a discovery command until X
+serves it again.
 
 ---
 

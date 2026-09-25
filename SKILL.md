@@ -84,6 +84,10 @@ xsh tweet post "With image" --image photo.jpg
 xsh tweet post "Reply" --reply-to <tweet_id>
 xsh tweet post "Quote" --quote <tweet_url>
 
+# Long-form Note Tweet (confirmation required)
+xsh tweet note "Long-form content"
+xsh tweet note --file essay.txt
+
 # Engagement
 xsh tweet like <tweet_id>
 xsh tweet retweet <tweet_id>
@@ -108,6 +112,11 @@ xsh user <handle> --json
 xsh user tweets <handle> --count 50 --json
 xsh user tweets <handle> --replies  # Include replies
 
+# User media and relationship discovery
+xsh user media <handle> --count 50 --json
+xsh user followers-you-know <handle> --count 50 --json
+xsh user blue-verified-followers <handle> --count 50 --json
+
 # Likes
 xsh user likes <handle> --count 50
 
@@ -120,6 +129,10 @@ xsh follow <handle>
 xsh unfollow <handle>
 xsh block <handle>
 xsh mute <handle>
+
+# Read relationship lists
+xsh social blocked --count 50 --json
+xsh social muted --count 50 --json
 ```
 
 ### 4. Batch Operations (Multiple IDs)
@@ -141,11 +154,19 @@ xsh lists --json
 # View tweets from a list
 xsh lists view <list_id> --count 50
 
+# Read metadata and memberships
+xsh lists info <list_id> --json
+xsh lists memberships --json
+
 # Manage
 xsh lists create "My List" --description "Description"
 xsh lists add-member <list_id> <handle>
 xsh lists remove-member <list_id> <handle>
 xsh lists delete <list_id>
+
+# Update metadata (confirmation required; JSON requires --force)
+xsh lists update <list_id> --name "New name"
+xsh lists update <list_id> --private=false --force --json
 ```
 
 ### 6. Bookmarks
@@ -307,15 +328,16 @@ xsh mcp
 }
 ```
 
-### Available MCP Tools (52)
+### Available MCP Tools (59)
 
 **Read (24):**
 - `get_feed`, `search`, `get_tweet`, `get_tweet_thread`
 - `get_tweets_batch`, `get_users_batch`
-- `get_user`, `get_user_tweets`, `get_user_likes`
-- `get_followers`, `get_following`
+- `get_user`, `get_user_tweets`, `get_user_likes`, `get_user_media`
+- `get_followers`, `get_following`, `get_followers_you_know`, `get_blue_verified_followers`
+- `get_blocked_accounts`, `get_muted_accounts`
 - `list_bookmarks`, `get_bookmark_folders`, `get_bookmark_folder_timeline`
-- `get_lists`, `get_list_timeline`, `get_list_members`
+- `get_lists`, `get_list_info`, `get_list_memberships`, `get_list_timeline`, `get_list_members`
 - `dm_inbox`, `get_trending`, `search_jobs`, `get_job`, `auth_status`
 
 **Write (14):**
@@ -328,6 +350,19 @@ xsh mcp
 - `schedule_tweet`, `list_scheduled_tweets`, `cancel_scheduled_tweet`
 - `dm_send`, `dm_delete`
 - `download_media`
+
+### Mutation safety
+
+Use read tools for diagnostics and smoke tests. `lists update` requires an
+explicit field and confirmation; JSON calls additionally require `--force`.
+`tweet note` accepts a file or text, validates 25,000 characters, and requires
+the same confirmation discipline. Do not invoke write tools during a health
+check unless a real remote change is intended.
+
+The endpoint inventory may contain operations removed by X. `TweetQuotes` is
+kept as a candidate but `quotes` uses the stable search query fallback;
+`CommunitiesMainPageTimeline` is not exposed as a command while it returns
+404 after endpoint refresh.
 
 ## Examples for LLM / Scripts
 

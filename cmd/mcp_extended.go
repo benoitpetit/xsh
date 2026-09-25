@@ -31,6 +31,16 @@ func registerReadToolsExtended(s *server.MCPServer) {
 	// get_lists
 	s.AddTool(createTool("get_lists", "Fetch the user's lists", map[string]interface{}{}), handleGetLists)
 
+	// get_list_info
+	s.AddTool(createTool("get_list_info", "Fetch list metadata", map[string]interface{}{
+		"list_id": map[string]interface{}{"type": "string", "description": "The list ID", "required": true},
+	}), handleGetListInfo)
+
+	// get_list_memberships
+	s.AddTool(createTool("get_list_memberships", "Fetch lists the current user belongs to", map[string]interface{}{
+		"count": map[string]interface{}{"type": "number", "description": "Number of lists to fetch", "default": 20},
+	}), handleGetListMemberships)
+
 	// get_list_timeline
 	s.AddTool(createTool("get_list_timeline", "Fetch tweets from a list", map[string]interface{}{
 		"list_id": map[string]interface{}{"type": "string", "description": "The list ID", "required": true},
@@ -65,6 +75,12 @@ func registerReadToolsExtended(s *server.MCPServer) {
 		"count":  map[string]interface{}{"type": "number", "description": "Number of tweets to fetch", "default": 20},
 	}), handleGetUserLikes)
 
+	// get_user_media
+	s.AddTool(createTool("get_user_media", "Fetch media posts from a user", map[string]interface{}{
+		"handle": map[string]interface{}{"type": "string", "description": "The user's handle (without @)", "required": true},
+		"count":  map[string]interface{}{"type": "number", "description": "Number of posts to fetch", "default": 20},
+	}), handleGetUserMedia)
+
 	// get_followers
 	s.AddTool(createTool("get_followers", "Fetch followers of a user", map[string]interface{}{
 		"handle": map[string]interface{}{"type": "string", "description": "The user's handle (without @)", "required": true},
@@ -76,6 +92,28 @@ func registerReadToolsExtended(s *server.MCPServer) {
 		"handle": map[string]interface{}{"type": "string", "description": "The user's handle (without @)", "required": true},
 		"count":  map[string]interface{}{"type": "number", "description": "Number of users to fetch", "default": 20},
 	}), handleGetFollowing)
+
+	// get_followers_you_know
+	s.AddTool(createTool("get_followers_you_know", "Fetch followers you may know", map[string]interface{}{
+		"handle": map[string]interface{}{"type": "string", "description": "The user's handle (without @)", "required": true},
+		"count":  map[string]interface{}{"type": "number", "description": "Number of users to fetch", "default": 20},
+	}), handleGetFollowersYouKnow)
+
+	// get_blue_verified_followers
+	s.AddTool(createTool("get_blue_verified_followers", "Fetch blue-verified followers", map[string]interface{}{
+		"handle": map[string]interface{}{"type": "string", "description": "The user's handle (without @)", "required": true},
+		"count":  map[string]interface{}{"type": "number", "description": "Number of users to fetch", "default": 20},
+	}), handleGetBlueVerifiedFollowers)
+
+	// get_blocked_accounts
+	s.AddTool(createTool("get_blocked_accounts", "Fetch blocked accounts", map[string]interface{}{
+		"count": map[string]interface{}{"type": "number", "description": "Number of users to fetch", "default": 50},
+	}), handleGetBlockedAccounts)
+
+	// get_muted_accounts
+	s.AddTool(createTool("get_muted_accounts", "Fetch muted accounts", map[string]interface{}{
+		"count": map[string]interface{}{"type": "number", "description": "Number of users to fetch", "default": 50},
+	}), handleGetMutedAccounts)
 
 	// dm_inbox
 	s.AddTool(createTool("dm_inbox", "Fetch DM inbox conversations", map[string]interface{}{}), handleDMInbox)
