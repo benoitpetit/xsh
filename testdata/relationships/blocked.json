@@ -1,0 +1,34 @@
+{
+  "data": {
+    "viewer": {
+      "blocked_accounts_timeline": {
+        "timeline": {
+          "instructions": [
+            {
+              "type": "TimelineAddEntries",
+              "entries": [
+                {
+                  "entryId": "user-103",
+                  "content": {
+                    "itemContent": {
+                      "user_results": {
+                        "result": {
+                          "rest_id": "103",
+                          "legacy": {"name": "Blocked User", "screen_name": "blocked_user"}
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "entryId": "cursor-bottom-1",
+                  "content": {"cursorType": "Bottom", "value": "blocked-next"}
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

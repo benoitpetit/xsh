@@ -8,14 +8,47 @@ import (
 
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
+	"github.com/benoitpetit/xsh/models"
 	"github.com/spf13/cobra"
 )
 
 // socialCmd represents the social command group
 var socialCmd = &cobra.Command{
 	Use:   "social",
-	Short: "Social actions (follow, block, mute)",
+	Short: "Social actions and relationship lists",
 }
+
+var socialListCmd = func(use, short, operation string) *cobra.Command {
+	return &cobra.Command{
+		Use:   use,
+		Short: short,
+		Run: func(cmd *cobra.Command, args []string) {
+			count, _ := cmd.Flags().GetInt("count")
+			client, err := getClient("")
+			if err != nil {
+				fmt.Println(display.Error(err.Error()))
+				os.Exit(core.ExitAuthError)
+			}
+			defer client.Close()
+
+			var users []*models.User
+			switch operation {
+			case "blocked":
+				users, _, err = core.GetBlockedAccounts(client, count, "")
+			case "muted":
+				users, _, err = core.GetMutedAccounts(client, count, "")
+			}
+			if err != nil {
+				fmt.Println(display.Error(fmt.Sprintf("Failed to fetch %s accounts: %v", operation, err)))
+				os.Exit(core.ExitError)
+			}
+			output(users, func() { fmt.Println(display.FormatUserList(users)) })
+		},
+	}
+}
+
+var socialBlockedCmd = socialListCmd("blocked", "View blocked accounts", "blocked")
+var socialMutedCmd = socialListCmd("muted", "View muted accounts", "muted")
 
 // followCmd follows a user
 var followCmd = &cobra.Command{
@@ -272,6 +305,10 @@ func init() {
 	socialCmd.AddCommand(unblockCmd)
 	socialCmd.AddCommand(muteCmd)
 	socialCmd.AddCommand(unmuteCmd)
+	socialCmd.AddCommand(socialBlockedCmd)
+	socialCmd.AddCommand(socialMutedCmd)
+	socialBlockedCmd.Flags().IntP("count", "n", 50, "Number of users")
+	socialMutedCmd.Flags().IntP("count", "n", 50, "Number of users")
 
 	rootCmd.AddCommand(followCmd)
 	rootCmd.AddCommand(unfollowCmd)

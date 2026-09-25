@@ -294,6 +294,82 @@ var userFollowingCmd = &cobra.Command{
 	},
 }
 
+// userFollowersYouKnowCmd shows accounts followed by people a user follows.
+var userFollowersYouKnowCmd = &cobra.Command{
+	Use:   "followers-you-know [handle]",
+	Short: "View followers you may know",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		client, err := getClient("")
+		if err != nil {
+			fmt.Println(display.Error(err.Error()))
+			os.Exit(core.ExitAuthError)
+		}
+		defer client.Close()
+
+		handle, valid := utils.ValidateTwitterHandle(args[0])
+		if !valid {
+			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
+			os.Exit(core.ExitError)
+		}
+		user, err := core.GetUserByHandle(client, handle)
+		if err != nil || user == nil {
+			if err != nil {
+				fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
+			} else {
+				fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
+			}
+			os.Exit(core.ExitError)
+		}
+
+		count, _ := cmd.Flags().GetInt("count")
+		users, _, err := core.GetFollowersYouKnow(client, user.ID, count, "")
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch followers you may know: %v", err)))
+			os.Exit(core.ExitError)
+		}
+		output(users, func() { fmt.Println(display.FormatUserList(users)) })
+	},
+}
+
+// userBlueVerifiedFollowersCmd shows verified followers of a user.
+var userBlueVerifiedFollowersCmd = &cobra.Command{
+	Use:   "blue-verified-followers [handle]",
+	Short: "View a user's blue-verified followers",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		client, err := getClient("")
+		if err != nil {
+			fmt.Println(display.Error(err.Error()))
+			os.Exit(core.ExitAuthError)
+		}
+		defer client.Close()
+
+		handle, valid := utils.ValidateTwitterHandle(args[0])
+		if !valid {
+			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
+			os.Exit(core.ExitError)
+		}
+		user, err := core.GetUserByHandle(client, handle)
+		if err != nil || user == nil {
+			if err != nil {
+				fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
+			} else {
+				fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
+			}
+			os.Exit(core.ExitError)
+		}
+
+		count, _ := cmd.Flags().GetInt("count")
+		users, _, err := core.GetBlueVerifiedFollowers(client, user.ID, count, "")
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch blue-verified followers: %v", err)))
+			os.Exit(core.ExitError)
+		}
+		output(users, func() { fmt.Println(display.FormatUserList(users)) })
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(userCmd)
 
@@ -303,6 +379,8 @@ func init() {
 	userCmd.AddCommand(userLikesCmd)
 	userCmd.AddCommand(userFollowersCmd)
 	userCmd.AddCommand(userFollowingCmd)
+	userCmd.AddCommand(userFollowersYouKnowCmd)
+	userCmd.AddCommand(userBlueVerifiedFollowersCmd)
 
 	// Flags
 	userTweetsCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
@@ -311,4 +389,6 @@ func init() {
 	userLikesCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
 	userFollowersCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of users")
 	userFollowingCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of users")
+	userFollowersYouKnowCmd.Flags().IntP("count", "n", 20, "Number of users")
+	userBlueVerifiedFollowersCmd.Flags().IntP("count", "n", 20, "Number of users")
 }

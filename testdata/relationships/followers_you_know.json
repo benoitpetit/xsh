@@ -1,0 +1,34 @@
+{
+  "data": {
+    "user": {
+      "result": {
+        "timeline": {
+          "instructions": [
+            {
+              "type": "TimelineAddEntries",
+              "entries": [
+                {
+                  "entryId": "user-101",
+                  "content": {
+                    "itemContent": {
+                      "user_results": {
+                        "result": {
+                          "rest_id": "101",
+                          "legacy": {"name": "Known Follower", "screen_name": "known_follower"}
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "entryId": "cursor-bottom-1",
+                  "content": {"cursorType": "Bottom", "value": "followers-next"}
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
