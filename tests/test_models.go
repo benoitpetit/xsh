@@ -238,6 +238,37 @@ func TestUserFromAPIResult(t *testing.T) {
 	}
 }
 
+func TestUserFromAPIResultPopulatesModernProfileFields(t *testing.T) {
+	result := map[string]interface{}{
+		"rest_id":                 "5973812",
+		"name":                    "Korben",
+		"screen_name":             "Korben",
+		"profile_image_url_https": "https://pbs.twimg.com/profile_images/x_normal.jpg",
+		"profile_banner_url":      "https://pbs.twimg.com/profile_banners/5973812/banner.jpg",
+		"legacy": map[string]interface{}{
+			"description":     "Tech blog",
+			"followers_count": 10.0,
+			"friends_count":   2.0,
+			"statuses_count":  3.0,
+		},
+		"is_blue_verified": true,
+	}
+
+	user := models.UserFromAPIResult(result)
+	if user == nil {
+		t.Fatal("UserFromAPIResult returned nil")
+	}
+	if user.Name != "Korben" || user.Handle != "Korben" {
+		t.Fatalf("profile name/handle = %q/%q, want Korben/Korben", user.Name, user.Handle)
+	}
+	if user.ProfileImageURL != "https://pbs.twimg.com/profile_images/x_400x400.jpg" {
+		t.Fatalf("profile image = %q", user.ProfileImageURL)
+	}
+	if user.ProfileBannerURL != "https://pbs.twimg.com/profile_banners/5973812/banner.jpg" {
+		t.Fatalf("profile banner = %q", user.ProfileBannerURL)
+	}
+}
+
 // TestUserFromAPIResultNil tests user parsing with nil data
 func TestUserFromAPIResultNil(t *testing.T) {
 	result := map[string]interface{}{}

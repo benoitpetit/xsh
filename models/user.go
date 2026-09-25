@@ -78,7 +78,26 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 
 	// Parse profile image URL (use larger size)
 	profileImageURL, _ := legacy["profile_image_url_https"].(string)
+	if profileImageURL == "" {
+		profileImageURL = GetString(result, "profile_image_url_https")
+	}
 	profileImageURL = replaceAll(profileImageURL, "_normal", "_400x400")
+
+	name := GetString(legacy, "name")
+	if name == "" {
+		name = GetString(result, "name")
+	}
+	handle := GetString(legacy, "screen_name")
+	if handle == "" {
+		handle = GetString(result, "screen_name")
+	}
+	if handle == "" {
+		handle = GetString(result, "handle")
+	}
+	profileBannerURL := GetString(legacy, "profile_banner_url")
+	if profileBannerURL == "" {
+		profileBannerURL = GetString(result, "profile_banner_url")
+	}
 
 	// Get counts
 	followersCount := getInt(legacy, "followers_count")
@@ -91,8 +110,8 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 
 	return &User{
 		ID:               restID,
-		Name:             GetString(legacy, "name"),
-		Handle:           GetString(legacy, "screen_name"),
+		Name:             name,
+		Handle:           handle,
 		Bio:              GetString(legacy, "description"),
 		Location:         GetString(legacy, "location"),
 		Website:          website,
@@ -103,7 +122,7 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 		ListedCount:      listedCount,
 		CreatedAt:        createdAt,
 		ProfileImageURL:  profileImageURL,
-		ProfileBannerURL: GetString(legacy, "profile_banner_url"),
+		ProfileBannerURL: profileBannerURL,
 		PinnedTweetID:    pinnedTweetID,
 	}
 }
