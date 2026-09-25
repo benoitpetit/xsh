@@ -40,6 +40,7 @@ func TestGetDefaultChromePathsIncludesProfileNetworkCookies(t *testing.T) {
 	}
 
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 
 	paths := GetDefaultChromePaths()
 	for _, path := range paths {

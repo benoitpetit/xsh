@@ -39,11 +39,14 @@ func ensureCommandGroups() {
 	if !socialCmd.ContainsGroup(groupEngage) {
 		socialCmd.AddGroup(&cobra.Group{ID: groupEngage, Title: "Engage:"})
 	}
+	if !socialCmd.ContainsGroup(groupExplore) {
+		socialCmd.AddGroup(&cobra.Group{ID: groupExplore, Title: "Discover & Read:"})
+	}
 
 	assignCommandGroups(map[string]string{
 		"auth": groupStart, "accounts": groupStart, "switch": groupStart,
 		"import": groupStart,
-		"feed": groupExplore, "search": groupExplore, "user": groupExplore,
+		"feed":   groupExplore, "search": groupExplore, "user": groupExplore,
 		"tweet": groupExplore, "thread": groupExplore, "unroll": groupExplore,
 		"quotes": groupExplore, "pinned": groupExplore, "trends": groupExplore,
 		"space": groupExplore, "community": groupExplore, "jobs": groupExplore,
@@ -65,6 +68,8 @@ func ensureCommandGroups() {
 		"auto-update": groupSystem, "ratelimit": groupSystem,
 		"mcp": groupSystem, "version": groupSystem, "completion": groupSystem,
 	})
+	socialBlockedCmd.GroupID = groupExplore
+	socialMutedCmd.GroupID = groupExplore
 	rootCmd.SetHelpCommandGroupID(groupSystem)
 	rootCmd.SetCompletionCommandGroupID(groupSystem)
 }

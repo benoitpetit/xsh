@@ -23,8 +23,9 @@ var listsCmd = &cobra.Command{
 	Long: `View, create, and manage your Twitter lists.
 
 Running xsh lists without a subcommand lists your owned and subscribed lists.
-Use xsh lists view <list-id> to read a list timeline and xsh lists members <list-id>
-to inspect its members.`,
+Use xsh lists view <list-id> to read a list timeline, xsh lists info <list-id>
+for metadata, and xsh lists members <list-id> to inspect its members.
+Use xsh lists memberships to inspect lists you belong to. Updates require confirmation.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Default: list user's lists
 		client, err := getClient("")
