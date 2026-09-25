@@ -32,13 +32,16 @@ Examples:
   xsh tweet view 1234567890                # View a specific tweet
   xsh tweet view 1234567890 --thread       # View tweet with replies as thread tree
   xsh tweet post "Hello world"             # Post a new tweet
+  xsh tweet note --file essay.txt          # Publish a long-form Note Tweet
   xsh tweet like 1234567890                # Like a tweet
   xsh tweet unlike 1234567890              # Unlike a tweet
   xsh tweet retweet 1234567890             # Retweet
   xsh tweet unretweet 1234567890           # Undo retweet
   xsh tweet bookmark 1234567890            # Bookmark a tweet
   xsh tweet unbookmark 1234567890          # Remove bookmark
-  xsh tweet delete 1234567890              # Delete your tweet`,
+  xsh tweet delete 1234567890              # Delete your tweet
+
+Note Tweet publication and list metadata updates require explicit confirmation.`,
 }
 
 // tweetViewCmd views a tweet and its thread

@@ -27,7 +27,9 @@ Use subcommands for specific actions:
   user media <handle>     View user's media posts
   user likes <handle>     View user's liked tweets  
   user followers <handle> View user's followers
-  user following <handle>  View who a user follows`,
+  user following <handle>  View who a user follows
+  user followers-you-know <handle>      Discover likely connections
+  user blue-verified-followers <handle> View blue-verified followers`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient("")
