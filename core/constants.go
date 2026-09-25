@@ -39,8 +39,8 @@ var GraphQLEndpoints = map[string]string{
 	"UserMedia":            "mWo2yKjZEaqK7_vKox_67Q/UserMedia",
 	"Likes":                "dv5-II7_Bup_PHish7p6fw/Likes",
 
-	// Read operations - Followers/Following
-	"Followers":             "8sIMO3RbSCdvk2QzxcPpIg/Followers",
+	// Read operations - Following. Followers has no verified static fallback;
+	// it must be discovered from the authenticated web client when available.
 	"Following":             "lEJDj0bTio9-s0hSukCD9Q/Following",
 	"FollowersYouKnow":      "fBi9FJP1haBdGoZuVfZVzQ/FollowersYouKnow",
 	"BlueVerifiedFollowers": "ZH16zF8R8YAJAAfIGbef9A/BlueVerifiedFollowers",

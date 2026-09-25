@@ -107,7 +107,7 @@ func TestGetListTweets(t *testing.T) {
 	// Test with a known public list ID
 	// You can find list IDs in the URL when viewing a list on Twitter
 	listID := "1234567890" // Replace with actual test list ID
-	
+
 	response, err := core.GetListTweets(client, listID, 10, "")
 	if err != nil {
 		t.Logf("GetListTweets() error = %v", err)
@@ -130,7 +130,7 @@ func TestGetListMembers(t *testing.T) {
 	defer client.Close()
 
 	listID := "1234567890" // Replace with actual test list ID
-	
+
 	users, nextCursor, err := core.GetListMembers(client, listID, 10, "")
 	if err != nil {
 		t.Logf("GetListMembers() error = %v", err)

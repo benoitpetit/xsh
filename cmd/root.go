@@ -4,6 +4,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -109,6 +110,12 @@ func isCompactMode() bool {
 
 // outputJSON prints data as JSON
 func outputJSON(data interface{}) {
+	if err := encodeJSON(os.Stdout, data, false); err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshaling JSON: %v\n", err)
+	}
+}
+
+func encodeJSON(w io.Writer, data interface{}, compact bool) error {
 	var output interface{}
 
 	switch v := data.(type) {
@@ -122,9 +129,11 @@ func outputJSON(data interface{}) {
 		output = data
 	}
 
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	encoder.Encode(output)
+	encoder := json.NewEncoder(w)
+	if !compact {
+		encoder.SetIndent("", "  ")
+	}
+	return encoder.Encode(output)
 }
 
 // outputYAML prints data as YAML
@@ -162,7 +171,7 @@ func getClient(acc string) (*core.XClient, error) {
 		cfg = core.DefaultConfig()
 	}
 
-	return core.NewXClient(nil, acc, cfg.Network.Proxy)
+	return core.NewXClientWithRequestConfig(nil, acc, cfg.Network.Proxy, cfg.Request)
 }
 
 // output handles output in the appropriate format (YAML, JSON, Compact, or human-readable)
@@ -179,10 +188,22 @@ func output(data interface{}, humanOutput func()) {
 	}
 }
 
+// outputPage keeps the terminal formatter focused on items while exposing
+// pagination metadata to JSON, YAML, and compact consumers.
+func outputPage[T any](items []T, nextCursor string, hasMore bool, humanOutput func()) {
+	output(models.Page[T]{
+		Items:      items,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, humanOutput)
+}
+
 // outputCompact prints minimal data for AI agents (compact JSON with essential fields)
 func outputCompact(data interface{}) {
 	compact := toCompact(data)
-	outputJSON(compact)
+	if err := encodeJSON(os.Stdout, compact, true); err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshaling compact JSON: %v\n", err)
+	}
 }
 
 // isWatchMode returns true if the watch flag is set
@@ -241,6 +262,32 @@ func runWithWatch(fetchAndDisplay func() error) {
 // toCompact converts data to compact format with only essential fields
 func toCompact(data interface{}) interface{} {
 	switch v := data.(type) {
+	case models.Page[*models.Tweet]:
+		items := make([]map[string]interface{}, 0, len(v.Items))
+		for _, t := range v.Items {
+			items = append(items, map[string]interface{}{
+				"id":       t.ID,
+				"text":     t.Text,
+				"author":   t.AuthorHandle,
+				"created":  t.CreatedAt,
+				"likes":    t.Engagement.Likes,
+				"retweets": t.Engagement.Retweets,
+				"replies":  t.Engagement.Replies,
+			})
+		}
+		return models.Page[map[string]interface{}]{Items: items, NextCursor: v.NextCursor, HasMore: v.HasMore}
+	case models.Page[*models.User]:
+		items := make([]map[string]interface{}, 0, len(v.Items))
+		for _, u := range v.Items {
+			items = append(items, map[string]interface{}{
+				"id":        u.ID,
+				"handle":    u.Handle,
+				"name":      u.Name,
+				"followers": u.FollowersCount,
+				"following": u.FollowingCount,
+			})
+		}
+		return models.Page[map[string]interface{}]{Items: items, NextCursor: v.NextCursor, HasMore: v.HasMore}
 	case []*models.Tweet:
 		var result []map[string]interface{}
 		for _, t := range v {

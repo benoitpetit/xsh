@@ -99,12 +99,13 @@ var userTweetsCmd = &cobra.Command{
 		}
 
 		runWithWatch(func() error {
-			response, err := core.GetUserTweets(client, user.ID, userCount, "", userReplies)
+			cursor, _ := cmd.Flags().GetString("cursor")
+			response, err := core.GetUserTweets(client, user.ID, userCount, cursor, userReplies)
 			if err != nil {
 				return fmt.Errorf("failed to fetch tweets: %w", err)
 			}
 
-			output(response.Tweets, func() {
+			outputPage(response.Tweets, response.CursorBottom, response.HasMore, func() {
 				fmt.Println(display.FormatTweetList(response.Tweets))
 			})
 			return nil
@@ -146,12 +147,13 @@ var userLikesCmd = &cobra.Command{
 		}
 
 		runWithWatch(func() error {
-			response, err := core.GetUserLikes(client, user.ID, userCount, "")
+			cursor, _ := cmd.Flags().GetString("cursor")
+			response, err := core.GetUserLikes(client, user.ID, userCount, cursor)
 			if err != nil {
 				return fmt.Errorf("failed to fetch likes: %w", err)
 			}
 
-			output(response.Tweets, func() {
+			outputPage(response.Tweets, response.CursorBottom, response.HasMore, func() {
 				fmt.Println(display.FormatTweetList(response.Tweets))
 			})
 			return nil
@@ -192,11 +194,12 @@ var userMediaCmd = &cobra.Command{
 		}
 
 		runWithWatch(func() error {
-			response, err := core.GetUserMedia(client, user.ID, userCount, "")
+			cursor, _ := cmd.Flags().GetString("cursor")
+			response, err := core.GetUserMedia(client, user.ID, userCount, cursor)
 			if err != nil {
 				return fmt.Errorf("failed to fetch media: %w", err)
 			}
-			output(response.Tweets, func() {
+			outputPage(response.Tweets, response.CursorBottom, response.HasMore, func() {
 				fmt.Println(display.FormatTweetList(response.Tweets))
 			})
 			return nil
@@ -237,14 +240,15 @@ var userFollowersCmd = &cobra.Command{
 			return
 		}
 
-		users, _, err := core.GetFollowers(client, user.ID, userCount, "")
+		cursor, _ := cmd.Flags().GetString("cursor")
+		users, nextCursor, err := core.GetFollowers(client, user.ID, userCount, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch followers: %v", err)))
 			os.Exit(core.ExitError)
 			return
 		}
 
-		output(users, func() {
+		outputPage(users, nextCursor, nextCursor != "", func() {
 			fmt.Println(display.FormatUserList(users))
 		})
 	},
@@ -283,14 +287,15 @@ var userFollowingCmd = &cobra.Command{
 			return
 		}
 
-		users, _, err := core.GetFollowing(client, user.ID, userCount, "")
+		cursor, _ := cmd.Flags().GetString("cursor")
+		users, nextCursor, err := core.GetFollowing(client, user.ID, userCount, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch following: %v", err)))
 			os.Exit(core.ExitError)
 			return
 		}
 
-		output(users, func() {
+		outputPage(users, nextCursor, nextCursor != "", func() {
 			fmt.Println(display.FormatUserList(users))
 		})
 	},
@@ -325,12 +330,13 @@ var userFollowersYouKnowCmd = &cobra.Command{
 		}
 
 		count, _ := cmd.Flags().GetInt("count")
-		users, _, err := core.GetFollowersYouKnow(client, user.ID, count, "")
+		cursor, _ := cmd.Flags().GetString("cursor")
+		users, nextCursor, err := core.GetFollowersYouKnow(client, user.ID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch followers you may know: %v", err)))
 			os.Exit(core.ExitError)
 		}
-		output(users, func() { fmt.Println(display.FormatUserList(users)) })
+		outputPage(users, nextCursor, nextCursor != "", func() { fmt.Println(display.FormatUserList(users)) })
 	},
 }
 
@@ -363,12 +369,13 @@ var userBlueVerifiedFollowersCmd = &cobra.Command{
 		}
 
 		count, _ := cmd.Flags().GetInt("count")
-		users, _, err := core.GetBlueVerifiedFollowers(client, user.ID, count, "")
+		cursor, _ := cmd.Flags().GetString("cursor")
+		users, nextCursor, err := core.GetBlueVerifiedFollowers(client, user.ID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch blue-verified followers: %v", err)))
 			os.Exit(core.ExitError)
 		}
-		output(users, func() { fmt.Println(display.FormatUserList(users)) })
+		outputPage(users, nextCursor, nextCursor != "", func() { fmt.Println(display.FormatUserList(users)) })
 	},
 }
 
@@ -387,10 +394,17 @@ func init() {
 	// Flags
 	userTweetsCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
 	userTweetsCmd.Flags().BoolVar(&userReplies, "replies", false, "Include replies")
+	userTweetsCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	userMediaCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
+	userMediaCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	userLikesCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
+	userLikesCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	userFollowersCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of users")
+	userFollowersCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	userFollowingCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of users")
+	userFollowingCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	userFollowersYouKnowCmd.Flags().IntP("count", "n", 20, "Number of users")
+	userFollowersYouKnowCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	userBlueVerifiedFollowersCmd.Flags().IntP("count", "n", 20, "Number of users")
+	userBlueVerifiedFollowersCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 }

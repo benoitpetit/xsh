@@ -51,7 +51,7 @@ func (sc *StartupChecker) MarkChecked() {
 // QuickCheckEndpoints performs a quick check of critical endpoints
 func (sc *StartupChecker) QuickCheckEndpoints() ([]string, error) {
 	fmt.Println("🔍 Checking API endpoints...")
-	
+
 	// Create a temporary client for checking
 	client, err := NewXClient(nil, "", "")
 	if err != nil {
@@ -61,7 +61,7 @@ func (sc *StartupChecker) QuickCheckEndpoints() ([]string, error) {
 	defer client.Close()
 
 	obsolete := []string{}
-	
+
 	// Check critical endpoints
 	endpointsToCheck := []string{
 		"HomeTimeline",
@@ -71,7 +71,7 @@ func (sc *StartupChecker) QuickCheckEndpoints() ([]string, error) {
 
 	for _, operation := range endpointsToCheck {
 		fmt.Printf("   Checking %s... ", operation)
-		
+
 		// Try a minimal request
 		if err := sc.checkEndpoint(client, operation); err != nil {
 			fmt.Printf("❌\n")
@@ -93,14 +93,14 @@ func (sc *StartupChecker) checkEndpoint(client *XClient, operation string) error
 	}
 
 	_, err := client.GraphQLGet(operation, variables)
-	
+
 	if err != nil {
 		// Check if it's a 404 "Query not found" error
 		if apiErr, ok := err.(*APIError); ok && apiErr.StatusCode == 404 {
 			// Check the response data for "Query not found"
 			if strings.Contains(apiErr.ResponseData, "Query not found") ||
-			   strings.Contains(apiErr.ResponseData, "Not Found") ||
-			   strings.Contains(apiErr.Message, "Query not found") {
+				strings.Contains(apiErr.ResponseData, "Not Found") ||
+				strings.Contains(apiErr.Message, "Query not found") {
 				return fmt.Errorf("endpoint obsolete: Query not found")
 			}
 		}
@@ -113,8 +113,8 @@ func (sc *StartupChecker) checkEndpoint(client *XClient, operation string) error
 			if err2 != nil {
 				if apiErr, ok := err2.(*APIError); ok && apiErr.StatusCode == 404 {
 					if strings.Contains(apiErr.ResponseData, "Query not found") ||
-					   strings.Contains(apiErr.ResponseData, "Not Found") ||
-					   strings.Contains(apiErr.Message, "Query not found") {
+						strings.Contains(apiErr.ResponseData, "Not Found") ||
+						strings.Contains(apiErr.Message, "Query not found") {
 						return fmt.Errorf("endpoint obsolete: Query not found")
 					}
 				}
@@ -124,7 +124,7 @@ func (sc *StartupChecker) checkEndpoint(client *XClient, operation string) error
 		// The endpoint is valid even if we get auth errors
 		return nil
 	}
-	
+
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (sc *StartupChecker) ShowUpdatePrompt(obsoleteEndpoints []string) {
 	}
 
 	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F")).Bold(true)
-	
+
 	fmt.Println()
 	fmt.Println(warningStyle.Render("⚠️  Some API endpoints are obsolete!"))
 	fmt.Println()
@@ -157,7 +157,7 @@ func (sc *StartupChecker) ShowUpdatePrompt(obsoleteEndpoints []string) {
 // RunStartupCheck performs the full startup check workflow
 func RunStartupCheck() {
 	checker := NewStartupChecker()
-	
+
 	if !checker.ShouldCheck() {
 		return
 	}

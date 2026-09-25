@@ -91,8 +91,8 @@ func (e *AuthError) Error() string {
 
 // AuthData represents the stored auth file structure
 type AuthData struct {
-	Default  string                         `json:"default"`
-	Accounts map[string]*AuthCredentials    `json:"accounts"`
+	Default  string                      `json:"default"`
+	Accounts map[string]*AuthCredentials `json:"accounts"`
 }
 
 // GetAuthFile returns the path to auth credentials file
@@ -163,7 +163,7 @@ func SaveAuth(creds *AuthCredentials, account string) error {
 	authData := AuthData{
 		Accounts: make(map[string]*AuthCredentials),
 	}
-	
+
 	if data, err := os.ReadFile(authFile); err == nil {
 		json.Unmarshal(data, &authData)
 	}
@@ -351,7 +351,7 @@ func GetAuthFromEnv() *AuthCredentials {
 	if authToken == "" {
 		authToken = os.Getenv("TWITTER_AUTH_TOKEN")
 	}
-	
+
 	ct0 := os.Getenv("X_CT0")
 	if ct0 == "" {
 		ct0 = os.Getenv("TWITTER_CT0")

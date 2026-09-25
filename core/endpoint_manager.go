@@ -14,8 +14,21 @@ import (
 // EndpointManager manages GraphQL endpoints with automatic discovery and updates
 // Now uses EndpointDiscovery as the single source of truth for caching.
 type EndpointManager struct {
-	discovery *EndpointDiscovery
-	verbose   bool
+	discovery       *EndpointDiscovery
+	verbose         bool
+	refreshCooldown time.Duration
+	refreshFunc     func(context.Context) error
+
+	refreshMu    sync.Mutex
+	refreshState *endpointRefreshState
+	failedAt     map[string]time.Time
+}
+
+const defaultEndpointRefreshCooldown = 30 * time.Second
+
+type endpointRefreshState struct {
+	done chan struct{}
+	err  error
 }
 
 // Global endpoint manager instance
@@ -61,15 +74,21 @@ func (em *EndpointManager) getCache() *EndpointCache {
 
 	// Return empty cache that will trigger fallback
 	return &EndpointCache{
-		Endpoints:  make(map[string]string),
-		Features:   make(map[string]bool),
-		OpFeatures: make(map[string][]string),
+		Endpoints:   make(map[string]string),
+		Quarantined: make(map[string]string),
+		Features:    make(map[string]bool),
+		OpFeatures:  make(map[string][]string),
 	}
 }
 
 // GetEndpoint returns the endpoint for an operation, with auto-discovery
 func (em *EndpointManager) GetEndpoint(operation string) string {
 	cache := em.getCache()
+	if cache != nil {
+		if _, quarantined := cache.Quarantined[operation]; quarantined {
+			return operation
+		}
+	}
 
 	// Check dynamic cache first
 	if cache != nil {
@@ -101,7 +120,7 @@ func (em *EndpointManager) GetEndpointWithRefresh(ctx context.Context, operation
 				log.Println("[EndpointManager] Cache expired, refreshing endpoints...")
 			}
 
-			if _, err := em.discovery.DiscoverEndpoints(ctx); err != nil {
+			if err := em.RefreshForOperation(ctx, operation); err != nil {
 				// Return existing endpoint even if refresh fails
 				if em.verbose {
 					log.Printf("[EndpointManager] Refresh failed, using cached: %v", err)
@@ -115,6 +134,53 @@ func (em *EndpointManager) GetEndpointWithRefresh(ctx context.Context, operation
 	}
 
 	return endpoint, nil
+}
+
+// RefreshForOperation refreshes endpoint discovery once per operation and
+// coalesces concurrent callers. Failed operations are cooled down briefly so
+// a removed GraphQL operation cannot trigger a discovery storm.
+func (em *EndpointManager) RefreshForOperation(ctx context.Context, operation string) error {
+	em.refreshMu.Lock()
+	cooldown := em.refreshCooldown
+	if cooldown <= 0 {
+		cooldown = defaultEndpointRefreshCooldown
+	}
+	if em.failedAt != nil {
+		if failedAt, ok := em.failedAt[operation]; ok && time.Since(failedAt) < cooldown {
+			err := fmt.Errorf("endpoint refresh for %q is cooling down after a failure", operation)
+			em.refreshMu.Unlock()
+			return err
+		}
+	}
+	if state := em.refreshState; state != nil {
+		em.refreshMu.Unlock()
+		<-state.done
+		return state.err
+	}
+
+	state := &endpointRefreshState{done: make(chan struct{})}
+	em.refreshState = state
+	em.refreshMu.Unlock()
+
+	if em.refreshFunc != nil {
+		state.err = em.refreshFunc(ctx)
+	} else {
+		state.err = em.RefreshEndpoints(ctx)
+	}
+
+	em.refreshMu.Lock()
+	if state.err != nil {
+		if em.failedAt == nil {
+			em.failedAt = make(map[string]time.Time)
+		}
+		em.failedAt[operation] = time.Now()
+	} else if em.failedAt != nil {
+		delete(em.failedAt, operation)
+	}
+	em.refreshState = nil
+	close(state.done)
+	em.refreshMu.Unlock()
+	return state.err
 }
 
 // GetOpFeatures returns feature switches for a specific operation
@@ -194,14 +260,19 @@ func (em *EndpointManager) UpdateEndpoint(operation, endpoint string) {
 	cache := em.getCache()
 	if cache == nil {
 		cache = &EndpointCache{
-			Endpoints:  make(map[string]string),
-			Features:   make(map[string]bool),
-			OpFeatures: make(map[string][]string),
-			Timestamp:  time.Now(),
+			Endpoints:   make(map[string]string),
+			Quarantined: make(map[string]string),
+			Features:    make(map[string]bool),
+			OpFeatures:  make(map[string][]string),
+			Timestamp:   time.Now(),
 		}
+	}
+	if cache.Quarantined == nil {
+		cache.Quarantined = make(map[string]string)
 	}
 
 	cache.Endpoints[operation] = endpoint
+	delete(cache.Quarantined, operation)
 	cache.Timestamp = time.Now()
 
 	// Save to disk
@@ -228,6 +299,7 @@ func (em *EndpointManager) ResetEndpoint(operation string) {
 	}
 
 	delete(cache.Endpoints, operation)
+	delete(cache.Quarantined, operation)
 	cache.Timestamp = time.Now()
 
 	// Save to disk
@@ -238,12 +310,64 @@ func (em *EndpointManager) ResetEndpoint(operation string) {
 	em.discovery.UpdateMemoryCache(cache)
 }
 
+// QuarantineEndpoint removes an operation from active endpoint selection after
+// X returns a definitive not-found response. The quarantine is persisted with
+// the cache so repeated calls do not keep retrying the same stale endpoint.
+func (em *EndpointManager) QuarantineEndpoint(operation, reason string) {
+	if em.discovery == nil || operation == "" {
+		return
+	}
+
+	cache := em.getCache()
+	if cache == nil {
+		cache = &EndpointCache{
+			Endpoints:   make(map[string]string),
+			Quarantined: make(map[string]string),
+			Features:    make(map[string]bool),
+			OpFeatures:  make(map[string][]string),
+		}
+	}
+	if cache.Endpoints == nil {
+		cache.Endpoints = make(map[string]string)
+	}
+	if cache.Quarantined == nil {
+		cache.Quarantined = make(map[string]string)
+	}
+
+	delete(cache.Endpoints, operation)
+	if reason == "" {
+		reason = "endpoint returned not found"
+	}
+	cache.Quarantined[operation] = reason
+	cache.Timestamp = time.Now()
+
+	if err := em.discovery.SaveCache(cache); err != nil {
+		log.Printf("[EndpointManager] Warning: failed to save quarantined endpoint: %v", err)
+	}
+	em.discovery.UpdateMemoryCache(cache)
+}
+
+// IsQuarantined reports whether an operation has been isolated after a 404.
+func (em *EndpointManager) IsQuarantined(operation string) bool {
+	cache := em.getCache()
+	if cache == nil {
+		return false
+	}
+	_, ok := cache.Quarantined[operation]
+	return ok
+}
+
 // ListEndpoints returns all current endpoints
 func (em *EndpointManager) ListEndpoints() map[string]string {
 	result := make(map[string]string)
 
 	// Start with static fallbacks
 	for k, v := range GraphQLEndpoints {
+		if cache := em.getCache(); cache != nil {
+			if _, quarantined := cache.Quarantined[k]; quarantined {
+				continue
+			}
+		}
 		result[k] = v
 	}
 
@@ -251,6 +375,9 @@ func (em *EndpointManager) ListEndpoints() map[string]string {
 	cache := em.getCache()
 	if cache != nil {
 		for k, v := range cache.Endpoints {
+			if _, quarantined := cache.Quarantined[k]; quarantined {
+				continue
+			}
 			result[k] = v
 		}
 	}
@@ -264,17 +391,21 @@ func (em *EndpointManager) GetStats() EndpointStats {
 
 	if cache == nil {
 		return EndpointStats{
-			TotalCount:   len(GraphQLEndpoints),
-			StaticCount:  len(GraphQLEndpoints),
-			DynamicCount: 0,
-			FeatureCount: len(DefaultFeatures),
-			LastUpdated:  time.Time{},
-			CacheAge:     0,
+			TotalCount:       len(GraphQLEndpoints),
+			StaticCount:      len(GraphQLEndpoints),
+			DynamicCount:     0,
+			QuarantinedCount: 0,
+			FeatureCount:     len(DefaultFeatures),
+			LastUpdated:      time.Time{},
+			CacheAge:         0,
 		}
 	}
 
 	staticCount := 0
 	for operation := range GraphQLEndpoints {
+		if _, quarantined := cache.Quarantined[operation]; quarantined {
+			continue
+		}
 		if _, ok := cache.Endpoints[operation]; !ok {
 			staticCount++
 		}
@@ -286,23 +417,25 @@ func (em *EndpointManager) GetStats() EndpointStats {
 	}
 
 	return EndpointStats{
-		TotalCount:   staticCount + len(cache.Endpoints),
-		StaticCount:  staticCount,
-		DynamicCount: len(cache.Endpoints),
-		FeatureCount: len(cache.Features),
-		LastUpdated:  cache.Timestamp,
-		CacheAge:     cacheAge,
+		TotalCount:       staticCount + len(cache.Endpoints),
+		StaticCount:      staticCount,
+		DynamicCount:     len(cache.Endpoints),
+		QuarantinedCount: len(cache.Quarantined),
+		FeatureCount:     len(cache.Features),
+		LastUpdated:      cache.Timestamp,
+		CacheAge:         cacheAge,
 	}
 }
 
 // EndpointStats represents endpoint statistics
 type EndpointStats struct {
-	TotalCount   int           `json:"total_count"`
-	StaticCount  int           `json:"static_count"`
-	DynamicCount int           `json:"dynamic_count"`
-	FeatureCount int           `json:"feature_count"`
-	LastUpdated  time.Time     `json:"last_updated"`
-	CacheAge     time.Duration `json:"cache_age"`
+	TotalCount       int           `json:"total_count"`
+	StaticCount      int           `json:"static_count"`
+	DynamicCount     int           `json:"dynamic_count"`
+	QuarantinedCount int           `json:"quarantined_count"`
+	FeatureCount     int           `json:"feature_count"`
+	LastUpdated      time.Time     `json:"last_updated"`
+	CacheAge         time.Duration `json:"cache_age"`
 }
 
 // CheckEndpoint checks if an endpoint is valid
@@ -312,12 +445,18 @@ func (em *EndpointManager) CheckEndpoint(operation string) (bool, string) {
 	// Check if using dynamic endpoint
 	isDynamic := false
 	if cache != nil {
+		if _, quarantined := cache.Quarantined[operation]; quarantined {
+			return false, "Quarantined after 404"
+		}
 		_, isDynamic = cache.Endpoints[operation]
 	}
 
 	endpoint := em.GetEndpoint(operation)
 
 	if !isDynamic {
+		if _, hasStaticFallback := GraphQLEndpoints[operation]; !hasStaticFallback {
+			return false, "No verified endpoint"
+		}
 		return false, fmt.Sprintf("Using static fallback: %s", endpoint)
 	}
 

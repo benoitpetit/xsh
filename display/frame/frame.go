@@ -6,22 +6,22 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/mattn/go-runewidth"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Colors
 var (
-	ColorBlue   = lipgloss.Color("#1DA1F2")
-	ColorGray   = lipgloss.Color("#8899A6")
-	ColorCyan   = lipgloss.Color("#00BCD4")
-	ColorGreen  = lipgloss.Color("#00BA7C")
-	ColorRed    = lipgloss.Color("#F4212E")
-	ColorYellow = lipgloss.Color("#FFAD1F")
-	ColorWhite  = lipgloss.Color("#FFFFFF")
-	
+	ColorBlue   = lipgloss.Color("#C8D0D8")
+	ColorGray   = lipgloss.Color("#7F8994")
+	ColorCyan   = lipgloss.Color("#A9B7C5")
+	ColorGreen  = lipgloss.Color("#A7C3B1")
+	ColorRed    = lipgloss.Color("#C99EA3")
+	ColorYellow = lipgloss.Color("#C8B98F")
+	ColorWhite  = lipgloss.Color("#E7EBEF")
+
 	// Background colors for cards
-	BgDark    = lipgloss.Color("#1a1a1a")
-	BgDarker  = lipgloss.Color("#0d0d0d")
+	BgDark   = lipgloss.Color("#171B20")
+	BgDarker = lipgloss.Color("#101317")
 )
 
 // FixedWidth is the target width for cards
@@ -31,28 +31,28 @@ const FixedWidth = 80
 // Uses a fixed width for consistency across all cards
 func Card(content string, accentColor lipgloss.Color) string {
 	lines := strings.Split(content, "\n")
-	
+
 	// Use fixed width for all cards
 	maxWidth := FixedWidth
-	
+
 	accentStyle := lipgloss.NewStyle().Foreground(accentColor)
-	
+
 	var b strings.Builder
-	
-	// Top border with rounded corners: ╭──────╮
-	topBorder := accentStyle.Render("╭" + strings.Repeat("─", maxWidth+2) + "╮")
+
+	// Minimal top border: ┌──────┐
+	topBorder := accentStyle.Render("┌" + strings.Repeat("─", maxWidth+2) + "┐")
 	b.WriteString(topBorder)
 	b.WriteString("\n")
-	
+
 	// Content without background - wrap long lines instead of truncating
 	for _, line := range lines {
-		lineWidth := runewidth.StringWidth(line)
-		
+		lineWidth := ansi.StringWidth(line)
+
 		if lineWidth > maxWidth {
 			// Word wrap: split long line into multiple lines
 			wrappedLines := wrapLine(line, maxWidth)
 			for _, wrappedLine := range wrappedLines {
-				w := runewidth.StringWidth(wrappedLine)
+				w := ansi.StringWidth(wrappedLine)
 				padding := maxWidth - w
 				if padding < 0 {
 					padding = 0
@@ -70,11 +70,11 @@ func Card(content string, accentColor lipgloss.Color) string {
 			b.WriteString("\n")
 		}
 	}
-	
-	// Bottom border with rounded corners: ╰──────╯
-	bottomBorder := accentStyle.Render("╰" + strings.Repeat("─", maxWidth+2) + "╯")
+
+	// Minimal bottom border: └──────┘
+	bottomBorder := accentStyle.Render("└" + strings.Repeat("─", maxWidth+2) + "┘")
 	b.WriteString(bottomBorder)
-	
+
 	return b.String()
 }
 
@@ -102,7 +102,7 @@ func SimpleSeparator() string {
 
 // StringWidth returns the display width of a string
 func StringWidth(s string) int {
-	return runewidth.StringWidth(s)
+	return ansi.StringWidth(s)
 }
 
 // Truncate truncates a string to fit within maxWidth
@@ -110,7 +110,7 @@ func Truncate(s string, maxWidth int) string {
 	if StringWidth(s) <= maxWidth {
 		return s
 	}
-	return runewidth.Truncate(s, maxWidth-3, "...")
+	return ansi.Truncate(s, maxWidth-3, "...")
 }
 
 // wrapLine wraps a long line into multiple lines at word boundaries
@@ -120,7 +120,7 @@ func wrapLine(line string, maxWidth int) []string {
 	if len(words) == 0 {
 		return []string{line}
 	}
-	
+
 	currentLine := ""
 	for _, word := range words {
 		testLine := currentLine
@@ -128,7 +128,7 @@ func wrapLine(line string, maxWidth int) []string {
 			testLine += " "
 		}
 		testLine += word
-		
+
 		if StringWidth(testLine) <= maxWidth {
 			currentLine = testLine
 		} else {
@@ -137,15 +137,15 @@ func wrapLine(line string, maxWidth int) []string {
 			}
 			// If single word is too long, force break it
 			if StringWidth(word) > maxWidth {
-				word = runewidth.Truncate(word, maxWidth-3, "...")
+				word = ansi.Truncate(word, maxWidth-3, "...")
 			}
 			currentLine = word
 		}
 	}
-	
+
 	if currentLine != "" {
 		result = append(result, currentLine)
 	}
-	
+
 	return result
 }

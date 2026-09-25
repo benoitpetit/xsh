@@ -12,7 +12,7 @@ import (
 func TestValidateMediaFile(t *testing.T) {
 	// Create a temporary test file
 	tmpDir := t.TempDir()
-	
+
 	tests := []struct {
 		name        string
 		content     []byte
@@ -47,7 +47,7 @@ func TestValidateMediaFile(t *testing.T) {
 			}
 
 			size, mimeType, err := core.ValidateMediaFile(testFile)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("ValidateMediaFile() error = nil, wantErr %v", tt.wantErr)

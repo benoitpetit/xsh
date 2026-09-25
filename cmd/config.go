@@ -7,12 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
+	"github.com/spf13/cobra"
 )
-
-
 
 // configCmd represents the config command
 // By default shows current configuration (like Python version)

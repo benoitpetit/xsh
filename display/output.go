@@ -32,6 +32,9 @@ func Info(message string) string {
 
 // Muted returns muted gray text.
 func Muted(text string) string {
+	if text == "" {
+		return ""
+	}
 	return StyleMuted.Render(text)
 }
 
@@ -194,9 +197,9 @@ func SimpleTable(headers []string, rows []TableRow) string {
 
 	var b strings.Builder
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(ColorText).Background(ColorPrimary).Padding(0, 1)
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(ColorPrimary).Padding(0, 1)
 	cellStyle := lipgloss.NewStyle().Padding(0, 1)
-	altCellStyle := lipgloss.NewStyle().Padding(0, 1).Background(lipgloss.Color("#1e1e1e"))
+	altCellStyle := lipgloss.NewStyle().Padding(0, 1).Background(lipgloss.Color("#1B2025"))
 
 	// Headers
 	for i, h := range headers {

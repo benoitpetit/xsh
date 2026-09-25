@@ -19,7 +19,7 @@ type Job struct {
 	Title              string     `json:"title"`
 	Company            JobCompany `json:"company"`
 	Location           string     `json:"location,omitempty"`
-	LocationType       string     `json:"location_type,omitempty"` // remote, onsite, hybrid
+	LocationType       string     `json:"location_type,omitempty"`  // remote, onsite, hybrid
 	WorkplaceType      string     `json:"workplace_type,omitempty"` // alias for compatibility
 	RedirectURL        string     `json:"redirect_url,omitempty"`
 	ApplyURL           string     `json:"apply_url,omitempty"` // alias
@@ -50,50 +50,50 @@ type JobSearchResponse struct {
 // JobCompanyFromAPIData parses company from API response data
 func JobCompanyFromAPIData(data map[string]interface{}) JobCompany {
 	company := JobCompany{}
-	
+
 	if id, ok := data["rest_id"].(string); ok {
 		company.ID = id
 	}
-	
+
 	if core, ok := data["core"].(map[string]interface{}); ok {
 		company.Name = GetString(core, "name")
 	}
-	
+
 	if logo, ok := data["logo"].(map[string]interface{}); ok {
 		company.LogoURL = GetString(logo, "normal_url")
 	}
-	
+
 	return company
 }
 
 // JobFromSearchResult creates a Job from search result data
 func JobFromSearchResult(data map[string]interface{}) *Job {
 	job := &Job{}
-	
+
 	// Extract job ID
 	if id, ok := data["rest_id"].(string); ok {
 		job.ID = id
 	} else if id, ok := data["id"].(string); ok {
 		job.ID = id
 	}
-	
+
 	// Try new format first (job_card)
 	if content, ok := data["job_card"].(map[string]interface{}); ok {
 		return jobFromJobCard(job, content)
 	}
-	
+
 	// Try standard format (result wrapper)
 	result, ok := data["result"].(map[string]interface{})
 	if !ok {
 		result = data
 	}
-	
+
 	core, ok := result["core"].(map[string]interface{})
 	if !ok {
 		// Fallback to old format
 		return jobFromLegacyFormat(job, data)
 	}
-	
+
 	job.Title = GetString(core, "title")
 	job.Location = GetString(core, "location")
 	job.RedirectURL = GetString(core, "redirect_url")
@@ -101,7 +101,7 @@ func JobFromSearchResult(data map[string]interface{}) *Job {
 	job.Salary = job.FormattedSalary // alias
 	job.Team = GetString(core, "team")
 	job.LocationType = GetString(core, "location_type")
-	
+
 	// Salary parsing
 	if min, ok := core["salary_min"].(float64); ok {
 		minInt := int(min)
@@ -112,20 +112,20 @@ func JobFromSearchResult(data map[string]interface{}) *Job {
 		job.SalaryMax = &maxInt
 	}
 	job.SalaryCurrency = GetString(core, "salary_currency_code")
-	
+
 	// Job URL
 	job.JobURL = fmt.Sprintf("https://x.com/i/jobs/%s", job.ID)
 	if pageURL := GetString(core, "job_page_url"); pageURL != "" {
 		job.JobURL = pageURL
 	}
-	
+
 	// Company
 	if companyData, ok := result["company_profile_results"].(map[string]interface{}); ok {
 		if companyResult, ok := companyData["result"].(map[string]interface{}); ok {
 			job.Company = JobCompanyFromAPIData(companyResult)
 		}
 	}
-	
+
 	// Poster info
 	if userData, ok := result["user_results"].(map[string]interface{}); ok {
 		if userResult, ok := userData["result"].(map[string]interface{}); ok {
@@ -139,7 +139,7 @@ func JobFromSearchResult(data map[string]interface{}) *Job {
 			}
 		}
 	}
-	
+
 	return job
 }
 
@@ -149,48 +149,48 @@ func jobFromJobCard(job *Job, content map[string]interface{}) *Job {
 	if title, ok := content["title"].(map[string]interface{}); ok {
 		job.Title = GetString(title, "text")
 	}
-	
+
 	// Company
 	if company, ok := content["company"].(map[string]interface{}); ok {
 		job.Company.Name = GetString(company, "text")
 	}
-	
+
 	// Location
 	if location, ok := content["location"].(map[string]interface{}); ok {
 		job.Location = GetString(location, "text")
 	}
-	
+
 	// Workplace type
 	if wt, ok := content["workplace_type"].(map[string]interface{}); ok {
 		job.WorkplaceType = GetString(wt, "text")
 		job.LocationType = job.WorkplaceType
 	}
-	
+
 	// Description
 	if desc, ok := content["description"].(map[string]interface{}); ok {
 		job.Description = GetString(desc, "text")
 	}
-	
+
 	// Apply URL
 	if apply, ok := content["apply_url"].(map[string]interface{}); ok {
 		job.ApplyURL = GetString(apply, "url")
 		job.RedirectURL = job.ApplyURL
 	}
-	
+
 	// Employment type
 	if et, ok := content["employment_type"].(map[string]interface{}); ok {
 		job.EmploymentType = GetString(et, "text")
 	}
-	
+
 	// Salary
 	if salary, ok := content["salary"].(map[string]interface{}); ok {
 		job.Salary = GetString(salary, "text")
 		job.FormattedSalary = job.Salary
 	}
-	
+
 	// Job URL
 	job.JobURL = fmt.Sprintf("https://x.com/i/jobs/%s", job.ID)
-	
+
 	return job
 }
 
@@ -200,13 +200,13 @@ func jobFromLegacyFormat(job *Job, data map[string]interface{}) *Job {
 		job.Title = GetString(core, "title")
 		job.Location = GetString(core, "location")
 	}
-	
+
 	if company, ok := data["company"].(map[string]interface{}); ok {
 		job.Company.Name = GetString(company, "text")
 	}
-	
+
 	job.JobURL = fmt.Sprintf("https://x.com/i/jobs/%s", job.ID)
-	
+
 	return job
 }
 
@@ -216,7 +216,7 @@ func JobFromDetailResult(data map[string]interface{}) *Job {
 	if !ok {
 		return nil
 	}
-	
+
 	// Try jobData format
 	jobResult, ok := jobData["jobData"].(map[string]interface{})
 	if !ok {
@@ -226,29 +226,29 @@ func JobFromDetailResult(data map[string]interface{}) *Job {
 			return nil
 		}
 	}
-	
+
 	job := JobFromSearchResult(jobResult)
 	if job == nil {
 		return nil
 	}
-	
+
 	// Parse detailed description if available
 	result, ok := jobResult["result"].(map[string]interface{})
 	if !ok {
 		result = jobResult
 	}
-	
+
 	core, ok := result["core"].(map[string]interface{})
 	if !ok {
 		return job
 	}
-	
+
 	// Extended fields for detail view
 	job.LocationType = GetString(core, "location_type")
 	job.WorkplaceType = job.LocationType
 	job.RedirectURL = GetString(core, "external_url")
 	job.ApplyURL = job.RedirectURL
-	
+
 	// Parse job description (Draft.js format)
 	rawDesc := GetString(core, "job_description")
 	if rawDesc != "" {
@@ -260,10 +260,10 @@ func JobFromDetailResult(data map[string]interface{}) *Job {
 			job.Description = rawDesc
 		}
 	}
-	
+
 	if pageURL := GetString(core, "job_page_url"); pageURL != "" {
 		job.JobURL = pageURL
 	}
-	
+
 	return job
 }

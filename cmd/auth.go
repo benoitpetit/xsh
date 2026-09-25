@@ -5,10 +5,10 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/browser"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -93,9 +93,9 @@ Examples:
 			browserName = authBrowser
 		} else {
 			// Auto-detect from all browsers
-			fmt.Println(display.Action("Detecting browsers with","Twitter/X cookies"))
+			fmt.Println(display.Action("Detecting browsers with", "Twitter/X cookies"))
 			availableBrowsers := browser.ListAvailableBrowsers()
-			
+
 			if len(availableBrowsers) == 0 {
 				fmt.Println(display.Error("No supported browser found"))
 				fmt.Println(display.Section("Supported browsers"))
@@ -104,7 +104,7 @@ Examples:
 				fmt.Println(display.Bullet("Microsoft Edge"))
 				fmt.Println(display.Bullet("Firefox"))
 				fmt.Println(display.Bullet("Opera / Vivaldi / Safari (via kooky library)"))
-				
+
 				fmt.Println(display.Section("Troubleshooting"))
 				switch runtime.GOOS {
 				case "linux":
@@ -116,22 +116,22 @@ Examples:
 				case "windows":
 					fmt.Println(display.Bullet("Browsers are in %LOCALAPPDATA%"))
 				}
-				
+
 				fmt.Println(display.Section("Recommended alternatives"))
 				fmt.Println(display.Bullet("xsh auth import <cookies.json>  — Export from Cookie Editor extension"))
 				fmt.Println(display.Bullet("xsh auth set                    — Manual token entry"))
 				os.Exit(core.ExitAuthError)
 				return
 			}
-			
+
 			fmt.Println(display.Info(fmt.Sprintf("Found browsers: %v", availableBrowsers)))
-			
+
 			creds, browserName, err = browser.ExtractFromAllBrowsersVerbose(core.Verbose)
 		}
 
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to extract cookies: %v", err)))
-			
+
 			// Provide OS-specific help
 			fmt.Println(display.Section("Troubleshooting"))
 			switch runtime.GOOS {
@@ -144,7 +144,7 @@ Examples:
 				fmt.Println(display.Numbered(2, "Try running as Administrator if access is denied"))
 				fmt.Println(display.Numbered(3, "Windows Defender or antivirus may block cookie access"))
 			case "linux":
-				fmt.Println(display.Numbered(1, display.Warning("CLOSE CHROME COMPLETELY") + " (cookie database is locked when Chrome is running)"))
+				fmt.Println(display.Numbered(1, display.Warning("CLOSE CHROME COMPLETELY")+" (cookie database is locked when Chrome is running)"))
 				fmt.Println(display.Bullet("Run: killall chrome"))
 				fmt.Println(display.Numbered(2, "Check file permissions on browser config directories (~/.config/google-chrome)"))
 				fmt.Println(display.Numbered(3, "Chrome 80+ uses system keyring (libsecret/gnome-keyring) for encryption"))
@@ -153,17 +153,17 @@ Examples:
 				fmt.Println(display.Bullet("Ubuntu/Debian: sudo apt install python3-secretstorage"))
 				fmt.Println(display.Bullet("Arch: sudo pacman -S python-secretstorage"))
 			}
-			
+
 			fmt.Println(display.Section("Recommended alternative methods"))
 			fmt.Println(display.Numbered(1, "xsh auth import <cookies.json>  — Export from Cookie Editor extension"))
 			fmt.Println(display.Numbered(2, "xsh auth set                    — Enter tokens manually"))
-			
+
 			fmt.Println(display.Section("Cookie Editor method (most reliable)"))
 			fmt.Println(display.Numbered(1, "Install 'Cookie Editor' extension in your browser"))
 			fmt.Println(display.Numbered(2, "Go to x.com and log in"))
 			fmt.Println(display.Numbered(3, "Open Cookie Editor, click 'Export' → 'JSON'"))
 			fmt.Println(display.Numbered(4, "Save to a file and run: xsh auth import <file>"))
-			
+
 			os.Exit(core.ExitAuthError)
 			return
 		}
@@ -229,7 +229,7 @@ var authSetCmd = &cobra.Command{
 
 		fmt.Print("Enter auth_token: ")
 		fmt.Scanln(&authToken)
-		
+
 		fmt.Print("Enter ct0: ")
 		fmt.Scanln(&ct0)
 

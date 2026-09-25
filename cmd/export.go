@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
 	"github.com/benoitpetit/xsh/models"
 	"github.com/benoitpetit/xsh/utils"
+	"github.com/spf13/cobra"
 )
 
 var (

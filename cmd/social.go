@@ -24,6 +24,7 @@ var socialListCmd = func(use, short, operation string) *cobra.Command {
 		Short: short,
 		Run: func(cmd *cobra.Command, args []string) {
 			count, _ := cmd.Flags().GetInt("count")
+			cursor, _ := cmd.Flags().GetString("cursor")
 			client, err := getClient("")
 			if err != nil {
 				fmt.Println(display.Error(err.Error()))
@@ -32,17 +33,18 @@ var socialListCmd = func(use, short, operation string) *cobra.Command {
 			defer client.Close()
 
 			var users []*models.User
+			var nextCursor string
 			switch operation {
 			case "blocked":
-				users, _, err = core.GetBlockedAccounts(client, count, "")
+				users, nextCursor, err = core.GetBlockedAccounts(client, count, cursor)
 			case "muted":
-				users, _, err = core.GetMutedAccounts(client, count, "")
+				users, nextCursor, err = core.GetMutedAccounts(client, count, cursor)
 			}
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to fetch %s accounts: %v", operation, err)))
 				os.Exit(core.ExitError)
 			}
-			output(users, func() { fmt.Println(display.FormatUserList(users)) })
+			outputPage(users, nextCursor, nextCursor != "", func() { fmt.Println(display.FormatUserList(users)) })
 		},
 	}
 }
@@ -308,7 +310,9 @@ func init() {
 	socialCmd.AddCommand(socialBlockedCmd)
 	socialCmd.AddCommand(socialMutedCmd)
 	socialBlockedCmd.Flags().IntP("count", "n", 50, "Number of users")
+	socialBlockedCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	socialMutedCmd.Flags().IntP("count", "n", 50, "Number of users")
+	socialMutedCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 
 	rootCmd.AddCommand(followCmd)
 	rootCmd.AddCommand(unfollowCmd)

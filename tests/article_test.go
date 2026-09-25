@@ -102,8 +102,8 @@ func TestArticleToMarkdown(t *testing.T) {
 func TestExtractArticleMetadata(t *testing.T) {
 	article := map[string]interface{}{
 		"result": map[string]interface{}{
-			"title":            "Test Article",
-			"lifecycle_state":  "published",
+			"title":           "Test Article",
+			"lifecycle_state": "published",
 			"cover_media": map[string]interface{}{
 				"media_info": map[string]interface{}{
 					"original_img_url": "https://example.com/image.jpg",

@@ -27,8 +27,8 @@ type ArticleResult struct {
 func GetArticle(client *XClient, tweetID string) (map[string]interface{}, error) {
 	// Use TweetDetail query to get full tweet data including article
 	variables := map[string]interface{}{
-		"focalTweetId": tweetID,
-		"withArticle":  true,
+		"focalTweetId":         tweetID,
+		"withArticle":          true,
 		"withArticlePlainText": false,
 		"withArticleRichText":  true,
 	}
@@ -45,7 +45,7 @@ func GetArticle(client *XClient, tweetID string) (map[string]interface{}, error)
 // extractArticleFromTweetData extracts article data from tweet detail response
 func extractArticleFromTweetData(data map[string]interface{}) map[string]interface{} {
 	// Path: data.threaded_conversation_with_injections_v2.instructions[].entries[].content.itemContent.tweet_results.result.article_results
-	
+
 	threadedConv, ok := data["data"].(map[string]interface{})
 	if !ok {
 		return nil
@@ -128,7 +128,7 @@ func ExportArticleToFile(articleData map[string]interface{}, tweet *models.Tweet
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("# %s\n\n", title))
 	sb.WriteString(fmt.Sprintf("*By @%s*\n\n", tweet.AuthorHandle))
-	
+
 	if tweet.CreatedAt != nil {
 		sb.WriteString(fmt.Sprintf("*Published: %s*\n\n", tweet.CreatedAt.Format("2006-01-02 15:04")))
 	}
@@ -164,9 +164,9 @@ func ArticleToJSON(articleData map[string]interface{}, tweet *models.Tweet) (str
 	result := map[string]interface{}{
 		"tweet": tweet,
 		"article": map[string]interface{}{
-			"title":         metadata["title"],
+			"title":           metadata["title"],
 			"cover_image_url": metadata["cover_image_url"],
-			"markdown":      contentMD,
+			"markdown":        contentMD,
 		},
 	}
 

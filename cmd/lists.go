@@ -55,6 +55,7 @@ var listViewCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		listID := args[0]
 		count, _ := cmd.Flags().GetInt("count")
+		cursor, _ := cmd.Flags().GetString("cursor")
 
 		client, err := getClient("")
 		if err != nil {
@@ -63,13 +64,13 @@ var listViewCmd = &cobra.Command{
 		}
 		defer client.Close()
 
-		response, err := core.GetListTweets(client, listID, count, "")
+		response, err := core.GetListTweets(client, listID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitError)
 		}
 
-		output(response.Tweets, func() {
+		outputPage(response.Tweets, response.CursorBottom, response.HasMore, func() {
 			fmt.Println(display.FormatTweets(response.Tweets))
 		})
 	},
@@ -152,6 +153,7 @@ var listMembersCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		listID := args[0]
 		count, _ := cmd.Flags().GetInt("count")
+		cursor, _ := cmd.Flags().GetString("cursor")
 
 		client, err := getClient("")
 		if err != nil {
@@ -160,13 +162,13 @@ var listMembersCmd = &cobra.Command{
 		}
 		defer client.Close()
 
-		users, _, err := core.GetListMembers(client, listID, count, "")
+		users, nextCursor, err := core.GetListMembers(client, listID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitError)
 		}
 
-		output(users, func() {
+		outputPage(users, nextCursor, nextCursor != "", func() {
 			fmt.Println(display.FormatUsers(users))
 		})
 	},
@@ -276,6 +278,7 @@ var listMembershipsCmd = &cobra.Command{
 	Short: "View lists you belong to",
 	Run: func(cmd *cobra.Command, args []string) {
 		count, _ := cmd.Flags().GetInt("count")
+		cursor, _ := cmd.Flags().GetString("cursor")
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
@@ -293,12 +296,12 @@ var listMembershipsCmd = &cobra.Command{
 			os.Exit(core.ExitError)
 		}
 
-		lists, _, err := core.GetListMemberships(client, viewer.ID, count, "")
+		lists, nextCursor, err := core.GetListMemberships(client, viewer.ID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 			os.Exit(core.ExitError)
 		}
-		output(lists, func() { fmt.Println(display.FormatLists(lists)) })
+		outputPage(lists, nextCursor, nextCursor != "", func() { fmt.Println(display.FormatLists(lists)) })
 	},
 }
 
@@ -470,11 +473,14 @@ func init() {
 
 	// Flags
 	listViewCmd.Flags().IntP("count", "n", 20, "Number of tweets to fetch")
+	listViewCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	listCreateCmd.Flags().StringVarP(&listDescription, "description", "d", "", "List description")
 	listCreateCmd.Flags().BoolVar(&listPrivate, "private", false, "Make the list private")
 	listDeleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 	listMembersCmd.Flags().IntP("count", "n", 20, "Number of members to fetch")
+	listMembersCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	listMembershipsCmd.Flags().IntP("count", "n", 50, "Number of lists to fetch")
+	listMembershipsCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	listUpdateCmd.Flags().String("name", "", "New list name")
 	listUpdateCmd.Flags().String("description", "", "New list description")
 	listUpdateCmd.Flags().Bool("private", false, "Set list visibility to private or public")
