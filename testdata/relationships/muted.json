@@ -1,0 +1,34 @@
+{
+  "data": {
+    "viewer": {
+      "muted_accounts_timeline": {
+        "timeline": {
+          "instructions": [
+            {
+              "type": "TimelineAddEntries",
+              "entries": [
+                {
+                  "entryId": "user-104",
+                  "content": {
+                    "itemContent": {
+                      "user_results": {
+                        "result": {
+                          "rest_id": "104",
+                          "legacy": {"name": "Muted User", "screen_name": "muted_user"}
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "entryId": "cursor-bottom-1",
+                  "content": {"cursorType": "Bottom", "value": "muted-next"}
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

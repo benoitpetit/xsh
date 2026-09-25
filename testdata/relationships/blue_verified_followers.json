@@ -1,0 +1,35 @@
+{
+  "data": {
+    "user": {
+      "result": {
+        "timeline": {
+          "instructions": [
+            {
+              "type": "TimelineAddEntries",
+              "entries": [
+                {
+                  "entryId": "user-102",
+                  "content": {
+                    "itemContent": {
+                      "user_results": {
+                        "result": {
+                          "rest_id": "102",
+                          "is_blue_verified": true,
+                          "legacy": {"name": "Blue Follower", "screen_name": "blue_follower"}
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "entryId": "cursor-bottom-1",
+                  "content": {"cursorType": "Bottom", "value": "blue-next"}
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

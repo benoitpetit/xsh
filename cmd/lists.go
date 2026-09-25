@@ -170,6 +170,64 @@ var listMembersCmd = &cobra.Command{
 	},
 }
 
+// listInfoCmd views metadata for a list.
+var listInfoCmd = &cobra.Command{
+	Use:   "info <list-id>",
+	Short: "View list details",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		client, err := getClient("")
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
+			os.Exit(core.ExitAuthError)
+		}
+		defer client.Close()
+
+		list, err := core.GetListInfo(client, args[0])
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
+			os.Exit(core.ExitError)
+		}
+		if list == nil {
+			fmt.Println(display.Error(fmt.Sprintf("List %s not found", args[0])))
+			os.Exit(core.ExitError)
+		}
+		output(list, func() { fmt.Println(display.FormatLists([]core.ListInfo{*list})) })
+	},
+}
+
+// listMembershipsCmd views lists the authenticated user belongs to.
+var listMembershipsCmd = &cobra.Command{
+	Use:   "memberships",
+	Short: "View lists you belong to",
+	Run: func(cmd *cobra.Command, args []string) {
+		count, _ := cmd.Flags().GetInt("count")
+		client, err := getClient("")
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
+			os.Exit(core.ExitAuthError)
+		}
+		defer client.Close()
+
+		viewer, err := core.GetViewer(client)
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Error fetching current user: %v", err)))
+			os.Exit(core.ExitError)
+		}
+		if viewer == nil || viewer.ID == "" {
+			fmt.Println(display.Error("Unable to resolve the current user"))
+			os.Exit(core.ExitError)
+		}
+
+		lists, _, err := core.GetListMemberships(client, viewer.ID, count, "")
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
+			os.Exit(core.ExitError)
+		}
+		output(lists, func() { fmt.Println(display.FormatLists(lists)) })
+	},
+}
+
 // listAddMemberCmd adds a member to a list
 var listAddMemberCmd = &cobra.Command{
 	Use:   "add-member <list-id> <handle>",
@@ -328,6 +386,8 @@ func init() {
 	listsCmd.AddCommand(listCreateCmd)
 	listsCmd.AddCommand(listDeleteCmd)
 	listsCmd.AddCommand(listMembersCmd)
+	listsCmd.AddCommand(listInfoCmd)
+	listsCmd.AddCommand(listMembershipsCmd)
 	listsCmd.AddCommand(listAddMemberCmd)
 	listsCmd.AddCommand(listRemoveMemberCmd)
 	listsCmd.AddCommand(listPinCmd)
@@ -339,7 +399,5 @@ func init() {
 	listCreateCmd.Flags().BoolVar(&listPrivate, "private", false, "Make the list private")
 	listDeleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation")
 	listMembersCmd.Flags().IntP("count", "n", 20, "Number of members to fetch")
+	listMembershipsCmd.Flags().IntP("count", "n", 50, "Number of lists to fetch")
 }
-
-
-

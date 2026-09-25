@@ -1,0 +1,15 @@
+{
+  "data": {
+    "list": {
+      "result": {
+        "rest_id": "555",
+        "name": "Go Builders",
+        "description": "People building with Go",
+        "member_count": 42,
+        "subscriber_count": 7,
+        "mode": "Public",
+        "is_pinned": true
+      }
+    }
+  }
+}

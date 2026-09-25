@@ -1,0 +1,42 @@
+{
+  "data": {
+    "viewer": {
+      "list_memberships_timeline": {
+        "timeline": {
+          "instructions": [
+            {
+              "type": "TimelineAddEntries",
+              "entries": [
+                {
+                  "entryId": "list-556",
+                  "content": {
+                    "items": [
+                      {
+                        "item": {
+                          "itemContent": {
+                            "list": {
+                              "rest_id": "556",
+                              "name": "CLI Builders",
+                              "description": "Useful CLI projects",
+                              "member_count": 12,
+                              "subscriber_count": 3,
+                              "mode": "Public"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "entryId": "cursor-bottom-1",
+                  "content": {"cursorType": "Bottom", "value": "memberships-next"}
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
