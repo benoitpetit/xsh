@@ -1,6 +1,6 @@
 #
 # install.ps1 - xsh Installation Script for Windows (PowerShell)
-# Usage: iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.ps1 | iex
+# Usage: iwr -useb https://xsh.devbyben.fr/install | iex
 #
 # This script downloads and installs xsh automatically on Windows
 #

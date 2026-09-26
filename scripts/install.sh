@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # install.sh - xsh Installation Script (Linux & macOS only)
-# Usage: curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.sh | bash
+# Usage: curl -fsSL https://xsh.devbyben.fr/install | bash
 #
 # For Windows, download the .exe directly from:
 # https://github.com/benoitpetit/xsh/releases/latest
@@ -11,7 +11,7 @@ set -e
 # Configuration
 REPO="benoitpetit/xsh"
 BINARY_NAME="xsh"
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="${XSH_INSTALL_DIR:-/usr/local/bin}"
 
 # Colors
 RED='\033[0;31m'
@@ -90,7 +90,7 @@ install_from_release() {
     print_info "Fetching latest release..."
 
     # Get latest version
-    LATEST_VERSION=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    LATEST_VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
     if [ -z "$LATEST_VERSION" ]; then
         print_error "Unable to fetch latest version"
@@ -110,7 +110,7 @@ install_from_release() {
     # Download
     print_info "Downloading from: ${DOWNLOAD_URL}"
     TMP_DIR=$(mktemp -d)
-    curl -sSL "${DOWNLOAD_URL}" -o "${TMP_DIR}/${BINARY_NAME}"
+    curl -fsSL "${DOWNLOAD_URL}" -o "${TMP_DIR}/${BINARY_NAME}"
 
     if [ ! -f "${TMP_DIR}/${BINARY_NAME}" ]; then
         print_error "Download failed"
@@ -167,12 +167,12 @@ install_from_source() {
 
     print_info "Building..."
     cd "${TMP_DIR}/xsh"
-    go build -o "${TMP_DIR}/xsh" .
+    go build -o "${TMP_DIR}/xsh-bin" .
 
     if [ -w "$INSTALL_DIR" ]; then
-        mv "${TMP_DIR}/xsh" "${INSTALL_DIR}/${BINARY_NAME}"
+        mv "${TMP_DIR}/xsh-bin" "${INSTALL_DIR}/${BINARY_NAME}"
     else
-        sudo mv "${TMP_DIR}/xsh" "${INSTALL_DIR}/${BINARY_NAME}"
+        sudo mv "${TMP_DIR}/xsh-bin" "${INSTALL_DIR}/${BINARY_NAME}"
     fi
 
     rm -rf "$TMP_DIR"

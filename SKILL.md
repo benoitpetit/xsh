@@ -13,7 +13,7 @@ CLI for Twitter/X using browser cookie authentication. No API key required. Work
 go install github.com/benoitpetit/xsh@latest
 
 # Option 2: Linux/macOS Script
-curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.sh | bash
+curl -fsSL https://xsh.devbyben.fr/install | bash
 
 # Option 3: Direct Binary
 wget https://github.com/benoitpetit/xsh/releases/latest/download/xsh-linux-amd64 -O xsh
