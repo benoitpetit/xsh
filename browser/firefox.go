@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/benoitpetit/xsh/core"
 	_ "github.com/mattn/go-sqlite3"
@@ -31,30 +30,11 @@ type FirefoxCookie struct {
 // GetDefaultFirefoxPaths returns default Firefox cookie paths by OS
 func GetDefaultFirefoxPaths() []string {
 	home, _ := os.UserHomeDir()
-
-	var paths []string
-
-	switch runtime.GOOS {
-	case "darwin":
-		profilesDir := filepath.Join(home, "Library/Application Support/Firefox/Profiles")
-		paths = findFirefoxProfiles(profilesDir)
-	case "windows":
-		profilesDir := filepath.Join(os.Getenv("APPDATA"), "Mozilla/Firefox/Profiles")
-		paths = findFirefoxProfiles(profilesDir)
-	case "linux":
-		// Firefox follows XDG_CONFIG_HOME on Linux. Keep the legacy path as a
-		// fallback for installations created before the XDG layout was used.
-		profileDirs := []string{}
-		if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
-			profileDirs = append(profileDirs, filepath.Join(configDir, "mozilla/firefox"))
-		}
-		profileDirs = append(profileDirs, filepath.Join(home, ".mozilla/firefox"))
-		for _, profilesDir := range uniqueStrings(profileDirs) {
-			paths = append(paths, findFirefoxProfiles(profilesDir)...)
-		}
+	configDir, _ := os.UserConfigDir()
+	if configDir == "" {
+		configDir = filepath.Join(home, ".config")
 	}
-
-	return paths
+	return firefoxCookiePaths(runtime.GOOS, home, configDir, os.Getenv("APPDATA"))
 }
 
 // findFirefoxProfiles finds Firefox profile directories containing cookies.sqlite
@@ -67,7 +47,7 @@ func findFirefoxProfiles(profilesDir string) []string {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() && (strings.HasSuffix(entry.Name(), ".default") || strings.HasSuffix(entry.Name(), ".default-release")) {
+		if entry.IsDir() {
 			cookiePath := filepath.Join(profilesDir, entry.Name(), "cookies.sqlite")
 			if _, err := os.Stat(cookiePath); err == nil {
 				paths = append(paths, cookiePath)
@@ -113,9 +93,9 @@ func (f *FirefoxCookieExtractor) ExtractCookies() (*core.AuthCredentials, error)
 	query := `
 		SELECT host, name, value, path
 		FROM moz_cookies
-		WHERE host LIKE '%twitter.com'
+		WHERE host = 'twitter.com'
 		   OR host LIKE '%.twitter.com'
-		   OR host LIKE '%x.com'
+		   OR host = 'x.com'
 		   OR host LIKE '%.x.com'
 	`
 
@@ -125,8 +105,7 @@ func (f *FirefoxCookieExtractor) ExtractCookies() (*core.AuthCredentials, error)
 	}
 	defer rows.Close()
 
-	cookies := make(map[string]string)
-	var authToken, ct0 string
+	acc := newCookieAccumulator()
 
 	for rows.Next() {
 		var cookie FirefoxCookie
@@ -135,28 +114,10 @@ func (f *FirefoxCookieExtractor) ExtractCookies() (*core.AuthCredentials, error)
 			continue
 		}
 
-		// Sanitize cookie value to remove invalid characters (quotes, etc.)
-		sanitizedValue := core.SanitizeCookieValue(cookie.Value)
-
-		cookies[cookie.Name] = sanitizedValue
-
-		if cookie.Name == "auth_token" {
-			authToken = sanitizedValue
-		}
-		if cookie.Name == "ct0" {
-			ct0 = sanitizedValue
-		}
+		acc.add(cookie.Host, cookie.Name, cookie.Value, nil)
 	}
 
-	if authToken == "" || ct0 == "" {
-		return nil, fmt.Errorf("auth_token or ct0 not found in Firefox cookies. Make sure you're logged into x.com in Firefox")
-	}
-
-	return &core.AuthCredentials{
-		AuthToken: authToken,
-		Ct0:       ct0,
-		Cookies:   cookies,
-	}, nil
+	return acc.credentials("Firefox")
 }
 
 // IsFirefoxAvailable checks if Firefox cookies are available
