@@ -70,12 +70,12 @@ go install github.com/benoitpetit/xsh@latest
 
 **Linux/macOS:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.sh | bash
+curl -fsSL https://xsh.devbyben.fr/install | bash
 ```
 
 **Windows (PowerShell as Administrator):**
 ```powershell
-iwr -useb https://raw.githubusercontent.com/benoitpetit/xsh/master/scripts/install.ps1 | iex
+iwr -useb https://xsh.devbyben.fr/install | iex
 ```
 
 ### Pre-built Binaries
