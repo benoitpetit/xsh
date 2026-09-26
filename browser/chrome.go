@@ -39,47 +39,11 @@ type ChromeCookie struct {
 // GetDefaultChromePaths returns default Chrome cookie paths by OS
 func GetDefaultChromePaths() []string {
 	home, _ := os.UserHomeDir()
-
-	switch runtime.GOOS {
-	case "darwin":
-		return []string{
-			filepath.Join(home, "Library/Application Support/Google/Chrome/Default/Cookies"),
-			filepath.Join(home, "Library/Application Support/Google/Chrome/Profile 1/Cookies"),
-			filepath.Join(home, "Library/Application Support/Google/Chrome/Profile 2/Cookies"),
-			filepath.Join(home, "Library/Application Support/BraveSoftware/Brave-Browser/Default/Cookies"),
-			filepath.Join(home, "Library/Application Support/Microsoft Edge/Default/Cookies"),
-			filepath.Join(home, "Library/Application Support/Chromium/Default/Cookies"),
-		}
-	case "windows":
-		localAppData := os.Getenv("LOCALAPPDATA")
-		return []string{
-			filepath.Join(localAppData, "Google/Chrome/User Data/Default/Network/Cookies"),
-			filepath.Join(localAppData, "Google/Chrome/User Data/Default/Cookies"),
-			filepath.Join(localAppData, "Google/Chrome/User Data/Profile 1/Cookies"),
-			filepath.Join(localAppData, "BraveSoftware/Brave-Browser/User Data/Default/Cookies"),
-			filepath.Join(localAppData, "Microsoft/Edge/User Data/Default/Cookies"),
-			filepath.Join(localAppData, "Chromium/User Data/Default/Cookies"),
-		}
-	case "linux":
-		configDir, err := os.UserConfigDir()
-		if err != nil || configDir == "" {
-			configDir = filepath.Join(home, ".config")
-		}
-
-		paths := []string{}
-		for _, userDataDir := range []string{
-			filepath.Join(configDir, "google-chrome"),
-			filepath.Join(configDir, "chromium"),
-			filepath.Join(configDir, "BraveSoftware/Brave-Browser"),
-			filepath.Join(configDir, "microsoft-edge"),
-			filepath.Join(home, ".var/app/com.google.Chrome/config/google-chrome"),
-			filepath.Join(home, "snap/chromium/common/chromium"),
-		} {
-			paths = append(paths, discoverChromiumCookiePaths(userDataDir)...)
-		}
-		return paths
+	configDir, _ := os.UserConfigDir()
+	if configDir == "" {
+		configDir = filepath.Join(home, ".config")
 	}
-	return nil
+	return cookiePathsForBrowser(runtime.GOOS, home, configDir, os.Getenv("LOCALAPPDATA"), os.Getenv("APPDATA"), "chrome")
 }
 
 // ExtractCookies extracts Twitter/X cookies from Chrome
@@ -159,9 +123,9 @@ func (c *ChromeCookieExtractor) ExtractCookiesVerbose(verbose bool) (*core.AuthC
 	query := `
 		SELECT host_key, name, value, encrypted_value, path
 		FROM cookies
-		WHERE host_key LIKE '%twitter.com'
+		WHERE host_key = 'twitter.com'
 		   OR host_key LIKE '%.twitter.com'
-		   OR host_key LIKE '%x.com'
+		   OR host_key = 'x.com'
 		   OR host_key LIKE '%.x.com'
 	`
 
@@ -171,9 +135,7 @@ func (c *ChromeCookieExtractor) ExtractCookiesVerbose(verbose bool) (*core.AuthC
 	}
 	defer rows.Close()
 
-	cookies := make(map[string]string)
-	var authToken, ct0 string
-	var authTokenDecryptErr, ct0DecryptErr error
+	acc := newCookieAccumulator()
 	cookieCount := 0
 
 	for rows.Next() {
@@ -190,26 +152,24 @@ func (c *ChromeCookieExtractor) ExtractCookiesVerbose(verbose bool) (*core.AuthC
 
 		// Decrypt value
 		var decryptedValue string
+		var decryptErr error
 		if len(cookie.EncryptedValue) > 0 {
-			decryptedValue, err = decryptChromeCookie(cookie.EncryptedValue, verbose)
-			if err != nil {
+			decryptedValue, decryptErr = decryptChromeCookie(cookie.EncryptedValue, verbose)
+			if decryptErr != nil {
 				if verbose {
-					fmt.Fprintf(os.Stderr, "[DEBUG] Failed to decrypt cookie %s: %v\n", cookie.Name, err)
+					fmt.Fprintf(os.Stderr, "[DEBUG] Failed to decrypt cookie %s: %v\n", cookie.Name, decryptErr)
 				}
 				// Fallback to plain value
 				decryptedValue = cookie.Value
-				if cookie.Name == "auth_token" {
-					authTokenDecryptErr = err
-				}
-				if cookie.Name == "ct0" {
-					ct0DecryptErr = err
-				}
 			}
 		} else {
 			decryptedValue = cookie.Value
 		}
 
-		// Skip empty values
+		acc.add(cookie.HostKey, cookie.Name, decryptedValue, decryptErr)
+
+		// Skip empty values in verbose output; the accumulator still records
+		// essential decryption failures so the final error is actionable.
 		if decryptedValue == "" {
 			if verbose {
 				fmt.Fprintf(os.Stderr, "[DEBUG] Cookie %s has empty value, skipping\n", cookie.Name)
@@ -217,42 +177,24 @@ func (c *ChromeCookieExtractor) ExtractCookiesVerbose(verbose bool) (*core.AuthC
 			continue
 		}
 
-		// Sanitize cookie value
-		sanitizedValue := core.SanitizeCookieValue(decryptedValue)
-		cookies[cookie.Name] = sanitizedValue
-
 		if verbose {
-			displayValue := sanitizedValue
+			displayValue := core.SanitizeCookieValue(decryptedValue)
 			if len(displayValue) > 10 {
 				displayValue = displayValue[:10]
 			}
 			fmt.Fprintf(os.Stderr, "[DEBUG] Found cookie: %s=%s... (host: %s)\n", cookie.Name, displayValue, cookie.HostKey)
 		}
 
-		if cookie.Name == "auth_token" {
-			authToken = sanitizedValue
-		}
-		if cookie.Name == "ct0" {
-			ct0 = sanitizedValue
-		}
 	}
 
+	creds, credentialsErr := acc.credentials(c.Name)
 	if verbose {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Total cookies found: %d, auth_token: %v, ct0: %v\n", cookieCount, authToken != "", ct0 != "")
+		fmt.Fprintf(os.Stderr, "[DEBUG] Total cookies found: %d, auth_token: %v, ct0: %v\n", cookieCount, creds != nil && creds.AuthToken != "", creds != nil && creds.Ct0 != "")
 	}
-
-	if authToken == "" || ct0 == "" {
-		if authTokenDecryptErr != nil || ct0DecryptErr != nil {
-			return nil, fmt.Errorf("could not decrypt Chrome authentication cookies; Chrome Safe Storage is unavailable (install/configure a Secret Service keyring and ensure the session is unlocked): auth_token=%v, ct0=%v", authTokenDecryptErr != nil, ct0DecryptErr != nil)
-		}
-		return nil, fmt.Errorf("auth_token or ct0 not found in Chrome cookies. Make sure you're logged into x.com in Chrome")
+	if credentialsErr != nil {
+		return nil, credentialsErr
 	}
-
-	return &core.AuthCredentials{
-		AuthToken: authToken,
-		Ct0:       ct0,
-		Cookies:   cookies,
-	}, nil
+	return creds, nil
 }
 
 // decryptChromeCookie decrypts Chrome's encrypted cookie value
@@ -589,28 +531,13 @@ func copyFile(src, dst string) error {
 
 // ListAvailableChromeBrowsers returns a list of available Chrome-based browsers
 func ListAvailableChromeBrowsers() []string {
-	var available []string
-	paths := GetDefaultChromePaths()
-
-	browserNames := map[string]string{
-		"Chrome":        "chrome",
-		"Brave-Browser": "brave",
-		"Edge":          "edge",
-		"Chromium":      "chromium",
-	}
-
-	for _, path := range paths {
-		if _, err := os.Stat(path); err == nil {
-			for key, name := range browserNames {
-				if strings.Contains(path, key) {
-					available = append(available, name)
-					break
-				}
-			}
+	available := make([]string, 0)
+	for _, candidate := range DiscoverBrowserCandidates() {
+		if candidate.Name != "firefox" {
+			available = append(available, candidate.Name)
 		}
 	}
-
-	return uniqueStrings(available)
+	return available
 }
 
 func uniqueStrings(s []string) []string {

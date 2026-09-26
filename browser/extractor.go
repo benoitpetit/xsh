@@ -4,8 +4,6 @@ package browser
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/benoitpetit/xsh/core"
@@ -26,13 +24,6 @@ type Extractor interface {
 	IsAvailable() bool
 }
 
-// ExtractionResult represents the result of a browser extraction attempt
-type ExtractionResult struct {
-	Browser string
-	Creds   *core.AuthCredentials
-	Error   error
-}
-
 // ExtractFromBrowser extracts cookies from a specific browser
 func ExtractFromBrowser(browserName string) (*core.AuthCredentials, error) {
 	return ExtractFromBrowserVerbose(browserName, false)
@@ -42,15 +33,15 @@ func ExtractFromBrowser(browserName string) (*core.AuthCredentials, error) {
 func ExtractFromBrowserVerbose(browserName string, verbose bool) (*core.AuthCredentials, error) {
 	switch strings.ToLower(browserName) {
 	case "chrome", "google-chrome", "google chrome":
-		return extractFromChromeVerbose(verbose)
+		return extractFromChromiumBrowserVerbose("chrome", "Chrome", verbose)
 	case "brave", "brave browser":
-		return extractFromBraveVerbose(verbose)
+		return extractFromChromiumBrowserVerbose("brave", "Brave", verbose)
 	case "firefox", "mozilla firefox":
 		return extractFromFirefoxVerbose(verbose)
 	case "edge", "microsoft edge":
-		return extractFromEdgeVerbose(verbose)
+		return extractFromChromiumBrowserVerbose("edge", "Edge", verbose)
 	case "chromium":
-		return extractFromChromiumVerbose(verbose)
+		return extractFromChromiumBrowserVerbose("chromium", "Chromium", verbose)
 	default:
 		return nil, fmt.Errorf("unsupported browser: %s", browserName)
 	}
@@ -63,36 +54,19 @@ func ExtractFromAllBrowsers() (*core.AuthCredentials, string, error) {
 
 // ExtractFromAllBrowsersVerbose tries all browsers with verbose output
 func ExtractFromAllBrowsersVerbose(verbose bool) (*core.AuthCredentials, string, error) {
-	availableBrowsers := ListAvailableBrowsers()
-
-	if len(availableBrowsers) == 0 {
+	candidates := DiscoverBrowserCandidates()
+	if len(candidates) == 0 {
 		return nil, "", fmt.Errorf("no supported browsers found")
 	}
 
-	results := make(chan ExtractionResult, len(availableBrowsers))
-
-	// Try all browsers concurrently
-	for _, browser := range availableBrowsers {
-		go func(b string) {
-			creds, err := ExtractFromBrowserVerbose(b, verbose)
-			results <- ExtractionResult{
-				Browser: b,
-				Creds:   creds,
-				Error:   err,
-			}
-		}(browser)
-	}
-
-	// Return the first successful result, but retain failures so the caller can
-	// explain why automatic detection did not work.
-	failures := make([]string, 0, len(availableBrowsers))
-	for i := 0; i < len(availableBrowsers); i++ {
-		result := <-results
-		if result.Error == nil && result.Creds != nil && result.Creds.IsValid() {
-			return result.Creds, result.Browser, nil
+	failures := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		creds, err := extractCandidateVerbose(candidate, verbose)
+		if err == nil && creds != nil && creds.IsValid() {
+			return creds, candidate.Name, nil
 		}
-		if result.Error != nil {
-			failures = append(failures, fmt.Sprintf("%s: %v", result.Browser, result.Error))
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", candidate.Name, err))
 		}
 	}
 
@@ -104,208 +78,98 @@ func ExtractFromAllBrowsersVerbose(verbose bool) (*core.AuthCredentials, string,
 
 // ListAvailableBrowsers returns a list of available browsers on the system
 func ListAvailableBrowsers() []string {
-	var available []string
-
-	// Check Chrome-based browsers
-	if isChromeAvailable() {
-		available = append(available, "chrome")
+	candidates := DiscoverBrowserCandidates()
+	available := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		available = append(available, candidate.Name)
 	}
-	if isBraveAvailable() {
-		available = append(available, "brave")
-	}
-	if isEdgeAvailable() {
-		available = append(available, "edge")
-	}
-	if isChromiumAvailable() {
-		available = append(available, "chromium")
-	}
-
-	// Check Firefox
-	if isFirefoxAvailable() {
-		available = append(available, "firefox")
-	}
-
-	return uniqueStrings(available)
-}
-
-// Platform-specific availability checks
-
-func isChromeAvailable() bool {
-	switch runtime.GOOS {
-	case "windows":
-		return IsChromeAvailableWindows()
-	case "darwin":
-		return isPathExists("/Applications/Google Chrome.app")
-	case "linux":
-		return isCommandExists("google-chrome") || isCommandExists("chromium")
-	}
-	return false
-}
-
-func isBraveAvailable() bool {
-	switch runtime.GOOS {
-	case "windows":
-		// Check Windows paths
-		localAppData := os.Getenv("LOCALAPPDATA")
-		return isPathExists(localAppData + "/BraveSoftware/Brave-Browser/User Data/Default")
-	case "darwin":
-		return isPathExists("/Applications/Brave Browser.app")
-	case "linux":
-		configDir, err := os.UserConfigDir()
-		if err != nil || configDir == "" {
-			configDir = filepath.Join(os.Getenv("HOME"), ".config")
-		}
-		if !isCommandExists("brave") && !isPathExists(filepath.Join(configDir, "BraveSoftware")) {
-			return false
-		}
-		return hasExistingCookieDatabase(discoverChromiumCookiePaths(filepath.Join(configDir, "BraveSoftware/Brave-Browser")))
-	}
-	return false
-}
-
-func isEdgeAvailable() bool {
-	switch runtime.GOOS {
-	case "windows":
-		localAppData := os.Getenv("LOCALAPPDATA")
-		return isPathExists(localAppData + "/Microsoft/Edge/User Data/Default")
-	case "darwin":
-		return isPathExists("/Applications/Microsoft Edge.app")
-	case "linux":
-		return isCommandExists("microsoft-edge")
-	}
-	return false
-}
-
-func isChromiumAvailable() bool {
-	switch runtime.GOOS {
-	case "windows":
-		localAppData := os.Getenv("LOCALAPPDATA")
-		return isPathExists(localAppData + "/Chromium/User Data/Default")
-	case "darwin":
-		return isPathExists("/Applications/Chromium.app")
-	case "linux":
-		return isCommandExists("chromium") || isCommandExists("chromium-browser")
-	}
-	return false
-}
-
-func isFirefoxAvailable() bool {
-	switch runtime.GOOS {
-	case "windows":
-		return IsFirefoxAvailableWindows()
-	case "darwin":
-		return isPathExists(os.Getenv("HOME") + "/Library/Application Support/Firefox")
-	case "linux":
-		return isCommandExists("firefox") && len(GetDefaultFirefoxPaths()) > 0
-	}
-	return false
+	return available
 }
 
 // Browser-specific extractors
 
 func extractFromChromeVerbose(verbose bool) (*core.AuthCredentials, error) {
-	extractor := &ChromeCookieExtractor{Name: "Chrome"}
-	creds, err := extractor.ExtractCookiesVerbose(verbose)
-	if err != nil {
-		return nil, fmt.Errorf("Chrome extraction failed: %w", err)
-	}
-	return creds, nil
+	return extractFromChromiumBrowserVerbose("chrome", "Chrome", verbose)
 }
 
 func extractFromBraveVerbose(verbose bool) (*core.AuthCredentials, error) {
-	// Brave uses same format as Chrome
-	var path string
-	switch runtime.GOOS {
-	case "windows":
-		localAppData := os.Getenv("LOCALAPPDATA")
-		path = localAppData + "/BraveSoftware/Brave-Browser/User Data/Default/Network/Cookies"
-	case "darwin":
-		home, _ := os.UserHomeDir()
-		path = home + "/Library/Application Support/BraveSoftware/Brave-Browser/Default/Cookies"
-	case "linux":
-		path = linuxChromiumCookiePath("brave")
-	}
-
-	extractor := &ChromeCookieExtractor{Name: "Brave", Path: path}
-	creds, err := extractor.ExtractCookiesVerbose(verbose)
-	if err != nil {
-		return nil, fmt.Errorf("Brave extraction failed: %w", err)
-	}
-	return creds, nil
+	return extractFromChromiumBrowserVerbose("brave", "Brave", verbose)
 }
 
 func extractFromEdgeVerbose(verbose bool) (*core.AuthCredentials, error) {
-	var path string
-	switch runtime.GOOS {
-	case "windows":
-		localAppData := os.Getenv("LOCALAPPDATA")
-		path = localAppData + "/Microsoft/Edge/User Data/Default/Network/Cookies"
-	case "darwin":
-		home, _ := os.UserHomeDir()
-		path = home + "/Library/Application Support/Microsoft Edge/Default/Cookies"
-	case "linux":
-		path = linuxChromiumCookiePath("edge")
-	}
-
-	extractor := &ChromeCookieExtractor{Name: "Edge", Path: path}
-	creds, err := extractor.ExtractCookiesVerbose(verbose)
-	if err != nil {
-		return nil, fmt.Errorf("Edge extraction failed: %w", err)
-	}
-	return creds, nil
+	return extractFromChromiumBrowserVerbose("edge", "Edge", verbose)
 }
 
 func extractFromChromiumVerbose(verbose bool) (*core.AuthCredentials, error) {
-	var path string
-	switch runtime.GOOS {
-	case "windows":
-		localAppData := os.Getenv("LOCALAPPDATA")
-		path = localAppData + "/Chromium/User Data/Default/Network/Cookies"
-	case "darwin":
-		home, _ := os.UserHomeDir()
-		path = home + "/Library/Application Support/Chromium/Default/Cookies"
-	case "linux":
-		path = linuxChromiumCookiePath("chromium")
-	}
-
-	extractor := &ChromeCookieExtractor{Name: "Chromium", Path: path}
-	creds, err := extractor.ExtractCookiesVerbose(verbose)
-	if err != nil {
-		return nil, fmt.Errorf("Chromium extraction failed: %w", err)
-	}
-	return creds, nil
+	return extractFromChromiumBrowserVerbose("chromium", "Chromium", verbose)
 }
 
 func extractFromFirefoxVerbose(verbose bool) (*core.AuthCredentials, error) {
-	extractor := &FirefoxCookieExtractor{}
-	creds, err := extractor.ExtractCookies()
+	paths := currentCookiePaths("firefox")
+	creds, err := extractFromPaths(paths, func(path string) (*core.AuthCredentials, error) {
+		return (&FirefoxCookieExtractor{Path: path}).ExtractCookies()
+	})
 	if err != nil {
 		return nil, fmt.Errorf("Firefox extraction failed: %w", err)
 	}
 	return creds, nil
 }
 
-// Utility functions
-
-func isPathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func isCommandExists(cmd string) bool {
-	// Simple check - look in PATH
-	_, err := os.Stat("/usr/bin/" + cmd)
-	if err == nil {
-		return true
+func extractFromChromiumBrowserVerbose(browserName, displayName string, verbose bool) (*core.AuthCredentials, error) {
+	paths := currentCookiePaths(browserName)
+	creds, err := extractFromPaths(paths, func(path string) (*core.AuthCredentials, error) {
+		return (&ChromeCookieExtractor{Name: displayName, Path: path}).ExtractCookiesVerbose(verbose)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s extraction failed: %w", displayName, err)
 	}
-	_, err = os.Stat("/usr/local/bin/" + cmd)
-	return err == nil
+	return creds, nil
 }
 
-// Platform-specific helpers
+func extractCandidateVerbose(candidate BrowserCandidate, verbose bool) (*core.AuthCredentials, error) {
+	return extractFromPaths(candidate.CookiePaths, func(path string) (*core.AuthCredentials, error) {
+		switch candidate.Name {
+		case "firefox":
+			return (&FirefoxCookieExtractor{Path: path}).ExtractCookies()
+		default:
+			return (&ChromeCookieExtractor{Name: candidate.Name, Path: path}).ExtractCookiesVerbose(verbose)
+		}
+	})
+}
+
+func currentCookiePaths(browserName string) []string {
+	for _, candidate := range DiscoverBrowserCandidates() {
+		if candidate.Name == browserName {
+			return candidate.CookiePaths
+		}
+	}
+	return nil
+}
+
+func extractFromPaths(paths []string, extract func(path string) (*core.AuthCredentials, error)) (*core.AuthCredentials, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no cookie database found")
+	}
+
+	failures := make([]string, 0, len(paths))
+	for _, path := range paths {
+		creds, err := extract(path)
+		if err == nil && creds != nil && creds.IsValid() {
+			return creds, nil
+		}
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", path, err))
+		}
+	}
+	if len(failures) > 0 {
+		return nil, fmt.Errorf("all cookie databases failed (%s)", strings.Join(failures, "; "))
+	}
+	return nil, fmt.Errorf("no valid credentials found in cookie databases")
+}
 
 // IsFirefoxAvailableWindows checks Firefox on Windows
 func IsFirefoxAvailableWindows() bool {
 	appData := os.Getenv("APPDATA")
-	return isPathExists(appData + "/Mozilla/Firefox/Profiles")
+	_, err := os.Stat(appData + "/Mozilla/Firefox/Profiles")
+	return err == nil
 }
