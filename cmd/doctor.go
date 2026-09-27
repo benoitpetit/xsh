@@ -4,7 +4,6 @@ package cmd
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"runtime"
 	"time"
 
@@ -25,7 +24,7 @@ var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Run diagnostics",
 	Long:  `Check the health of your xsh installation and configuration.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput := isJSONMode()
 
 		var checks []CheckResult
@@ -46,12 +45,14 @@ var doctorCmd = &cobra.Command{
 
 		for _, c := range checks {
 			if c.Status == "fail" && c.Name == "Auth" {
-				os.Exit(core.ExitAuthError)
+				abortCommand(core.ExitAuthError)
 			}
 			if c.Status == "fail" && c.Name == "Network" {
-				os.Exit(core.ExitError)
+				abortCommand(core.ExitError)
 			}
 		}
+
+		return nil
 	},
 }
 

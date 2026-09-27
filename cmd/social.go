@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/benoitpetit/xsh/core"
@@ -22,13 +21,13 @@ var socialListCmd = func(use, short, operation string) *cobra.Command {
 	return &cobra.Command{
 		Use:   use,
 		Short: short,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			count, _ := cmd.Flags().GetInt("count")
 			cursor, _ := cmd.Flags().GetString("cursor")
 			client, err := getClient("")
 			if err != nil {
 				fmt.Println(display.Error(err.Error()))
-				os.Exit(core.ExitAuthError)
+				abortCommand(core.ExitAuthError)
 			}
 			defer client.Close()
 
@@ -42,9 +41,11 @@ var socialListCmd = func(use, short, operation string) *cobra.Command {
 			}
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to fetch %s accounts: %v", operation, err)))
-				os.Exit(core.ExitError)
+				abortCommand(core.ExitError)
 			}
 			outputPage(users, nextCursor, nextCursor != "", func() { fmt.Println(display.FormatUserList(users)) })
+
+			return nil
 		},
 	}
 }
@@ -57,30 +58,30 @@ var followCmd = &cobra.Command{
 	Use:   "follow <handle>",
 	Short: "Follow a user",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		handle := strings.TrimPrefix(args[0], "@")
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		_, err = core.FollowUser(client, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -90,6 +91,8 @@ var followCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Followed @%s", handle)))
 		})
+
+		return nil
 	},
 }
 
@@ -98,30 +101,30 @@ var unfollowCmd = &cobra.Command{
 	Use:   "unfollow <handle>",
 	Short: "Unfollow a user",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		handle := strings.TrimPrefix(args[0], "@")
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		_, err = core.UnfollowUser(client, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -131,6 +134,8 @@ var unfollowCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Unfollowed @%s", handle)))
 		})
+
+		return nil
 	},
 }
 
@@ -139,30 +144,30 @@ var blockCmd = &cobra.Command{
 	Use:   "block <handle>",
 	Short: "Block a user",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		handle := strings.TrimPrefix(args[0], "@")
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		_, err = core.BlockUser(client, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -172,6 +177,8 @@ var blockCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Blocked @%s", handle)))
 		})
+
+		return nil
 	},
 }
 
@@ -180,30 +187,30 @@ var unblockCmd = &cobra.Command{
 	Use:   "unblock <handle>",
 	Short: "Unblock a user",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		handle := strings.TrimPrefix(args[0], "@")
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		_, err = core.UnblockUser(client, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -213,6 +220,8 @@ var unblockCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Unblocked @%s", handle)))
 		})
+
+		return nil
 	},
 }
 
@@ -221,30 +230,30 @@ var muteCmd = &cobra.Command{
 	Use:   "mute <handle>",
 	Short: "Mute a user",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		handle := strings.TrimPrefix(args[0], "@")
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		_, err = core.MuteUser(client, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -254,6 +263,8 @@ var muteCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Muted @%s", handle)))
 		})
+
+		return nil
 	},
 }
 
@@ -262,30 +273,30 @@ var unmuteCmd = &cobra.Command{
 	Use:   "unmute <handle>",
 	Short: "Unmute a user",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		handle := strings.TrimPrefix(args[0], "@")
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		_, err = core.UnmuteUser(client, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -295,6 +306,8 @@ var unmuteCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Unmuted @%s", handle)))
 		})
+
+		return nil
 	},
 }
 

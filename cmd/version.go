@@ -23,7 +23,7 @@ func VersionInfo() string {
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of xsh",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		output(map[string]string{
 			"version":    Version,
 			"commit":     Commit,
@@ -31,6 +31,8 @@ var versionCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Title(fmt.Sprintf("xsh version %s", VersionInfo())))
 		})
+
+		return nil
 	},
 }
 

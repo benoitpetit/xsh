@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"runtime"
 
 	"github.com/benoitpetit/xsh/browser"
@@ -28,14 +27,14 @@ var authCmd = &cobra.Command{
 var authStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check authentication status",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		creds, err := core.GetCredentials(account)
 		if err != nil {
 			output(map[string]bool{"authenticated": false}, func() {
 				fmt.Println(display.Error("Not authenticated"))
 			})
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 
 		info := map[string]interface{}{
@@ -51,6 +50,8 @@ var authStatusCmd = &cobra.Command{
 				fmt.Println(display.KeyValue("Account:", creds.AccountName))
 			}
 		})
+
+		return nil
 	},
 }
 
@@ -81,7 +82,7 @@ Examples:
 
   # Save to specific account
   xsh auth login --account work`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var creds *core.AuthCredentials
 		var browserName string
 		var err error
@@ -120,8 +121,8 @@ Examples:
 				fmt.Println(display.Section("Recommended alternatives"))
 				fmt.Println(display.Bullet("xsh auth import <cookies.json>  — Export from Cookie Editor extension"))
 				fmt.Println(display.Bullet("xsh auth set                    — Manual token entry"))
-				os.Exit(core.ExitAuthError)
-				return
+				abortCommand(core.ExitAuthError)
+				return nil
 			}
 
 			fmt.Println(display.Info(fmt.Sprintf("Found browsers: %v", availableBrowsers)))
@@ -164,15 +165,15 @@ Examples:
 			fmt.Println(display.Numbered(3, "Open Cookie Editor, click 'Export' → 'JSON'"))
 			fmt.Println(display.Numbered(4, "Save to a file and run: xsh auth import <file>"))
 
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 
 		if creds == nil || !creds.IsValid() {
 			fmt.Println(display.Error("Extracted credentials are invalid"))
 			fmt.Println(display.Info("Make sure you're logged into x.com in your browser"))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 
 		acc := authAccount
@@ -183,12 +184,14 @@ Examples:
 		creds.AccountName = acc
 		if err := core.SaveAuth(creds, acc); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to save credentials: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Authenticated using %s! Saved as account '%s'", browserName, acc)))
 		fmt.Println(display.KeyValue("Token:", creds.AuthToken[:8]+"..."))
+
+		return nil
 	},
 }
 
@@ -197,12 +200,12 @@ var authImportCmd = &cobra.Command{
 	Use:   "import [file]",
 	Short: "Import cookies from Cookie Editor JSON export",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		creds, err := core.ImportCookiesFromFile(args[0])
 		if err != nil || creds == nil || !creds.IsValid() {
 			fmt.Println(display.Error("Could not find auth_token/ct0 in the file. Make sure you exported cookies from x.com with Cookie Editor"))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 
 		acc := authAccount
@@ -212,11 +215,13 @@ var authImportCmd = &cobra.Command{
 
 		if err := core.SaveAuth(creds, acc); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to save credentials: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Imported cookies! Saved as account '%s'", acc)))
+
+		return nil
 	},
 }
 
@@ -224,7 +229,7 @@ var authImportCmd = &cobra.Command{
 var authSetCmd = &cobra.Command{
 	Use:   "set",
 	Short: "Manually set authentication credentials",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var authToken, ct0 string
 
 		fmt.Print("Enter auth_token: ")
@@ -235,8 +240,8 @@ var authSetCmd = &cobra.Command{
 
 		if authToken == "" || ct0 == "" {
 			fmt.Println(display.Error("Both auth_token and ct0 are required"))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 
 		creds := &core.AuthCredentials{
@@ -252,11 +257,13 @@ var authSetCmd = &cobra.Command{
 
 		if err := core.SaveAuth(creds, acc); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to save credentials: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Credentials saved as account '%s'", acc)))
+
+		return nil
 	},
 }
 
@@ -264,7 +271,7 @@ var authSetCmd = &cobra.Command{
 var authAccountsCmd = &cobra.Command{
 	Use:   "accounts",
 	Short: "List stored accounts",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		accounts, err := core.ListAccounts()
 		if err != nil {
 			accounts = []string{}
@@ -279,6 +286,8 @@ var authAccountsCmd = &cobra.Command{
 				}
 			}
 		})
+
+		return nil
 	},
 }
 
@@ -287,13 +296,15 @@ var authSwitchCmd = &cobra.Command{
 	Use:   "switch [account]",
 	Short: "Switch default account",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := core.SetDefaultAccount(args[0]); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Account '%s' not found", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 		fmt.Println(display.Success(fmt.Sprintf("Switched to account '%s'", args[0])))
+
+		return nil
 	},
 }
 
@@ -301,7 +312,7 @@ var authSwitchCmd = &cobra.Command{
 var authLogoutCmd = &cobra.Command{
 	Use:   "logout [account]",
 	Short: "Remove stored credentials",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		acc := "default"
 		if len(args) > 0 {
 			acc = args[0]
@@ -313,17 +324,19 @@ var authLogoutCmd = &cobra.Command{
 			fmt.Scanln(&confirm)
 			if confirm != "y" && confirm != "Y" {
 				fmt.Println(display.Warning("Aborted."))
-				return
+				return nil
 			}
 		}
 
 		if err := core.RemoveAuth(acc); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to remove account: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Removed account '%s'", acc)))
+
+		return nil
 	},
 }
 
@@ -331,12 +344,12 @@ var authLogoutCmd = &cobra.Command{
 var authWhoamiCmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Show current user information",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
@@ -344,8 +357,8 @@ var authWhoamiCmd = &cobra.Command{
 		creds, _ := core.GetCredentials(account)
 		if creds == nil {
 			fmt.Println(display.Error("Not authenticated"))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 
 		// Try to get user info from API
@@ -353,8 +366,8 @@ var authWhoamiCmd = &cobra.Command{
 		response, err := core.GetHomeTimeline(client, "for-you", 1, "")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to verify credentials: %v", err)))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 
 		output(map[string]interface{}{
@@ -369,6 +382,8 @@ var authWhoamiCmd = &cobra.Command{
 				fmt.Println(display.KeyValue("API Status:", "OK (timeline accessible)"))
 			}
 		})
+
+		return nil
 	},
 }
 

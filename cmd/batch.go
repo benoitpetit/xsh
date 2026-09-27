@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/benoitpetit/xsh/core"
@@ -16,23 +15,25 @@ var tweetsBatchCmd = &cobra.Command{
 	Use:   "tweets <tweet-id>...",
 	Short: "Fetch multiple tweets by ID",
 	Args:  cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		tweets, err := core.GetTweetsByIDs(client, args)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(tweets, func() {
 			fmt.Println(display.FormatTweets(tweets))
 		})
+
+		return nil
 	},
 }
 
@@ -41,7 +42,7 @@ var usersBatchCmd = &cobra.Command{
 	Use:   "users <handle>...",
 	Short: "Fetch multiple user profiles",
 	Args:  cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Clean handles
 		for i, h := range args {
 			args[i] = strings.TrimPrefix(h, "@")
@@ -50,19 +51,21 @@ var usersBatchCmd = &cobra.Command{
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		users, err := core.GetUsersByHandles(client, args)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(users, func() {
 			fmt.Println(display.FormatUsers(users))
 		})
+
+		return nil
 	},
 }
 

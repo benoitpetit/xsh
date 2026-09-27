@@ -53,31 +53,31 @@ var tweetViewCmd = &cobra.Command{
 For tweets containing articles (long-form content), use --export to save as Markdown:
   xsh tweet view <id> --export article.md`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		tweets, err := core.GetTweetDetail(client, args[0], tweetCount)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch tweet: %v", err)))
-			return
+			return nil
 		}
 
 		if len(tweets) == 0 {
 			fmt.Println(display.Error(fmt.Sprintf("Tweet %s not found", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		// Get focal tweet
@@ -97,18 +97,18 @@ For tweets containing articles (long-form content), use --export to save as Mark
 			articleData, err := core.GetArticle(client, args[0])
 			if err != nil || articleData == nil {
 				fmt.Println(display.Warning("No article found in this tweet"))
-				os.Exit(core.ExitError)
-				return
+				abortCommand(core.ExitError)
+				return nil
 			}
 
 			if err := core.ExportArticleToFile(articleData, focal, exportArticle); err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to export article: %v", err)))
-				os.Exit(core.ExitError)
-				return
+				abortCommand(core.ExitError)
+				return nil
 			}
 
 			fmt.Println(display.Success(fmt.Sprintf("Article exported to %s", exportArticle)))
-			return
+			return nil
 		}
 
 		// Check if this is an article tweet (for display purposes)
@@ -135,6 +135,8 @@ For tweets containing articles (long-form content), use --export to save as Mark
 			// Default: show only the focal tweet in simple style
 			fmt.Println(display.FormatSingleTweet(focal))
 		}
+
+		return nil
 	},
 }
 
@@ -153,19 +155,19 @@ Examples:
   xsh tweet post "Quoting" --quote https://x.com/user/status/1234567890
   xsh tweet post "What's better?" --poll "Option A" --poll "Option B"
   xsh tweet post "Vote!" --poll "Yes" --poll "No" --poll "Maybe" --poll-duration 1440`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		text, valid := utils.ValidateTweetTextWithLimit(args[0], 280)
 		if !valid {
 			fmt.Println(display.Error("Tweet text is empty or exceeds 280 characters"))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
@@ -177,29 +179,29 @@ Examples:
 
 		if replyTo != "" && !utils.ValidateTweetID(replyTo) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid reply-to tweet ID: %s", replyTo)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		// Validate poll choices
 		if len(pollChoices) > 0 && (len(pollChoices) < 2 || len(pollChoices) > 4) {
 			fmt.Println(display.Error("Polls require 2-4 choices"))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		// Images and polls are mutually exclusive
 		if len(pollChoices) > 0 && len(images) > 0 {
 			fmt.Println(display.Error("Cannot attach both images and a poll to the same tweet"))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		// Validate max images
 		if len(images) > 4 {
 			fmt.Println(display.Error(fmt.Sprintf("Too many images: %d (max 4)", len(images))))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		// Upload media if provided
@@ -212,8 +214,8 @@ Examples:
 				mediaID, err := core.UploadMediaFile(client, imgPath)
 				if err != nil {
 					fmt.Println(display.Error(fmt.Sprintf("Failed to upload image %s: %v", imgPath, err)))
-					os.Exit(core.ExitError)
-					return
+					abortCommand(core.ExitError)
+					return nil
 				}
 				mediaIDs = append(mediaIDs, mediaID)
 				if verbose {
@@ -231,8 +233,8 @@ Examples:
 			uri, err := core.CreatePollCard(client, pollChoices, pollDuration)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to create poll: %v", err)))
-				os.Exit(core.ExitError)
-				return
+				abortCommand(core.ExitError)
+				return nil
 			}
 			cardURI = uri
 			if verbose {
@@ -243,7 +245,7 @@ Examples:
 		result, err := core.CreateTweet(client, text, replyTo, quote, mediaIDs, cardURI)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to post tweet: %v", err)))
-			return
+			return nil
 		}
 
 		outputData := result
@@ -265,6 +267,8 @@ Examples:
 				fmt.Println(display.Success(fmt.Sprintf("Tweet posted%s!", suffix)))
 			}
 		})
+
+		return nil
 	},
 }
 
@@ -280,15 +284,15 @@ Examples:
   xsh tweet note "A longer post..."
   xsh tweet note --file essay.txt --force --json`,
 	Args: cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		file, _ := cmd.Flags().GetString("file")
 		if len(args) == 0 && file == "" {
 			fmt.Println(display.Error("Provide note content or --file"))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if len(args) > 0 && file != "" {
 			fmt.Println(display.Error("Use either note text or --file, not both"))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		content := ""
@@ -296,7 +300,7 @@ Examples:
 			data, err := os.ReadFile(file)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to read note file: %v", err)))
-				os.Exit(core.ExitError)
+				abortCommand(core.ExitError)
 			}
 			content = string(data)
 		} else {
@@ -306,7 +310,7 @@ Examples:
 		force, _ := cmd.Flags().GetBool("force")
 		if isJSONMode() && !force {
 			fmt.Println(display.Error("JSON mode requires --force for Note Tweet publication"))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if !force {
 			fmt.Printf("Publish Note Tweet (%d characters)? [y/N] ", len([]rune(content)))
@@ -314,21 +318,21 @@ Examples:
 			_, _ = fmt.Scanln(&response)
 			if response != "y" && response != "Y" {
 				fmt.Println(display.Warning("Cancelled"))
-				return
+				return nil
 			}
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		result, err := core.CreateNoteTweet(client, content, nil)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to publish Note Tweet: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		output(result, func() {
 			id := extractTweetIDFromResult(result)
@@ -338,6 +342,8 @@ Examples:
 			}
 			fmt.Println(display.Success("Note Tweet published!"))
 		})
+
+		return nil
 	},
 }
 
@@ -346,18 +352,18 @@ var tweetDeleteCmd = &cobra.Command{
 	Use:   "delete [id]",
 	Short: "Delete your tweet",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
@@ -368,19 +374,21 @@ var tweetDeleteCmd = &cobra.Command{
 			fmt.Scanln(&confirm)
 			if confirm != "y" && confirm != "Y" {
 				fmt.Println(display.Warning("Aborted."))
-				return
+				return nil
 			}
 		}
 
 		result, err := core.DeleteTweet(client, args[0])
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to delete tweet: %v", err)))
-			return
+			return nil
 		}
 
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Deleted tweet %s", args[0])))
 		})
+
+		return nil
 	},
 }
 
@@ -389,30 +397,32 @@ var tweetLikeCmd = &cobra.Command{
 	Use:   "like [id]",
 	Short: "Like a tweet",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		result, err := core.LikeTweet(client, args[0])
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to like tweet: %v", err)))
-			return
+			return nil
 		}
 
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Liked tweet %s", args[0])))
 		})
+
+		return nil
 	},
 }
 
@@ -421,30 +431,32 @@ var tweetUnlikeCmd = &cobra.Command{
 	Use:   "unlike [id]",
 	Short: "Unlike a tweet",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		result, err := core.UnlikeTweet(client, args[0])
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to unlike tweet: %v", err)))
-			return
+			return nil
 		}
 
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Unliked tweet %s", args[0])))
 		})
+
+		return nil
 	},
 }
 
@@ -453,30 +465,32 @@ var tweetRetweetCmd = &cobra.Command{
 	Use:   "retweet [id]",
 	Short: "Retweet a tweet",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		result, err := core.Retweet(client, args[0])
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to retweet: %v", err)))
-			return
+			return nil
 		}
 
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Retweeted %s", args[0])))
 		})
+
+		return nil
 	},
 }
 
@@ -485,30 +499,32 @@ var tweetUnretweetCmd = &cobra.Command{
 	Use:   "unretweet [id]",
 	Short: "Undo a retweet",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		result, err := core.Unretweet(client, args[0])
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to unretweet: %v", err)))
-			return
+			return nil
 		}
 
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Unretweeted %s", args[0])))
 		})
+
+		return nil
 	},
 }
 
@@ -517,29 +533,31 @@ var tweetBookmarkCmd = &cobra.Command{
 	Use:   "bookmark [id]",
 	Short: "Bookmark a tweet",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			return
+			return nil
 		}
 		defer client.Close()
 
 		result, err := core.BookmarkTweet(client, args[0])
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to bookmark: %v", err)))
-			return
+			return nil
 		}
 
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Bookmarked tweet %s", args[0])))
 		})
+
+		return nil
 	},
 }
 
@@ -548,29 +566,31 @@ var tweetUnbookmarkCmd = &cobra.Command{
 	Use:   "unbookmark [id]",
 	Short: "Remove a bookmark",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			return
+			return nil
 		}
 		defer client.Close()
 
 		result, err := core.UnbookmarkTweet(client, args[0])
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to unbookmark: %v", err)))
-			return
+			return nil
 		}
 
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Unbookmarked tweet %s", args[0])))
 		})
+
+		return nil
 	},
 }
 
@@ -578,11 +598,11 @@ var tweetUnbookmarkCmd = &cobra.Command{
 var bookmarksCmd = &cobra.Command{
 	Use:   "bookmarks",
 	Short: "View your bookmarks",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			return
+			return nil
 		}
 		defer client.Close()
 
@@ -590,7 +610,7 @@ var bookmarksCmd = &cobra.Command{
 		response, err := core.GetBookmarks(client, count, "")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch bookmarks: %v", err)))
-			return
+			return nil
 		}
 
 		// Apply filter if specified
@@ -603,6 +623,8 @@ var bookmarksCmd = &cobra.Command{
 		output(filteredTweets, func() {
 			fmt.Println(display.FormatTweetList(filteredTweets))
 		})
+
+		return nil
 	},
 }
 

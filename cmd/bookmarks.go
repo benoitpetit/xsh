@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/benoitpetit/xsh/core"
@@ -15,23 +14,25 @@ import (
 var bookmarksFoldersCmd = &cobra.Command{
 	Use:   "bookmarks-folders",
 	Short: "List bookmark folders",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		folders, err := core.GetBookmarkFolders(client)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(folders, func() {
 			fmt.Println(display.FormatBookmarkFolders(folders))
 		})
+
+		return nil
 	},
 }
 
@@ -40,26 +41,28 @@ var bookmarksFolderCmd = &cobra.Command{
 	Use:   "bookmarks-folder <folder-id>",
 	Short: "View tweets in a bookmark folder",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		folderID := args[0]
 		count, _ := strconv.Atoi(cmd.Flag("count").Value.String())
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		response, err := core.GetBookmarkFolderTimeline(client, folderID, count, "")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(response.Tweets, func() {
 			fmt.Println(display.FormatTweets(response.Tweets))
 		})
+
+		return nil
 	},
 }
 

@@ -20,7 +20,7 @@ var statusCmd = &cobra.Command{
 - Endpoint system health
 - API connectivity
 - Cache status`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		showJSON, _ := cmd.Flags().GetBool("json")
 		checkNow, _ := cmd.Flags().GetBool("check")
 
@@ -28,10 +28,12 @@ var statusCmd = &cobra.Command{
 
 		if showJSON || isJSONMode() || isYAMLMode() {
 			output(status, func() {})
-			return
+			return nil
 		}
 
 		displayStatus(status)
+
+		return nil
 	},
 }
 

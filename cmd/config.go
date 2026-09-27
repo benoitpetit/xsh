@@ -18,13 +18,13 @@ var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Show current configuration",
 	Long:  "Show current configuration. Use subcommands for advanced management.",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Default behavior: show config (like Python)
 		cfg, err := core.LoadConfig()
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to load config: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		output(cfg, func() {
@@ -47,6 +47,8 @@ var configCmd = &cobra.Command{
 			}
 			fmt.Println(display.FormatConfig(cv))
 		})
+
+		return nil
 	},
 }
 
@@ -54,11 +56,11 @@ var configCmd = &cobra.Command{
 var configShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Show current configuration",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := core.LoadConfig()
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to load config: %v", err)))
-			return
+			return nil
 		}
 
 		output(cfg, func() {
@@ -81,6 +83,8 @@ var configShowCmd = &cobra.Command{
 			}
 			fmt.Println(display.FormatConfig(cv))
 		})
+
+		return nil
 	},
 }
 
@@ -89,11 +93,11 @@ var configGetCmd = &cobra.Command{
 	Use:   "get <key>",
 	Short: "Get a specific configuration value",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := core.LoadConfig()
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to load config: %v", err)))
-			return
+			return nil
 		}
 
 		key := strings.ToLower(args[0])
@@ -103,13 +107,15 @@ var configGetCmd = &cobra.Command{
 			fmt.Println(display.Error(fmt.Sprintf("Unknown config key: %s", key)))
 			fmt.Println(display.Section("\nAvailable keys:"))
 			printAvailableKeys()
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		output(map[string]string{key: value}, func() {
 			fmt.Println(display.Code(value))
 		})
+
+		return nil
 	},
 }
 
@@ -136,11 +142,11 @@ Available keys:
   filter.bookmarks_weight - Bookmarks weight for scoring
   filter.views_log_weight - Views log weight for scoring`,
 	Args: cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := core.LoadConfig()
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to load config: %v", err)))
-			return
+			return nil
 		}
 
 		key := strings.ToLower(args[0])
@@ -148,19 +154,21 @@ Available keys:
 
 		if err := setConfigValue(cfg, key, value); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to set config: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		if err := cfg.Save(); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to save config: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		output(map[string]string{"status": "ok", "key": key, "value": value}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Set %s = %s", key, value)))
 		})
+
+		return nil
 	},
 }
 
@@ -168,7 +176,7 @@ Available keys:
 var configResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Reset configuration to defaults",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
 
 		if !force && !isJSONMode() {
@@ -177,20 +185,22 @@ var configResetCmd = &cobra.Command{
 			fmt.Scanln(&confirm)
 			if confirm != "y" && confirm != "Y" {
 				fmt.Println(display.Warning("Aborted."))
-				return
+				return nil
 			}
 		}
 
 		cfg := core.DefaultConfig()
 		if err := cfg.Save(); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to save config: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		output(map[string]string{"status": "reset"}, func() {
 			fmt.Println(display.Success("Configuration reset to defaults"))
 		})
+
+		return nil
 	},
 }
 
@@ -198,16 +208,18 @@ var configResetCmd = &cobra.Command{
 var configPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Show configuration file path",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := core.GetConfigPath()
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to get config path: %v", err)))
-			return
+			return nil
 		}
 
 		output(map[string]string{"path": path}, func() {
 			fmt.Println(display.Code(path))
 		})
+
+		return nil
 	},
 }
 
@@ -215,11 +227,11 @@ var configPathCmd = &cobra.Command{
 var configEditCmd = &cobra.Command{
 	Use:   "edit",
 	Short: "Open configuration file in default editor",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := core.GetConfigPath()
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to get config path: %v", err)))
-			return
+			return nil
 		}
 
 		// Ensure config exists
@@ -227,7 +239,7 @@ var configEditCmd = &cobra.Command{
 			cfg := core.DefaultConfig()
 			if err := cfg.Save(); err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to create config: %v", err)))
-				return
+				return nil
 			}
 		}
 
@@ -248,7 +260,7 @@ var configEditCmd = &cobra.Command{
 		if editor == "" {
 			fmt.Println(display.Error("No editor found. Set EDITOR environment variable."))
 			fmt.Println(display.Info(fmt.Sprintf("\nConfig file location: %s", path)))
-			return
+			return nil
 		}
 
 		// Open editor
@@ -258,8 +270,10 @@ var configEditCmd = &cobra.Command{
 		cmd2.Stderr = os.Stderr
 		if err := cmd2.Run(); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to open editor: %v", err)))
-			return
+			return nil
 		}
+
+		return nil
 	},
 }
 

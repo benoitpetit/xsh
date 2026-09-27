@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/benoitpetit/xsh/core"
@@ -22,23 +21,25 @@ var dmCmd = &cobra.Command{
 var dmInboxCmd = &cobra.Command{
 	Use:   "inbox",
 	Short: "View DM inbox",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		conversations, err := core.GetDMInbox(client)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(conversations, func() {
 			fmt.Println(display.FormatDMInbox(conversations))
 		})
+
+		return nil
 	},
 }
 
@@ -47,14 +48,14 @@ var dmSendCmd = &cobra.Command{
 	Use:   "send <handle> <message>",
 	Short: "Send a direct message",
 	Args:  cobra.MinimumNArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		handle := strings.TrimPrefix(args[0], "@")
 		message := strings.Join(args[1:], " ")
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
@@ -62,22 +63,24 @@ var dmSendCmd = &cobra.Command{
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		result, err := core.SendDM(client, user.ID, message)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("DM sent to @%s", handle)))
 		})
+
+		return nil
 	},
 }
 
@@ -86,7 +89,7 @@ var dmDeleteCmd = &cobra.Command{
 	Use:   "delete <message-id>",
 	Short: "Delete a DM message",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		messageID := args[0]
 		force, _ := cmd.Flags().GetBool("force")
 
@@ -96,21 +99,21 @@ var dmDeleteCmd = &cobra.Command{
 			fmt.Scanln(&response)
 			if response != "y" && response != "Y" {
 				fmt.Println(display.Warning("Cancelled"))
-				return
+				return nil
 			}
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.DeleteDM(client, messageID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -120,6 +123,8 @@ var dmDeleteCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success("Message deleted"))
 		})
+
+		return nil
 	},
 }
 

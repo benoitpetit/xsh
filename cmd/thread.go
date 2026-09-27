@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/benoitpetit/xsh/core"
@@ -23,25 +22,27 @@ Examples:
   xsh quotes 1234567890             # View quote tweets
   xsh quotes 1234567890 -n 50       # View up to 50 quote tweets`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		count, _ := strconv.Atoi(cmd.Flag("count").Value.String())
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		response, err := core.GetQuoteTweets(client, args[0], count, "")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch quote tweets: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(response.Tweets, func() {
 			fmt.Println(display.FormatTweetList(response.Tweets))
 		})
+
+		return nil
 	},
 }
 
@@ -55,25 +56,27 @@ Examples:
   xsh thread 1234567890             # View full conversation thread
   xsh thread 1234567890 -n 50       # Fetch up to 50 replies`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		count, _ := strconv.Atoi(cmd.Flag("count").Value.String())
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		tweets, err := core.GetTweetDetail(client, args[0], count)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch thread: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(tweets, func() {
 			fmt.Println(display.FormatThread(tweets, args[0]))
 		})
+
+		return nil
 	},
 }
 
@@ -87,44 +90,44 @@ Examples:
   xsh pinned elonmusk               # View @elonmusk's pinned tweet
   xsh pinned @jack                   # View @jack's pinned tweet`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		if user.PinnedTweetID == "" {
 			fmt.Println(display.Muted(fmt.Sprintf("@%s has no pinned tweet", handle)))
-			return
+			return nil
 		}
 
 		tweets, err := core.GetTweetDetail(client, user.PinnedTweetID, 1)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch pinned tweet: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		if len(tweets) == 0 {
 			fmt.Println(display.Muted("Pinned tweet not found or unavailable"))
-			return
+			return nil
 		}
 
 		// Show the focal (pinned) tweet
@@ -132,6 +135,8 @@ Examples:
 			fmt.Println(display.Subtitle(fmt.Sprintf("Pinned tweet by @%s", handle)))
 			fmt.Println(display.FormatTweet(tweets[0], "", true, false))
 		})
+
+		return nil
 	},
 }
 
@@ -146,25 +151,25 @@ Examples:
   xsh unroll 1234567890             # Unroll the thread
   xsh unroll 1234567890 -n 100      # Fetch more tweets in the thread`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		count, _ := strconv.Atoi(cmd.Flag("count").Value.String())
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		tweets, err := core.GetTweetDetail(client, args[0], count)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch thread: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		if len(tweets) == 0 {
 			fmt.Println(display.Muted("Thread not found or empty"))
-			return
+			return nil
 		}
 
 		// Find the focal tweet and determine the thread author
@@ -237,6 +242,8 @@ Examples:
 		output(chain, func() {
 			fmt.Println(display.FormatUnrolledThread(chain, author))
 		})
+
+		return nil
 	},
 }
 

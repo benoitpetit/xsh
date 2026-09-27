@@ -34,14 +34,14 @@ Examples:
   xsh gallery @user --photos-only           # Photos only
   xsh gallery @user --videos-only           # Videos only`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		isSearch, _ := cmd.Flags().GetBool("search")
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
@@ -55,8 +55,8 @@ Examples:
 			handle, valid := utils.ValidateTwitterHandle(args[0])
 			if !valid {
 				fmt.Println(display.Error(fmt.Sprintf("Invalid handle: %s (use --search for search queries)", args[0])))
-				os.Exit(core.ExitError)
-				return
+				abortCommand(core.ExitError)
+				return nil
 			}
 			label = "@" + handle
 			mediaFiles, err = galleryFromUser(client, handle)
@@ -64,13 +64,13 @@ Examples:
 
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch tweets: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		if len(mediaFiles) == 0 {
 			fmt.Println(display.Muted("No media found"))
-			return
+			return nil
 		}
 
 		// Create output directory
@@ -80,8 +80,8 @@ Examples:
 		}
 		if err := os.MkdirAll(outDir, 0755); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to create directory: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		// Download media
@@ -142,6 +142,8 @@ Examples:
 				fmt.Println(display.Info(fmt.Sprintf("  Videos: %d", videos)))
 			}
 		})
+
+		return nil
 	},
 }
 

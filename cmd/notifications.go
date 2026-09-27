@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/benoitpetit/xsh/core"
@@ -20,13 +19,13 @@ var notificationsCmd = &cobra.Command{
 Examples:
   xsh notifications              # View recent notifications
   xsh notifications -n 50        # View last 50 notifications`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		count, _ := strconv.Atoi(cmd.Flag("count").Value.String())
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
@@ -41,6 +40,8 @@ Examples:
 			})
 			return nil
 		})
+
+		return nil
 	},
 }
 

@@ -27,12 +27,12 @@ var feedCmd = &cobra.Command{
 	Use:   "feed",
 	Short: "View your timeline",
 	Long:  "Fetch your home timeline (for-you or following).",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
@@ -75,6 +75,8 @@ var feedCmd = &cobra.Command{
 			})
 			return nil
 		})
+
+		return nil
 	},
 }
 

@@ -26,11 +26,11 @@ Use --location for city/country or --woeid for specific location ID.`,
   xsh trends --location "France"      # France trends
   xsh trends --woeid 1                # Worldwide (WOEID 1)
   xsh trends --woeid 615702           # Paris (WOEID 615702)`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			return
+			return nil
 		}
 		defer client.Close()
 
@@ -73,6 +73,8 @@ Use --location for city/country or --woeid for specific location ID.`,
 			fmt.Println(display.Muted(fmt.Sprintf("Showing top %d trends", len(trends))))
 			return nil
 		})
+
+		return nil
 	},
 }
 

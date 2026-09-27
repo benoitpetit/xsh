@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
@@ -31,37 +30,39 @@ Use subcommands for specific actions:
   user followers-you-know <handle>      Discover likely connections
   user blue-verified-followers <handle> View blue-verified followers`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		output(user, func() {
 			fmt.Println(display.FormatUser(user))
 		})
+
+		return nil
 	},
 }
 
@@ -70,32 +71,32 @@ var userTweetsCmd = &cobra.Command{
 	Use:   "tweets [handle]",
 	Short: "View a user's tweets",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		runWithWatch(func() error {
@@ -110,6 +111,8 @@ var userTweetsCmd = &cobra.Command{
 			})
 			return nil
 		})
+
+		return nil
 	},
 }
 
@@ -118,32 +121,32 @@ var userLikesCmd = &cobra.Command{
 	Use:   "likes [handle]",
 	Short: "View a user's liked tweets",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		runWithWatch(func() error {
@@ -158,6 +161,8 @@ var userLikesCmd = &cobra.Command{
 			})
 			return nil
 		})
+
+		return nil
 	},
 }
 
@@ -166,31 +171,31 @@ var userMediaCmd = &cobra.Command{
 	Use:   "media [handle]",
 	Short: "View a user's media posts",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		runWithWatch(func() error {
@@ -204,6 +209,8 @@ var userMediaCmd = &cobra.Command{
 			})
 			return nil
 		})
+
+		return nil
 	},
 }
 
@@ -212,45 +219,47 @@ var userFollowersCmd = &cobra.Command{
 	Use:   "followers [handle]",
 	Short: "View a user's followers",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		cursor, _ := cmd.Flags().GetString("cursor")
 		users, nextCursor, err := core.GetFollowers(client, user.ID, userCount, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch followers: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		outputPage(users, nextCursor, nextCursor != "", func() {
 			fmt.Println(display.FormatUserList(users))
 		})
+
+		return nil
 	},
 }
 
@@ -259,45 +268,47 @@ var userFollowingCmd = &cobra.Command{
 	Use:   "following [handle]",
 	Short: "View who a user follows",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		cursor, _ := cmd.Flags().GetString("cursor")
 		users, nextCursor, err := core.GetFollowing(client, user.ID, userCount, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch following: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		outputPage(users, nextCursor, nextCursor != "", func() {
 			fmt.Println(display.FormatUserList(users))
 		})
+
+		return nil
 	},
 }
 
@@ -306,18 +317,18 @@ var userFollowersYouKnowCmd = &cobra.Command{
 	Use:   "followers-you-know [handle]",
 	Short: "View followers you may know",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil || user == nil {
@@ -326,7 +337,7 @@ var userFollowersYouKnowCmd = &cobra.Command{
 			} else {
 				fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			}
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		count, _ := cmd.Flags().GetInt("count")
@@ -334,9 +345,11 @@ var userFollowersYouKnowCmd = &cobra.Command{
 		users, nextCursor, err := core.GetFollowersYouKnow(client, user.ID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch followers you may know: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		outputPage(users, nextCursor, nextCursor != "", func() { fmt.Println(display.FormatUserList(users)) })
+
+		return nil
 	},
 }
 
@@ -345,18 +358,18 @@ var userBlueVerifiedFollowersCmd = &cobra.Command{
 	Use:   "blue-verified-followers [handle]",
 	Short: "View a user's blue-verified followers",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil || user == nil {
@@ -365,7 +378,7 @@ var userBlueVerifiedFollowersCmd = &cobra.Command{
 			} else {
 				fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
 			}
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		count, _ := cmd.Flags().GetInt("count")
@@ -373,9 +386,11 @@ var userBlueVerifiedFollowersCmd = &cobra.Command{
 		users, nextCursor, err := core.GetBlueVerifiedFollowers(client, user.ID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch blue-verified followers: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		outputPage(users, nextCursor, nextCursor != "", func() { fmt.Println(display.FormatUserList(users)) })
+
+		return nil
 	},
 }
 

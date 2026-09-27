@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/benoitpetit/xsh/core"
@@ -26,7 +25,7 @@ Use these commands to check status, refresh, or troubleshoot endpoints.`,
 var endpointsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all GraphQL endpoints",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		manager := core.GetEndpointManager()
 		endpoints := manager.ListEndpoints()
 		stats := manager.GetStats()
@@ -36,7 +35,7 @@ var endpointsListCmd = &cobra.Command{
 				"endpoints": endpoints,
 				"stats":     stats,
 			}, func() {})
-			return
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Found %d endpoints", len(endpoints))))
@@ -67,6 +66,8 @@ var endpointsListCmd = &cobra.Command{
 			}
 			fmt.Println()
 		}
+
+		return nil
 	},
 }
 
@@ -75,10 +76,10 @@ var endpointsCheckCmd = &cobra.Command{
 	Use:   "check [operation]",
 	Short: "Check status of a specific endpoint",
 	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			checkAllEndpoints()
-			return
+			return nil
 		}
 
 		operation := args[0]
@@ -101,7 +102,7 @@ var endpointsCheckCmd = &cobra.Command{
 				"quarantined": quarantined,
 				"features":    opFeatures,
 			}, func() {})
-			return
+			return nil
 		}
 
 		fmt.Println(display.Title("Endpoint Check"))
@@ -126,6 +127,8 @@ var endpointsCheckCmd = &cobra.Command{
 				}
 			}
 		}
+
+		return nil
 	},
 }
 
@@ -146,7 +149,7 @@ A logged-out shell or a missing session is rejected. No public shell is used
 as an authenticated endpoint source.
 
 The process may take 10-30 seconds depending on network speed.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println(display.Action("Refreshing endpoints from", "X.com"))
 		fmt.Println(display.Muted("This may take a moment..."))
 
@@ -154,8 +157,8 @@ The process may take 10-30 seconds depending on network speed.`,
 
 		if err := core.RefreshEndpoints(); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Refresh failed: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		duration := time.Since(start).Round(time.Second)
@@ -169,10 +172,12 @@ The process may take 10-30 seconds depending on network speed.`,
 				"endpoints": stats.TotalCount,
 				"features":  stats.FeatureCount,
 			}, func() {})
-			return
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Refreshed %d endpoints in %s", stats.TotalCount, duration)))
+
+		return nil
 	},
 }
 
@@ -180,7 +185,7 @@ The process may take 10-30 seconds depending on network speed.`,
 var endpointsStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show endpoint system status",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		manager := core.GetEndpointManager()
 		stats := manager.GetStats()
 
@@ -214,7 +219,7 @@ var endpointsStatusCmd = &cobra.Command{
 				"can_discover": canDiscover,
 				"stats":        stats,
 			}, func() {})
-			return
+			return nil
 		}
 
 		fmt.Println(display.Title("Endpoint System Status"))
@@ -239,6 +244,8 @@ var endpointsStatusCmd = &cobra.Command{
 			fmt.Println()
 			fmt.Println(display.Warning("Cache is old. Consider running 'xsh endpoints refresh'"))
 		}
+
+		return nil
 	},
 }
 
@@ -249,7 +256,7 @@ var endpointsUpdateCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Example: `  xsh endpoints update HomeTimeline abc123/HomeTimeline
   xsh endpoints update UserByScreenName xyz789/UserByScreenName`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		operation := args[0]
 		endpoint := args[1]
 
@@ -262,10 +269,12 @@ var endpointsUpdateCmd = &cobra.Command{
 				"operation": operation,
 				"endpoint":  endpoint,
 			}, func() {})
-			return
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Updated %s → %s", operation, endpoint)))
+
+		return nil
 	},
 }
 
@@ -273,7 +282,7 @@ var endpointsUpdateCmd = &cobra.Command{
 var endpointsResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Reset all endpoints to defaults",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
 
 		if !force && !isJSONMode() {
@@ -282,7 +291,7 @@ var endpointsResetCmd = &cobra.Command{
 			fmt.Scanln(&confirm)
 			if confirm != "y" && confirm != "Y" {
 				fmt.Println(display.Warning("Aborted."))
-				return
+				return nil
 			}
 		}
 
@@ -290,11 +299,13 @@ var endpointsResetCmd = &cobra.Command{
 
 		if isJSONMode() || isYAMLMode() {
 			output(map[string]string{"status": "reset"}, func() {})
-			return
+			return nil
 		}
 
 		fmt.Println(display.Success("All endpoints reset to defaults"))
 		fmt.Println(display.Info("Run 'xsh endpoints refresh' to discover fresh endpoints from X.com"))
+
+		return nil
 	},
 }
 

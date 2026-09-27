@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
@@ -15,21 +14,21 @@ var downloadCmd = &cobra.Command{
 	Use:   "download <tweet-id>",
 	Short: "Download media from a tweet",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		tweetID := args[0]
 		outputDir, _ := cmd.Flags().GetString("output-dir")
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		files, err := core.DownloadTweetMedia(client, tweetID, outputDir)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]interface{}{
@@ -46,6 +45,8 @@ var downloadCmd = &cobra.Command{
 				}
 			}
 		})
+
+		return nil
 	},
 }
 

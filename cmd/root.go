@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -56,23 +57,77 @@ Examples:
   xsh endpoints status --json`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if err := ValidateOutputFlags(jsonOutput, yamlOutput, compactMode); err != nil {
+			return err
+		}
+		if activeRuntime != nil {
+			activeRuntime.Account = account
+			activeRuntime.Mode = outputModeFromFlags()
+		}
 		// Propagate verbose flag to core package
 		if verbose {
 			core.Verbose = true
 		}
+		return nil
 	},
 }
 
 // Execute runs the root command
 func Execute() {
-	// Some command registrations happen in separate init functions. Ensure the
-	// final command tree is grouped after all registrations are complete.
-	ensureCommandGroups()
-	if err := rootCmd.Execute(); err != nil {
+	if err := ExecuteContext(context.Background(), os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(core.ExitError)
+		os.Exit(commandExitCode(err))
 	}
+}
+
+// ExecuteContext runs the command tree using caller-owned streams and context.
+func ExecuteContext(ctx context.Context, in io.Reader, out, errOut io.Writer) (err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if in == nil {
+		in = os.Stdin
+	}
+	if out == nil {
+		out = io.Discard
+	}
+	if errOut == nil {
+		errOut = io.Discard
+	}
+
+	ensureCommandGroups()
+	previous := activeRuntime
+	activeRuntime = &Runtime{
+		Context: ctx,
+		In:      in,
+		Out:     out,
+		Err:     errOut,
+		Account: account,
+		Mode:    outputModeFromFlags(),
+	}
+	defer func() {
+		activeRuntime = previous
+		if recovered := recover(); recovered != nil {
+			if commandErr, ok := recovered.(*CommandError); ok {
+				err = commandErr
+				return
+			}
+			panic(recovered)
+		}
+	}()
+
+	rootCmd.SetIn(in)
+	rootCmd.SetOut(out)
+	rootCmd.SetErr(errOut)
+	err = rootCmd.ExecuteContext(ctx)
+	if err == nil && activeRuntime.Failure != nil {
+		err = activeRuntime.Failure
+	}
+	return err
 }
 
 func init() {
@@ -92,8 +147,13 @@ func isJSONMode() bool {
 	}
 	// Auto-detect pipe/redirect like Python (but only if yaml/compact are not explicitly set)
 	if !yamlOutput && !compactMode {
-		stat, _ := os.Stdout.Stat()
-		return (stat.Mode() & os.ModeCharDevice) == 0
+		if statter, ok := runtimeOutput().(interface{ Stat() (os.FileInfo, error) }); ok {
+			stat, err := statter.Stat()
+			if err == nil {
+				return (stat.Mode() & os.ModeCharDevice) == 0
+			}
+		}
+		return true
 	}
 	return false
 }
@@ -109,10 +169,13 @@ func isCompactMode() bool {
 }
 
 // outputJSON prints data as JSON
-func outputJSON(data interface{}) {
-	if err := encodeJSON(os.Stdout, data, false); err != nil {
-		fmt.Fprintf(os.Stderr, "Error marshaling JSON: %v\n", err)
+func outputJSON(data interface{}) error {
+	if err := encodeJSON(runtimeOutput(), data, false); err != nil {
+		fmt.Fprintf(runtimeError(), "Error marshaling JSON: %v\n", err)
+		recordRuntimeFailure(err)
+		return err
 	}
+	return nil
 }
 
 func encodeJSON(w io.Writer, data interface{}, compact bool) error {
@@ -121,8 +184,8 @@ func encodeJSON(w io.Writer, data interface{}, compact bool) error {
 	switch v := data.(type) {
 	case *core.AuthCredentials:
 		output = map[string]interface{}{
-			"auth_token": v.AuthToken[:8] + "...",
-			"ct0":        v.Ct0[:8] + "...",
+			"auth_token": redactCredential(v.AuthToken),
+			"ct0":        redactCredential(v.Ct0),
 			"account":    v.AccountName,
 		}
 	default:
@@ -136,15 +199,22 @@ func encodeJSON(w io.Writer, data interface{}, compact bool) error {
 	return encoder.Encode(output)
 }
 
+func redactCredential(value string) string {
+	if len(value) <= 8 {
+		return "[redacted]"
+	}
+	return value[:8] + "..."
+}
+
 // outputYAML prints data as YAML
-func outputYAML(data interface{}) {
+func outputYAML(data interface{}) error {
 	var output interface{}
 
 	switch v := data.(type) {
 	case *core.AuthCredentials:
 		output = map[string]interface{}{
-			"auth_token": v.AuthToken[:8] + "...",
-			"ct0":        v.Ct0[:8] + "...",
+			"auth_token": redactCredential(v.AuthToken),
+			"ct0":        redactCredential(v.Ct0),
 			"account":    v.AccountName,
 		}
 	default:
@@ -153,10 +223,14 @@ func outputYAML(data interface{}) {
 
 	yamlData, err := yaml.Marshal(output)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error marshaling YAML: %v\n", err)
-		return
+		fmt.Fprintf(runtimeError(), "Error marshaling YAML: %v\n", err)
+		return err
 	}
-	os.Stdout.Write(yamlData)
+	if _, err := runtimeOutput().Write(yamlData); err != nil {
+		recordRuntimeFailure(err)
+		return err
+	}
+	return nil
 }
 
 // getClient creates an XClient with error handling
@@ -176,22 +250,23 @@ func getClient(acc string) (*core.XClient, error) {
 
 // output handles output in the appropriate format (YAML, JSON, Compact, or human-readable)
 // humanOutput should be a function that prints human-readable output
-func output(data interface{}, humanOutput func()) {
+func output(data interface{}, humanOutput func()) error {
 	if isCompactMode() {
-		outputCompact(data)
+		return outputCompact(data)
 	} else if isYAMLMode() {
-		outputYAML(data)
+		return outputYAML(data)
 	} else if isJSONMode() {
-		outputJSON(data)
+		return outputJSON(data)
 	} else {
 		humanOutput()
+		return nil
 	}
 }
 
 // outputPage keeps the terminal formatter focused on items while exposing
 // pagination metadata to JSON, YAML, and compact consumers.
-func outputPage[T any](items []T, nextCursor string, hasMore bool, humanOutput func()) {
-	output(models.Page[T]{
+func outputPage[T any](items []T, nextCursor string, hasMore bool, humanOutput func()) error {
+	return output(models.Page[T]{
 		Items:      items,
 		NextCursor: nextCursor,
 		HasMore:    hasMore,
@@ -199,11 +274,14 @@ func outputPage[T any](items []T, nextCursor string, hasMore bool, humanOutput f
 }
 
 // outputCompact prints minimal data for AI agents (compact JSON with essential fields)
-func outputCompact(data interface{}) {
+func outputCompact(data interface{}) error {
 	compact := toCompact(data)
-	if err := encodeJSON(os.Stdout, compact, true); err != nil {
-		fmt.Fprintf(os.Stderr, "Error marshaling compact JSON: %v\n", err)
+	if err := encodeJSON(runtimeOutput(), compact, true); err != nil {
+		fmt.Fprintf(runtimeError(), "Error marshaling compact JSON: %v\n", err)
+		recordRuntimeFailure(err)
+		return err
 	}
+	return nil
 }
 
 // isWatchMode returns true if the watch flag is set
@@ -218,7 +296,7 @@ func runWithWatch(fetchAndDisplay func() error) {
 	// Run once immediately
 	if err := fetchAndDisplay(); err != nil {
 		fmt.Println(display.Error(err.Error()))
-		os.Exit(core.ExitError)
+		abortCommand(core.ExitError)
 		return
 	}
 

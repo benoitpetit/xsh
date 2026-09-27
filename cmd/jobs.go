@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
@@ -33,13 +32,13 @@ var jobsSearchCmd = &cobra.Command{
 	Use:   "search <keyword>",
 	Short: "Search for jobs",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		keyword := args[0]
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
@@ -61,7 +60,7 @@ var jobsSearchCmd = &cobra.Command{
 			)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-				os.Exit(core.ExitError)
+				abortCommand(core.ExitError)
 			}
 
 			for _, job := range response.Jobs {
@@ -80,6 +79,8 @@ var jobsSearchCmd = &cobra.Command{
 		output(allJobs, func() {
 			fmt.Println(display.FormatJobs(allJobs))
 		})
+
+		return nil
 	},
 }
 
@@ -88,30 +89,32 @@ var jobsViewCmd = &cobra.Command{
 	Use:   "view <job-id>",
 	Short: "View job details",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		jobID := args[0]
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		job, err := core.GetJobDetail(client, jobID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		if job == nil {
 			fmt.Println(display.Error(fmt.Sprintf("Job %s not found", jobID)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(job, func() {
 			fmt.Println(display.FormatJobDetail(job))
 		})
+
+		return nil
 	},
 }
 

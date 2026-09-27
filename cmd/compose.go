@@ -36,7 +36,7 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 
   # Preview without posting
   xsh compose --file thread.txt --dry-run`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var tweets []string
 
 		if composeFile != "" {
@@ -44,8 +44,8 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 			content, err := os.ReadFile(composeFile)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Error reading file: %v", err)))
-				os.Exit(core.ExitError)
-				return
+				abortCommand(core.ExitError)
+				return nil
 			}
 			tweets = parseThreadFile(string(content))
 		} else {
@@ -55,7 +55,7 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 
 		if len(tweets) == 0 {
 			fmt.Println(display.Warning("No tweets to post"))
-			return
+			return nil
 		}
 
 		// Preview
@@ -65,7 +65,7 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 		if composeDryRun {
 			fmt.Println()
 			fmt.Println(display.Muted("Dry run mode - no tweets posted."))
-			return
+			return nil
 		}
 
 		// Confirm
@@ -75,11 +75,13 @@ Splits long text into multiple tweets automatically or allows manual entry.`,
 		fmt.Scanln(&confirm)
 		if confirm != "y" && confirm != "Y" {
 			fmt.Println(display.Warning("Aborted."))
-			return
+			return nil
 		}
 
 		// Post thread
 		postThread(tweets)
+
+		return nil
 	},
 }
 
@@ -213,7 +215,7 @@ func postThread(tweets []string) {
 	client, err := getClient("")
 	if err != nil {
 		fmt.Println(display.Error(err.Error()))
-		os.Exit(core.ExitAuthError)
+		abortCommand(core.ExitAuthError)
 		return
 	}
 	defer client.Close()

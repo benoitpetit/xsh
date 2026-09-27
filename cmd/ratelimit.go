@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"sort"
 
 	"github.com/benoitpetit/xsh/core"
@@ -26,7 +25,7 @@ Examples:
   xsh feed && xsh ratelimit             # View after fetching feed
   xsh ratelimit --probe                 # Make a lightweight request to check limits
   xsh ratelimit --json                  # Machine-readable output`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		probe, _ := cmd.Flags().GetBool("probe")
 
 		if probe {
@@ -34,8 +33,8 @@ Examples:
 			client, err := getClient("")
 			if err != nil {
 				fmt.Println(display.Error(err.Error()))
-				os.Exit(core.ExitAuthError)
-				return
+				abortCommand(core.ExitAuthError)
+				return nil
 			}
 			defer client.Close()
 
@@ -49,7 +48,7 @@ Examples:
 
 		if len(limits) == 0 {
 			fmt.Println(display.Muted("No rate limit data yet. Run some commands first, or use --probe."))
-			return
+			return nil
 		}
 
 		// Sort by endpoint name
@@ -60,6 +59,8 @@ Examples:
 		output(limits, func() {
 			fmt.Println(display.FormatRateLimits(limits))
 		})
+
+		return nil
 	},
 }
 

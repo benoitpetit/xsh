@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
@@ -29,20 +28,20 @@ var searchCmd = &cobra.Command{
 	Use:   "search [query]",
 	Short: "Search for tweets",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Sanitize search query (max 500 chars for Twitter search)
 		query := utils.SanitizeInputWithMaxLength(args[0], 500)
 		if query == "" {
 			fmt.Println(display.Error("Search query cannot be empty"))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
@@ -73,6 +72,8 @@ var searchCmd = &cobra.Command{
 			})
 			return nil
 		})
+
+		return nil
 	},
 }
 

@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/benoitpetit/xsh/core"
@@ -34,7 +33,7 @@ Examples:
   xsh multi like 1234567890                    # Like from all
   xsh multi feed --accounts work,personal      # Only specific accounts`,
 	Args: cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		action := args[0]
 		actionArgs := args[1:]
 
@@ -42,14 +41,14 @@ Examples:
 		accounts, err := resolveMultiAccounts(accountFilter)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to list accounts: %v", err)))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		if len(accounts) == 0 {
 			fmt.Println(display.Error("No accounts configured. Run 'xsh auth login' first."))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 
 		if len(accounts) == 1 {
@@ -70,6 +69,8 @@ Examples:
 		output(results, func() {
 			displayMultiResults(results, action)
 		})
+
+		return nil
 	},
 }
 

@@ -33,11 +33,11 @@ Supports exporting from feed, search, bookmarks, or user tweets.`,
 var exportFeedCmd = &cobra.Command{
 	Use:   "feed",
 	Short: "Export timeline to file",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			return
+			return nil
 		}
 		defer client.Close()
 
@@ -53,7 +53,7 @@ var exportFeedCmd = &cobra.Command{
 			response, err := core.GetHomeTimeline(client, feedType, count, cursor)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to fetch timeline: %v", err)))
-				return
+				return nil
 			}
 			allTweets = append(allTweets, response.Tweets...)
 			cursor = response.CursorBottom
@@ -72,10 +72,12 @@ var exportFeedCmd = &cobra.Command{
 
 		if err := exportTweets(tweets, exportFormat, exportOutput); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Export failed: %v", err)))
-			return
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Exported %d tweets to %s", len(tweets), exportOutput)))
+
+		return nil
 	},
 }
 
@@ -84,11 +86,11 @@ var exportSearchCmd = &cobra.Command{
 	Use:   "search [query]",
 	Short: "Export search results to file",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			return
+			return nil
 		}
 		defer client.Close()
 
@@ -103,7 +105,7 @@ var exportSearchCmd = &cobra.Command{
 			response, err := core.SearchTweets(client, args[0], searchType, count, cursor)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to search: %v", err)))
-				return
+				return nil
 			}
 			allTweets = append(allTweets, response.Tweets...)
 			cursor = response.CursorBottom
@@ -114,10 +116,12 @@ var exportSearchCmd = &cobra.Command{
 
 		if err := exportTweets(allTweets, exportFormat, exportOutput); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Export failed: %v", err)))
-			return
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Exported %d tweets to %s", len(allTweets), exportOutput)))
+
+		return nil
 	},
 }
 
@@ -125,11 +129,11 @@ var exportSearchCmd = &cobra.Command{
 var exportBookmarksCmd = &cobra.Command{
 	Use:   "bookmarks",
 	Short: "Export bookmarks to file",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
-			return
+			return nil
 		}
 		defer client.Close()
 
@@ -138,15 +142,17 @@ var exportBookmarksCmd = &cobra.Command{
 		response, err := core.GetBookmarks(client, count, "")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch bookmarks: %v", err)))
-			return
+			return nil
 		}
 
 		if err := exportTweets(response.Tweets, exportFormat, exportOutput); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Export failed: %v", err)))
-			return
+			return nil
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Exported %d bookmarks to %s", len(response.Tweets), exportOutput)))
+
+		return nil
 	},
 }
 

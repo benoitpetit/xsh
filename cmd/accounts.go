@@ -15,17 +15,17 @@ var accountsCmd = &cobra.Command{
 	Use:   "accounts",
 	Short: "List stored accounts",
 	Long:  `List all stored Twitter/X accounts in the authentication file.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		accounts, err := core.ListAccounts()
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to list accounts: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		if len(accounts) == 0 {
 			fmt.Println(display.Warning("No stored accounts found"))
 			fmt.Println(display.Muted("\nUse 'xsh auth' to add an account."))
-			return
+			return nil
 		}
 
 		// Get default account
@@ -52,6 +52,8 @@ var accountsCmd = &cobra.Command{
 
 		fmt.Println()
 		fmt.Println(display.Muted("Use 'xsh switch <account>' to change accounts"))
+
+		return nil
 	},
 }
 
@@ -60,15 +62,17 @@ var switchCmd = &cobra.Command{
 	Short: "Switch default account",
 	Long:  `Switch the default Twitter/X account for subsequent commands.`,
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		acc := args[0]
 
 		if err := core.SetDefaultAccount(acc); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to switch account: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Switched to account '%s'", acc)))
+
+		return nil
 	},
 }
 
@@ -79,7 +83,7 @@ var importCmd = &cobra.Command{
 
 The cookie file should be in JSON format exported from x.com with 'auth_token' and 'ct0' cookies.`,
 	Args: cobra.RangeArgs(1, 2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		cookieFile := args[0]
 		accountName := ""
 		if len(args) > 1 {
@@ -91,7 +95,7 @@ The cookie file should be in JSON format exported from x.com with 'auth_token' a
 			cwd, err := os.Getwd()
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to get working directory: %v", err)))
-				os.Exit(core.ExitError)
+				abortCommand(core.ExitError)
 			}
 			cookieFile = filepath.Join(cwd, cookieFile)
 		}
@@ -99,14 +103,14 @@ The cookie file should be in JSON format exported from x.com with 'auth_token' a
 		// Check file exists
 		if _, err := os.Stat(cookieFile); os.IsNotExist(err) {
 			fmt.Println(display.Error(fmt.Sprintf("Cookie file not found: %s", cookieFile)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		// Import cookies
 		creds, err := core.ImportCookiesFromFile(cookieFile)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to import cookies: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 
 		// Generate account name if not provided
@@ -133,10 +137,12 @@ The cookie file should be in JSON format exported from x.com with 'auth_token' a
 		// Save auth
 		if err := core.SaveAuth(creds, accountName); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Failed to save auth: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Successfully imported account '%s'", accountName)))
+
+		return nil
 	},
 }
 

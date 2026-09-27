@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/benoitpetit/xsh/core"
@@ -26,24 +25,26 @@ Running xsh lists without a subcommand lists your owned and subscribed lists.
 Use xsh lists view <list-id> to read a list timeline, xsh lists info <list-id>
 for metadata, and xsh lists members <list-id> to inspect its members.
 Use xsh lists memberships to inspect lists you belong to. Updates require confirmation.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Default: list user's lists
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		lists, err := core.GetUserLists(client)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(lists, func() {
 			fmt.Println(display.FormatLists(lists))
 		})
+
+		return nil
 	},
 }
 
@@ -52,7 +53,7 @@ var listViewCmd = &cobra.Command{
 	Use:   "view <list-id>",
 	Short: "View tweets from a list",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		listID := args[0]
 		count, _ := cmd.Flags().GetInt("count")
 		cursor, _ := cmd.Flags().GetString("cursor")
@@ -60,19 +61,21 @@ var listViewCmd = &cobra.Command{
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		response, err := core.GetListTweets(client, listID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		outputPage(response.Tweets, response.CursorBottom, response.HasMore, func() {
 			fmt.Println(display.FormatTweets(response.Tweets))
 		})
+
+		return nil
 	},
 }
 
@@ -81,25 +84,27 @@ var listCreateCmd = &cobra.Command{
 	Use:   "create <name>",
 	Short: "Create a new list",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		result, err := core.CreateList(client, name, listDescription, listPrivate)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Created list '%s'", name)))
 		})
+
+		return nil
 	},
 }
 
@@ -108,7 +113,7 @@ var listDeleteCmd = &cobra.Command{
 	Use:   "delete <list-id>",
 	Short: "Delete a list",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		listID := args[0]
 		force, _ := cmd.Flags().GetBool("force")
 
@@ -118,21 +123,21 @@ var listDeleteCmd = &cobra.Command{
 			fmt.Scanln(&response)
 			if response != "y" && response != "Y" {
 				fmt.Println(display.Warning("Cancelled"))
-				return
+				return nil
 			}
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.DeleteList(client, listID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -142,6 +147,8 @@ var listDeleteCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Deleted list %s", listID)))
 		})
+
+		return nil
 	},
 }
 
@@ -150,7 +157,7 @@ var listMembersCmd = &cobra.Command{
 	Use:   "members <list-id>",
 	Short: "View members of a list",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		listID := args[0]
 		count, _ := cmd.Flags().GetInt("count")
 		cursor, _ := cmd.Flags().GetString("cursor")
@@ -158,19 +165,21 @@ var listMembersCmd = &cobra.Command{
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		users, nextCursor, err := core.GetListMembers(client, listID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		outputPage(users, nextCursor, nextCursor != "", func() {
 			fmt.Println(display.FormatUsers(users))
 		})
+
+		return nil
 	},
 }
 
@@ -179,24 +188,26 @@ var listInfoCmd = &cobra.Command{
 	Use:   "info <list-id>",
 	Short: "View list details",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		list, err := core.GetListInfo(client, args[0])
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if list == nil {
 			fmt.Println(display.Error(fmt.Sprintf("List %s not found", args[0])))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		output(list, func() { fmt.Println(display.FormatLists([]core.ListInfo{*list})) })
+
+		return nil
 	},
 }
 
@@ -206,7 +217,7 @@ var listUpdateCmd = &cobra.Command{
 	Short: "Update list metadata",
 	Long:  "Update list metadata. Supply at least one of --name, --description, or --private.",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		name, _ := cmd.Flags().GetString("name")
 		description, _ := cmd.Flags().GetString("description")
 		private, _ := cmd.Flags().GetBool("private")
@@ -215,11 +226,11 @@ var listUpdateCmd = &cobra.Command{
 		changed := cmd.Flags().Changed("name") || cmd.Flags().Changed("description") || cmd.Flags().Changed("private")
 		if !changed {
 			fmt.Println(display.Error("At least one update flag is required: --name, --description, or --private"))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if isJSONMode() && !force {
 			fmt.Println(display.Error("JSON mode requires --force for list updates"))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		fields := make([]string, 0, 3)
@@ -243,21 +254,21 @@ var listUpdateCmd = &cobra.Command{
 			_, _ = fmt.Scanln(&response)
 			if response != "y" && response != "Y" {
 				fmt.Println(display.Warning("Cancelled"))
-				return
+				return nil
 			}
 		}
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.UpdateList(client, args[0], update)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		result := map[string]interface{}{
@@ -269,6 +280,8 @@ var listUpdateCmd = &cobra.Command{
 		output(result, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Updated list %s (%s)", args[0], strings.Join(fields, ", "))))
 		})
+
+		return nil
 	},
 }
 
@@ -276,32 +289,34 @@ var listUpdateCmd = &cobra.Command{
 var listMembershipsCmd = &cobra.Command{
 	Use:   "memberships",
 	Short: "View lists you belong to",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		count, _ := cmd.Flags().GetInt("count")
 		cursor, _ := cmd.Flags().GetString("cursor")
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		viewer, err := core.GetViewer(client)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching current user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if viewer == nil || viewer.ID == "" {
 			fmt.Println(display.Error("Unable to resolve the current user"))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		lists, nextCursor, err := core.GetListMemberships(client, viewer.ID, count, cursor)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		outputPage(lists, nextCursor, nextCursor != "", func() { fmt.Println(display.FormatLists(lists)) })
+
+		return nil
 	},
 }
 
@@ -310,14 +325,14 @@ var listAddMemberCmd = &cobra.Command{
 	Use:   "add-member <list-id> <handle>",
 	Short: "Add a member to a list",
 	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		listID := args[0]
 		handle := args[1]
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
@@ -325,17 +340,17 @@ var listAddMemberCmd = &cobra.Command{
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		_, err = core.AddListMember(client, listID, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -346,6 +361,8 @@ var listAddMemberCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Added @%s to list %s", handle, listID)))
 		})
+
+		return nil
 	},
 }
 
@@ -354,14 +371,14 @@ var listRemoveMemberCmd = &cobra.Command{
 	Use:   "remove-member <list-id> <handle>",
 	Short: "Remove a member from a list",
 	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		listID := args[0]
 		handle := args[1]
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
@@ -369,17 +386,17 @@ var listRemoveMemberCmd = &cobra.Command{
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error fetching user: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 		if user == nil {
 			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		_, err = core.RemoveListMember(client, listID, user.ID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -390,6 +407,8 @@ var listRemoveMemberCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Removed @%s from list %s", handle, listID)))
 		})
+
+		return nil
 	},
 }
 
@@ -398,20 +417,20 @@ var listPinCmd = &cobra.Command{
 	Use:   "pin <list-id>",
 	Short: "Pin a list",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		listID := args[0]
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.PinList(client, listID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -421,6 +440,8 @@ var listPinCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Pinned list %s", listID)))
 		})
+
+		return nil
 	},
 }
 
@@ -429,20 +450,20 @@ var listUnpinCmd = &cobra.Command{
 	Use:   "unpin <list-id>",
 	Short: "Unpin a list",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		listID := args[0]
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitAuthError)
+			abortCommand(core.ExitAuthError)
 		}
 		defer client.Close()
 
 		_, err = core.UnpinList(client, listID)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		output(map[string]string{
@@ -452,6 +473,8 @@ var listUnpinCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(display.Success(fmt.Sprintf("Unpinned list %s", listID)))
 		})
+
+		return nil
 	},
 }
 

@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"time"
 
@@ -40,7 +39,7 @@ used as a source of authenticated endpoints.`,
 
   # Dry run (check only, don't update)
   xsh auto-update --dry-run`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println(display.Title("🔄 Automatic Endpoint Updater"))
 		fmt.Println(display.Info("Method: Extract from X.com JavaScript bundles"))
 		fmt.Println()
@@ -62,7 +61,7 @@ used as a source of authenticated endpoints.`,
 		discovery, err := core.NewEndpointDiscovery(verbose)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error initializing endpoint discovery: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		var previousCache *core.EndpointCache
@@ -76,7 +75,7 @@ used as a source of authenticated endpoints.`,
 		cache, err := discovery.DiscoverEndpoints(ctx)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Auto-update failed: %v", err)))
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
 
 		after := manager.ListEndpoints()
@@ -103,7 +102,7 @@ used as a source of authenticated endpoints.`,
 
 			if len(changed) == 0 {
 				fmt.Println(display.Success("No endpoint changes detected"))
-				return
+				return nil
 			}
 
 			fmt.Println(display.Warning(fmt.Sprintf("%d endpoint(s) would be updated", len(changed))))
@@ -117,7 +116,7 @@ used as a source of authenticated endpoints.`,
 
 			fmt.Println(display.Info("Run without --dry-run to apply these updates:"))
 			fmt.Println(display.Code("  xsh auto-update"))
-			return
+			return nil
 		}
 
 		fmt.Println()
@@ -126,6 +125,8 @@ used as a source of authenticated endpoints.`,
 		fmt.Println()
 		fmt.Println(display.Info("You can verify the updated endpoints with:"))
 		fmt.Println(display.Code("  xsh endpoints list"))
+
+		return nil
 	},
 }
 

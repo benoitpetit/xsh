@@ -28,7 +28,7 @@ Supports both direct text input and file input.`,
 	Example: `  xsh count "Hello world!"
   xsh count --file draft.txt
   echo "My tweet" | xsh count`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var text string
 
 		// Get text from various sources
@@ -37,8 +37,8 @@ Supports both direct text input and file input.`,
 			content, err := os.ReadFile(countFile)
 			if err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Error reading file: %v", err)))
-				os.Exit(core.ExitError)
-				return
+				abortCommand(core.ExitError)
+				return nil
 			}
 			text = string(content)
 		} else if len(args) > 0 {
@@ -56,8 +56,8 @@ Supports both direct text input and file input.`,
 
 		if text == "" {
 			fmt.Println(display.Error("No text provided. Use arguments, --file, or pipe text to stdin."))
-			os.Exit(core.ExitError)
-			return
+			abortCommand(core.ExitError)
+			return nil
 		}
 
 		// Calculate metrics
@@ -108,8 +108,10 @@ Supports both direct text input and file input.`,
 
 		// Exit with error if over limit
 		if remaining < 0 {
-			os.Exit(core.ExitError)
+			abortCommand(core.ExitError)
 		}
+
+		return nil
 	},
 }
 

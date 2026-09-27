@@ -19,10 +19,12 @@ var mcpCmd = &cobra.Command{
 
 This starts the server using stdio transport for communication with MCP clients
 like Claude Desktop, Claude Code, or other MCP-compatible tools.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := runMCPServer(); err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error: %v", err)))
 		}
+
+		return nil
 	},
 }
 

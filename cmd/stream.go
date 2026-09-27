@@ -45,15 +45,15 @@ Examples:
     curl -X POST https://hook.example.com -d "$line"
   done`,
 	Args: cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		source := args[0]
 		sourceArgs := args[1:]
 
 		client, err := getClient("")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, display.Error(err.Error()))
-			os.Exit(core.ExitAuthError)
-			return
+			abortCommand(core.ExitAuthError)
+			return nil
 		}
 		defer client.Close()
 
@@ -81,7 +81,7 @@ Examples:
 			select {
 			case <-sigCh:
 				fmt.Fprintln(os.Stderr, display.Muted("\nStream stopped."))
-				return
+				return nil
 			case <-ticker.C:
 				streamOnce(client, source, sourceArgs, seen, encoder)
 			}
