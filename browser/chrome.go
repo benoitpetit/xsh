@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 // Package browser provides automatic cookie extraction from browsers.
 package browser
 
@@ -17,8 +14,8 @@ import (
 	"strings"
 
 	"github.com/benoitpetit/xsh/core"
-	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/pbkdf2"
+	_ "modernc.org/sqlite"
 )
 
 // ChromeCookieExtractor extracts cookies from Chrome-based browsers
@@ -113,7 +110,7 @@ func (c *ChromeCookieExtractor) ExtractCookiesVerbose(verbose bool) (*core.AuthC
 	}
 	defer os.Remove(tempDB)
 
-	db, err := sql.Open("sqlite3", tempDB)
+	db, err := sql.Open("sqlite", tempDB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open cookie database: %w", err)
 	}
@@ -256,20 +253,6 @@ func decryptChromeCookieMacOS(encrypted []byte) (string, error) {
 	}
 
 	return string(plaintext), nil
-}
-
-// getChromeKeyMacOS retrieves Chrome's encryption key from macOS Keychain
-func getChromeKeyMacOS() ([]byte, error) {
-	password := "peanuts"
-	salt := []byte("saltysalt")
-	key := pbkdf2.Key([]byte(password), salt, 1003, 16, sha1.New)
-
-	// Expand to 32 bytes for AES-256
-	fullKey := make([]byte, 32)
-	copy(fullKey, key)
-	copy(fullKey[16:], key)
-
-	return fullKey, nil
 }
 
 // decryptChromeCookieLinux decrypts cookies on Linux using AES-128-CBC

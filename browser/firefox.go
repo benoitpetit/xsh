@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package browser
 
 import (
@@ -11,7 +8,7 @@ import (
 	"runtime"
 
 	"github.com/benoitpetit/xsh/core"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // FirefoxCookieExtractor extracts cookies from Firefox
@@ -83,7 +80,7 @@ func (f *FirefoxCookieExtractor) ExtractCookies() (*core.AuthCredentials, error)
 	}
 	defer os.Remove(tempDB)
 
-	db, err := sql.Open("sqlite3", tempDB)
+	db, err := sql.Open("sqlite", tempDB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open cookie database: %w", err)
 	}
