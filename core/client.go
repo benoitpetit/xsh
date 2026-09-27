@@ -43,6 +43,8 @@ func (e *APIError) Error() string {
 // RateLimitError is raised when rate limited
 type RateLimitError struct {
 	APIError
+	RetryAfter time.Duration
+	Reset      time.Time
 }
 
 // StaleEndpointError is raised when a GraphQL endpoint returns 404 (stale operation ID)
@@ -370,11 +372,16 @@ func (c *XClient) getCookies() (map[string]string, error) {
 
 // requestWithOperation makes an authenticated request with operation-specific headers
 func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error) {
-	if maxRetries <= 0 {
-		maxRetries = c.effectivePolicy().ReadAttempts
-		if method != "GET" {
-			maxRetries = c.effectivePolicy().MutationAttempts
+	policy := c.effectivePolicy()
+	if method == "GET" || IsIdempotentOperation(operation) {
+		if maxRetries <= 0 || maxRetries > policy.ReadAttempts {
+			maxRetries = policy.ReadAttempts
 		}
+	} else {
+		maxRetries = policy.MutationAttempts
+	}
+	if maxRetries <= 0 {
+		maxRetries = 1
 	}
 	var headers map[string]string
 	var err error
@@ -485,6 +492,9 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 		if err != nil {
 			logVerbose("Request error: %v (type: %T)", err, err)
 			lastErr = err
+			if !policy.CanRetry(method, operation, 0, err) || attempt >= maxRetries-1 {
+				return nil, err
+			}
 			continue
 		}
 
@@ -496,6 +506,8 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 		}
 
 		logVerbose("Response status: %d", resp.StatusCode)
+		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
+		resetAt := parseRateLimitReset(resp.Header.Get("x-rate-limit-reset"))
 
 		// Track rate limit headers
 		if operation != "" {
@@ -558,10 +570,15 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 			}
 			return nil, &AuthError{Message: "Authentication failed. Cookies may be expired."}
 		case 429:
-			if attempt < maxRetries-1 {
+			if attempt < maxRetries-1 && policy.CanRetry(method, operation, resp.StatusCode, nil) {
+				if retryAfter > 0 {
+					if err := utils.SleepWithContext(context.Background(), retryAfter); err != nil {
+						return nil, err
+					}
+				}
 				continue
 			}
-			return nil, &RateLimitError{APIError: APIError{Message: "Rate limited by Twitter/X", StatusCode: 429}}
+			return nil, &RateLimitError{APIError: APIError{Message: "Rate limited by Twitter/X", StatusCode: 429}, RetryAfter: retryAfter, Reset: resetAt}
 		case 403:
 			// Try to refresh credentials from browser on first 403
 			if attempt == 0 {
@@ -588,6 +605,9 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 		case 404:
 			return nil, &StaleEndpointError{APIError: APIError{Message: "GraphQL endpoint not found (HTTP 404) — operation IDs may be stale", StatusCode: 404}}
 		default:
+			if attempt < maxRetries-1 && policy.CanRetry(method, operation, resp.StatusCode, nil) {
+				continue
+			}
 			msg := string(respBody)
 			if len(msg) > 500 {
 				msg = msg[:500]
@@ -702,7 +722,7 @@ func (c *XClient) graphqlRequest(
 		if err != nil {
 			// Check if this is a stale endpoint error (404)
 			if IsEndpointObsolete(err) {
-				if attempt == 0 {
+				if attempt == 0 && (method == "GET" || IsIdempotentOperation(operation)) {
 					if c.invalidateCacheHook == nil && c.refreshEndpointsHook == nil {
 						GetEndpointManager().QuarantineEndpoint(operation, "HTTP 404 or query not found")
 					}
@@ -731,7 +751,7 @@ func (c *XClient) graphqlRequest(
 			}
 
 			if isGraphQLUnprocessableError(err) {
-				if attempt == 0 {
+				if attempt == 0 && (method == "GET" || IsIdempotentOperation(operation)) {
 					logVerbose("HTTP 422 for '%s' — endpoint/variables may be stale, refreshing endpoints and retrying...", operation)
 					c.refreshEndpointsForRetry(operation)
 
@@ -745,7 +765,7 @@ func (c *XClient) graphqlRequest(
 		}
 
 		if isGraphQLEndpointNotFoundResponse(result) {
-			if attempt == 0 {
+			if attempt == 0 && (method == "GET" || IsIdempotentOperation(operation)) {
 				if c.invalidateCacheHook == nil && c.refreshEndpointsHook == nil {
 					GetEndpointManager().QuarantineEndpoint(operation, "GraphQL response reported query not found")
 				}

@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"math"
+	"net/http"
 	"time"
 )
 
@@ -16,6 +17,46 @@ type RequestPolicy struct {
 	BackoffMin       time.Duration
 	BackoffMax       time.Duration
 	MaxResponseBytes int64
+}
+
+var idempotentOperations = map[string]struct{}{
+	"Bookmarks":             {},
+	"BookmarkFoldersSlice":  {},
+	"CommunityTweets":       {},
+	"DMConversation":        {},
+	"DMInbox":               {},
+	"ExploreSidebar":        {},
+	"HomeTimeline":          {},
+	"JobsSearch":            {},
+	"List":                  {},
+	"ListMembers":           {},
+	"ListTweets":            {},
+	"NotificationsTimeline": {},
+	"SearchTimeline":        {},
+	"Trends":                {},
+	"TweetDetail":           {},
+	"UserByScreenName":      {},
+	"UserLikes":             {},
+	"UserMedia":             {},
+	"UserTweets":            {},
+}
+
+// IsIdempotentOperation returns true only for the explicit read-safe set.
+func IsIdempotentOperation(operation string) bool {
+	_, ok := idempotentOperations[operation]
+	return ok
+}
+
+// CanRetry classifies a request without replaying unknown mutations.
+func (p RequestPolicy) CanRetry(method, operation string, status int, err error) bool {
+	safe := method == http.MethodGet || IsIdempotentOperation(operation)
+	if !safe {
+		return false
+	}
+	if status == 0 && err != nil {
+		return true
+	}
+	return status == http.StatusRequestTimeout || status == http.StatusTooManyRequests || status >= 500
 }
 
 func defaultRequestPolicy() RequestPolicy {

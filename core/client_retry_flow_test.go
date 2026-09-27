@@ -50,21 +50,21 @@ func TestGraphQLRequestRetryFlowOn422(t *testing.T) {
 	client.writeDelayHook = script.WriteDelayHook
 
 	_, err := client.graphqlRequest("POST", "CreateTweet", map[string]interface{}{"tweet_text": "hello"}, nil, "")
-	if err != nil {
-		t.Fatalf("graphqlRequest returned error: %v", err)
+	if err == nil {
+		t.Fatal("graphqlRequest unexpectedly replayed a mutation after HTTP 422")
 	}
 
-	if script.RequestCalls != 2 {
-		t.Fatalf("requestCalls = %d, want 2", script.RequestCalls)
+	if script.RequestCalls != 1 {
+		t.Fatalf("requestCalls = %d, want 1", script.RequestCalls)
 	}
-	if script.RefreshCalls != 1 {
-		t.Fatalf("refreshCalls = %d, want 1", script.RefreshCalls)
+	if script.RefreshCalls != 0 {
+		t.Fatalf("refreshCalls = %d, want 0", script.RefreshCalls)
 	}
-	if script.InvalidateCalls != 1 {
-		t.Fatalf("invalidateCalls = %d, want 1", script.InvalidateCalls)
+	if script.InvalidateCalls != 0 {
+		t.Fatalf("invalidateCalls = %d, want 0", script.InvalidateCalls)
 	}
-	if script.WriteDelayCalls != 1 {
-		t.Fatalf("writeDelayCalls = %d, want 1", script.WriteDelayCalls)
+	if script.WriteDelayCalls != 0 {
+		t.Fatalf("writeDelayCalls = %d, want 0", script.WriteDelayCalls)
 	}
 }
 
