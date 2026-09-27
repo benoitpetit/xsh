@@ -2,10 +2,34 @@
 package utils
 
 import (
+	"context"
 	"math"
 	"math/rand"
 	"time"
 )
+
+// SleepWithContext waits for d or returns when ctx is canceled.
+func SleepWithContext(ctx context.Context, d time.Duration) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if d <= 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			return nil
+		}
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
 
 const (
 	defaultDelaySec  = 1.5
@@ -36,7 +60,7 @@ func DelaySeconds(seconds float64) {
 	if seconds <= 0 {
 		return
 	}
-	time.Sleep(time.Duration(seconds * float64(time.Second)))
+	_ = SleepWithContext(context.Background(), time.Duration(seconds*float64(time.Second)))
 }
 
 // WriteDelay sleeps for a random duration appropriate for write operations.
@@ -47,6 +71,11 @@ func WriteDelay() {
 // BackoffDelay sleeps for an exponential backoff duration based on the attempt number.
 // If minSec and maxSec are both 0, default bounds are used.
 func BackoffDelay(attempt int, minSec, maxSec float64) {
+	_ = BackoffDelayWithContext(context.Background(), attempt, minSec, maxSec)
+}
+
+// BackoffDelayWithContext is the cancellable form used by request paths.
+func BackoffDelayWithContext(ctx context.Context, attempt int, minSec, maxSec float64) error {
 	if minSec == 0 && maxSec == 0 {
 		minSec = baseBackoffSec
 		maxSec = maxBackoffSec
@@ -61,5 +90,5 @@ func BackoffDelay(attempt int, minSec, maxSec float64) {
 	if d < minSec {
 		d = minSec
 	}
-	time.Sleep(time.Duration(d * float64(time.Second)))
+	return SleepWithContext(ctx, time.Duration(d*float64(time.Second)))
 }

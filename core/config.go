@@ -23,9 +23,10 @@ type NetworkConfig struct {
 
 // RequestConfig contains request settings
 type RequestConfig struct {
-	Delay      float64 `toml:"delay"`
-	Timeout    int     `toml:"timeout"`
-	MaxRetries int     `toml:"max_retries"`
+	Delay            float64 `toml:"delay"`
+	Timeout          int     `toml:"timeout"`
+	MaxRetries       int     `toml:"max_retries"`
+	MaxResponseBytes int64   `toml:"max_response_bytes"`
 }
 
 // Config is the root configuration
@@ -49,9 +50,10 @@ func DefaultConfig() *Config {
 			MaxWidth:       100,
 		},
 		Request: RequestConfig{
-			Delay:      DefaultDelaySec,
-			Timeout:    30,
-			MaxRetries: 3,
+			Delay:            DefaultDelaySec,
+			Timeout:          30,
+			MaxRetries:       3,
+			MaxResponseBytes: defaultMaxResponseBytes,
 		},
 		Network: NetworkConfig{
 			Proxy: "",

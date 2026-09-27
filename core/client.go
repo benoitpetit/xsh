@@ -61,6 +61,7 @@ type XClient struct {
 	readDelay            float64
 	readDelayConfigured  bool
 	requestTimeout       time.Duration
+	policy               RequestPolicy
 
 	// Test hooks
 	requestWithOperationHook func(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error)
@@ -71,27 +72,45 @@ type XClient struct {
 	readDelayFunc            func(float64)
 }
 
+func (c *XClient) effectivePolicy() RequestPolicy {
+	if c == nil || c.policy.ReadAttempts < 1 || c.policy.MutationAttempts < 1 || c.policy.MaxResponseBytes <= 0 {
+		return defaultRequestPolicy()
+	}
+	return c.policy
+}
+
 // NewXClient creates a new XClient with a consistent Chrome fingerprint
 func NewXClient(credentials *AuthCredentials, account, proxy string) (*XClient, error) {
 	return NewXClientWithRequestConfig(credentials, account, proxy, RequestConfig{
-		Delay:   DefaultDelaySec,
-		Timeout: 30,
+		Delay:            DefaultDelaySec,
+		Timeout:          30,
+		MaxRetries:       3,
+		MaxResponseBytes: defaultMaxResponseBytes,
 	})
 }
 
 // NewXClientWithRequestConfig creates a client using explicit request settings.
 // A configured zero delay is preserved and disables read sleeping.
 func NewXClientWithRequestConfig(credentials *AuthCredentials, account, proxy string, request RequestConfig) (*XClient, error) {
+	if request.Timeout == 0 {
+		request.Timeout = 30
+	}
+	if request.MaxRetries == 0 {
+		request.MaxRetries = 3
+	}
+	if request.MaxResponseBytes == 0 {
+		request.MaxResponseBytes = defaultMaxResponseBytes
+	}
+	policy, err := RequestPolicyFromConfig(request)
+	if err != nil {
+		return nil, err
+	}
 	chromeVersion := BestChromeTarget()
 
 	if Verbose {
 		logVerbose("Using Chrome version: %s", chromeVersion)
 	}
 
-	timeout := time.Duration(request.Timeout) * time.Second
-	if timeout <= 0 {
-		timeout = 30 * time.Second
-	}
 	return &XClient{
 		credentials:         credentials,
 		account:             account,
@@ -99,7 +118,8 @@ func NewXClientWithRequestConfig(credentials *AuthCredentials, account, proxy st
 		chromeTarget:        chromeVersion,
 		readDelay:           request.Delay,
 		readDelayConfigured: true,
-		requestTimeout:      timeout,
+		requestTimeout:      policy.Timeout,
+		policy:              policy,
 	}, nil
 }
 
@@ -352,6 +372,12 @@ func (c *XClient) getCookies() (map[string]string, error) {
 
 // requestWithOperation makes an authenticated request with operation-specific headers
 func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error) {
+	if maxRetries <= 0 {
+		maxRetries = c.effectivePolicy().ReadAttempts
+		if method != "GET" {
+			maxRetries = c.effectivePolicy().MutationAttempts
+		}
+	}
 	var headers map[string]string
 	var err error
 
@@ -382,7 +408,10 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
 			logVerbose("Retry attempt %d/%d", attempt+1, maxRetries)
-			utils.BackoffDelay(attempt, 0, 0)
+			policy := c.effectivePolicy()
+			if err := utils.BackoffDelayWithContext(context.Background(), attempt, policy.BackoffMin.Seconds(), policy.BackoffMax.Seconds()); err != nil {
+				return nil, err
+			}
 		}
 
 		var body io.Reader
@@ -641,7 +670,7 @@ func (c *XClient) graphqlRequest(
 				"features":     resolvedFeatures,
 				"fieldToggles": DefaultFieldToggles,
 			}
-			result, err = c.executeRequestWithOperation("GET", urlStr, params, nil, 3, referer, operation)
+			result, err = c.executeRequestWithOperation("GET", urlStr, params, nil, c.effectivePolicy().ReadAttempts, referer, operation)
 		} else {
 			// Extract query ID from endpoint (part before /)
 			queryID := endpoint
@@ -664,7 +693,7 @@ func (c *XClient) graphqlRequest(
 					"queryId":   queryID,
 				}
 			}
-			result, err = c.executeRequestWithOperation("POST", urlStr, nil, jsonData, 3, referer, operation)
+			result, err = c.executeRequestWithOperation("POST", urlStr, nil, jsonData, c.effectivePolicy().MutationAttempts, referer, operation)
 
 			if Verbose {
 				jsonBytes, _ := json.Marshal(jsonData)
