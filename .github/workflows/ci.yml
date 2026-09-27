@@ -15,6 +15,9 @@ env:
 jobs:
   go:
     runs-on: ubuntu-latest
+    env:
+      XSH_CONFIG_DIR: ""
+      XDG_CONFIG_HOME: ""
     strategy:
       matrix:
         cgo: ["0", "1"]
@@ -27,8 +30,6 @@ jobs:
       - name: Test
         env:
           CGO_ENABLED: ${{ matrix.cgo }}
-          XSH_CONFIG_DIR: ""
-          XDG_CONFIG_HOME: ""
         run: go test ./...
       - name: Vet
         if: matrix.cgo == '1'
