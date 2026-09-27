@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -118,9 +117,9 @@ func createStandardDiscoveryHTTPClient() *http.Client {
 // Uses uTLS to mimic Chrome browser fingerprint and avoid bot detection
 func createDiscoveryHTTPClient() *http.Client {
 	// Use uTLS for advanced TLS fingerprinting (like Python's curl_cffi)
-	proxy := os.Getenv("X_PROXY")
-	if proxy == "" {
-		proxy = os.Getenv("TWITTER_PROXY")
+	proxy := ""
+	if proxyURL, err := ResolveProxy("", os.Getenv); err == nil && proxyURL != nil {
+		proxy = proxyURL.String()
 	}
 
 	client, err := newUTLSHTTPClient(proxy, BestChromeTarget())
@@ -241,7 +240,7 @@ func (ed *EndpointDiscovery) fetchHomepageWithClient(ctx context.Context, client
 		return "", "", fmt.Errorf("X.com returned HTTP %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024)) // Max 10MB
+	body, err := ReadLimitedBody(resp.Body, 10*1024*1024)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read response: %w", err)
 	}
@@ -561,7 +560,7 @@ func (ed *EndpointDiscovery) fetchBundle(ctx context.Context, bundleURL string) 
 		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	js, err := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024)) // Max 5MB per bundle
+	js, err := ReadLimitedBody(resp.Body, 5*1024*1024)
 	if err != nil {
 		return "", err
 	}

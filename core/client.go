@@ -181,15 +181,13 @@ func (c *XClient) TryRefreshCredentials() bool {
 func (c *XClient) getHTTPClient() (*http.Client, error) {
 	if c.client == nil {
 		// Use uTLS for advanced TLS fingerprinting
-		proxy := c.proxy
-		if proxy == "" {
-			proxy = os.Getenv("CLIX_PROXY")
+		proxyURL, err := ResolveProxy(c.proxy, os.Getenv)
+		if err != nil {
+			return nil, err
 		}
-		if proxy == "" {
-			proxy = os.Getenv("X_PROXY")
-		}
-		if proxy == "" {
-			proxy = os.Getenv("TWITTER_PROXY")
+		proxy := ""
+		if proxyURL != nil {
+			proxy = proxyURL.String()
 		}
 
 		client, err := newUTLSHTTPClient(proxy, c.chromeTarget)
@@ -490,7 +488,7 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 			continue
 		}
 
-		respBody, err := io.ReadAll(resp.Body)
+		respBody, err := ReadLimitedBody(resp.Body, c.effectivePolicy().MaxResponseBytes)
 		resp.Body.Close()
 		if err != nil {
 			lastErr = err
@@ -989,7 +987,7 @@ func (c *XClient) RestPostWithOptions(urlStr string, data map[string]string, jso
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := ReadLimitedBody(resp.Body, c.effectivePolicy().MaxResponseBytes)
 	if err != nil {
 		return nil, err
 	}

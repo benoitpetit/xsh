@@ -4,14 +4,17 @@ package core
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,13 +77,39 @@ func (t *uTLSTransport) roundTripHTTP1(req *http.Request) (*http.Response, error
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	stopCancel := context.AfterFunc(req.Context(), func() { _ = conn.Close() })
 
 	if err := req.Write(conn); err != nil {
+		stopCancel()
+		_ = conn.Close()
 		return nil, err
 	}
 
-	return http.ReadResponse(bufio.NewReader(conn), req)
+	resp, err := http.ReadResponse(bufio.NewReader(conn), req)
+	if err != nil {
+		stopCancel()
+		_ = conn.Close()
+		return nil, err
+	}
+	resp.Body = &connBody{ReadCloser: resp.Body, conn: conn, stopCancel: stopCancel}
+	return resp, nil
+}
+
+type connBody struct {
+	io.ReadCloser
+	conn       net.Conn
+	stopCancel func() bool
+}
+
+func (b *connBody) Close() error {
+	if b.stopCancel != nil {
+		b.stopCancel()
+	}
+	err := b.ReadCloser.Close()
+	if closeErr := b.conn.Close(); err == nil {
+		err = closeErr
+	}
+	return err
 }
 
 // dial creates a connection (direct or through proxy)
@@ -119,35 +148,67 @@ func (t *uTLSTransport) dialDirect(ctx context.Context, addr, host string) (net.
 
 // dialProxy creates a TLS connection through HTTP CONNECT proxy
 func (t *uTLSTransport) dialProxy(ctx context.Context, addr, host string) (net.Conn, error) {
-	proxyURL, err := url.Parse(t.proxy)
+	proxyURL, err := ResolveProxy(t.proxy, func(string) string { return "" })
 	if err != nil {
-		return nil, fmt.Errorf("invalid proxy URL: %w", err)
+		return nil, err
+	}
+	if proxyURL == nil {
+		return nil, fmt.Errorf("proxy URL is empty")
+	}
+	proxyHost := proxyURL.Hostname()
+	proxyPort := proxyURL.Port()
+	if proxyPort == "" {
+		proxyPort = "80"
+		if proxyURL.Scheme == "https" {
+			proxyPort = "443"
+		}
 	}
 
 	// Connect to proxy
-	proxyConn, err := t.dialer.DialContext(ctx, "tcp", proxyURL.Host)
+	dialer := t.dialer
+	if dialer == nil {
+		dialer = &net.Dialer{Timeout: 10 * time.Second}
+	}
+	proxyConn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(proxyHost, proxyPort))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to proxy: %w", err)
 	}
+	stopCancel := context.AfterFunc(ctx, func() { _ = proxyConn.Close() })
+	closeProxy := func() {
+		stopCancel()
+		_ = proxyConn.Close()
+	}
 
 	// Send CONNECT request
-	connectReq := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", addr, addr)
+	connectReq := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n", addr, addr)
+	if proxyURL.User != nil {
+		password, _ := proxyURL.User.Password()
+		credentials := base64.StdEncoding.EncodeToString([]byte(proxyURL.User.Username() + ":" + password))
+		connectReq += "Proxy-Authorization: Basic " + credentials + "\r\n"
+	}
+	connectReq += "\r\n"
 	if _, err := proxyConn.Write([]byte(connectReq)); err != nil {
-		proxyConn.Close()
+		closeProxy()
 		return nil, fmt.Errorf("failed to write CONNECT: %w", err)
 	}
 
-	// Read response
-	buf := make([]byte, 1024)
-	n, err := proxyConn.Read(buf)
+	// Read and parse a possibly split CONNECT response without over-reading the
+	// first TLS bytes that follow the header terminator.
+	response, err := readProxyHeaders(ctx, proxyConn)
 	if err != nil {
-		proxyConn.Close()
+		closeProxy()
 		return nil, fmt.Errorf("failed to read CONNECT response: %w", err)
 	}
-
-	if !strings.Contains(string(buf[:n]), "200") {
-		proxyConn.Close()
-		return nil, fmt.Errorf("proxy CONNECT failed: %s", string(buf[:n]))
+	lines := strings.Split(string(response), "\r\n")
+	statusFields := strings.Fields(lines[0])
+	if len(statusFields) < 2 {
+		closeProxy()
+		return nil, fmt.Errorf("proxy CONNECT returned malformed status: %q", lines[0])
+	}
+	statusCode, err := strconv.Atoi(statusFields[1])
+	if err != nil || statusCode != http.StatusOK {
+		closeProxy()
+		return nil, fmt.Errorf("proxy CONNECT failed: %s", lines[0])
 	}
 
 	// Clone config and set ServerName
@@ -157,11 +218,38 @@ func (t *uTLSTransport) dialProxy(ctx context.Context, addr, host string) (net.C
 	// Wrap with uTLS
 	uConn := utls.UClient(proxyConn, config, t.clientHelloID)
 	if err := uConn.HandshakeContext(ctx); err != nil {
-		proxyConn.Close()
+		closeProxy()
 		return nil, fmt.Errorf("TLS handshake failed: %w", err)
 	}
+	stopCancel()
 
 	return uConn, nil
+}
+
+func readProxyHeaders(ctx context.Context, conn net.Conn) ([]byte, error) {
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetReadDeadline(deadline)
+	} else {
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	}
+	var response []byte
+	var one [1]byte
+	for len(response) < 64*1024 {
+		n, err := conn.Read(one[:])
+		if n > 0 {
+			response = append(response, one[:n]...)
+			if bytes.HasSuffix(response, []byte("\r\n\r\n")) {
+				return response, nil
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("proxy CONNECT response headers exceed 64 KiB")
 }
 
 // newUTLSHTTPClient creates an HTTP client with real TLS fingerprinting and HTTP/2 support
@@ -204,8 +292,8 @@ func newUTLSHTTPClient(proxy string, chromeVersion TLSFingerprintType) (*http.Cl
 	// Configure HTTP/2 transport with uTLS
 	// We ignore the passed *tls.Config and use our uTLS config instead
 	transport.http2Transport = &http2.Transport{
-		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
-			return transport.dialTLS(context.Background(), addr)
+		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+			return transport.dialTLS(ctx, addr)
 		},
 		TLSClientConfig: &tls.Config{}, // Empty config, we handle TLS ourselves
 	}
