@@ -730,6 +730,12 @@ func (c *XClient) graphqlRequest(
 					logVerbose("HTTP 404 for '%s' — operation IDs may be stale, "+
 						"refreshing endpoints from X.com and retrying...", operation)
 					c.refreshEndpointsForRetry(operation)
+					if GetEndpointManager().IsQuarantined(operation) {
+						return nil, &APIError{
+							Message:    fmt.Sprintf("GraphQL operation %q has no verified endpoint after refresh", operation),
+							StatusCode: http.StatusNotFound,
+						}
+					}
 
 					// Refresh features if they came from cache
 					if features == nil {
@@ -771,6 +777,12 @@ func (c *XClient) graphqlRequest(
 				}
 				logVerbose("GraphQL response indicates obsolete endpoint for '%s' — refreshing endpoints and retrying...", operation)
 				c.refreshEndpointsForRetry(operation)
+				if GetEndpointManager().IsQuarantined(operation) {
+					return nil, &APIError{
+						Message:    fmt.Sprintf("GraphQL operation %q has no verified endpoint after refresh", operation),
+						StatusCode: http.StatusNotFound,
+					}
+				}
 
 				if features == nil {
 					resolvedFeatures = c.getOpFeatures(operation)

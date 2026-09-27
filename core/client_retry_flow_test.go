@@ -4,11 +4,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/benoitpetit/xsh/internal/testutil"
 )
 
 func TestGraphQLRequestRetryFlowOn404(t *testing.T) {
+	resetEndpointTestState()
 	client := &XClient{}
 	script := testutil.NewRetryScript([]testutil.RequestStep{
 		{Err: &StaleEndpointError{APIError: APIError{Message: "GraphQL endpoint not found (HTTP 404)", StatusCode: 404}}},
@@ -36,6 +38,21 @@ func TestGraphQLRequestRetryFlowOn404(t *testing.T) {
 	if script.ReadDelayCalls != 1 {
 		t.Fatalf("readDelayCalls = %d, want 1", script.ReadDelayCalls)
 	}
+}
+
+func resetEndpointTestState() {
+	memoryCacheMu.Lock()
+	memoryCache = newEmptyEndpointCache()
+	memoryCacheMu.Unlock()
+	manager := GetEndpointManager()
+	manager.repositoryMu.Lock()
+	repository := NewEndpointRepository(nil)
+	_ = repository.Replace(&EndpointCache{
+		Endpoints: map[string]string{"TestOnly": "test/TestOnly"},
+		Timestamp: time.Now(),
+	})
+	manager.repository = repository
+	manager.repositoryMu.Unlock()
 }
 
 func TestGraphQLRequestRetryFlowOn422(t *testing.T) {

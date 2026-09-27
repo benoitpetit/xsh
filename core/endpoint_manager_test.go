@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -66,6 +68,64 @@ func TestRefreshForOperationPreservesExistingEndpointOnFailure(t *testing.T) {
 	}
 	if got := manager.GetEndpoint(operation); got != "old-query-id/old-operation" {
 		t.Fatalf("endpoint after failed refresh = %q, want previous endpoint", got)
+	}
+}
+
+func TestRefreshForOperationHonorsWaitingCallerCancellation(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	manager := &EndpointManager{
+		refreshFunc: func(context.Context) error {
+			close(started)
+			<-release
+			return nil
+		},
+	}
+
+	ownerDone := make(chan error, 1)
+	go func() { ownerDone <- manager.RefreshForOperation(context.Background(), "SearchTimeline") }()
+	<-started
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := manager.RefreshForOperation(ctx, "SearchTimeline"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("waiting refresh error = %v, want context cancellation", err)
+	}
+	close(release)
+	if err := <-ownerDone; err != nil {
+		t.Fatalf("owner refresh error = %v", err)
+	}
+}
+
+func TestRefreshForOperationCoalescesConcurrentCallers(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var refreshes atomic.Int32
+	var startedOnce sync.Once
+	manager := &EndpointManager{
+		refreshFunc: func(context.Context) error {
+			refreshes.Add(1)
+			startedOnce.Do(func() { close(started) })
+			<-release
+			return nil
+		},
+	}
+
+	const callers = 8
+	results := make(chan error, callers)
+	for i := 0; i < callers; i++ {
+		go func() { results <- manager.RefreshForOperation(context.Background(), "SearchTimeline") }()
+	}
+	<-started
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	for i := 0; i < callers; i++ {
+		if err := <-results; err != nil {
+			t.Fatalf("coalesced refresh error = %v", err)
+		}
+	}
+	if got := refreshes.Load(); got != 1 {
+		t.Fatalf("refreshes = %d, want 1", got)
 	}
 }
 

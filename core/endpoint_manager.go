@@ -15,6 +15,8 @@ import (
 // Now uses EndpointDiscovery as the single source of truth for caching.
 type EndpointManager struct {
 	discovery       *EndpointDiscovery
+	repository      EndpointRepository
+	repositoryMu    sync.Mutex
 	verbose         bool
 	refreshCooldown time.Duration
 	refreshFunc     func(context.Context) error
@@ -46,8 +48,9 @@ func GetEndpointManager() *EndpointManager {
 		}
 
 		globalEndpointManager = &EndpointManager{
-			discovery: discovery,
-			verbose:   Verbose,
+			discovery:  discovery,
+			repository: NewEndpointRepository(discovery),
+			verbose:    Verbose,
 		}
 	})
 
@@ -56,19 +59,17 @@ func GetEndpointManager() *EndpointManager {
 
 // getCache returns the current cache from discovery
 func (em *EndpointManager) getCache() *EndpointCache {
-	if em.discovery == nil {
+	repository := em.getRepository()
+	if repository == nil {
 		return nil
 	}
-
-	// Try to get from memory cache first
-	if cache := em.discovery.GetMemoryCache(); cache != nil && cache.IsValid() {
+	if cache := repository.Snapshot(); cache != nil && cache.IsValid() {
 		return cache
 	}
 
-	// Try to load from disk
 	cache, err := em.discovery.LoadCache()
 	if err == nil && cache.IsValid() {
-		em.discovery.UpdateMemoryCache(cache)
+		_ = repository.Replace(cache)
 		return cache
 	}
 
@@ -79,6 +80,18 @@ func (em *EndpointManager) getCache() *EndpointCache {
 		Features:    make(map[string]bool),
 		OpFeatures:  make(map[string][]string),
 	}
+}
+
+func (em *EndpointManager) getRepository() EndpointRepository {
+	if em == nil || em.discovery == nil {
+		return nil
+	}
+	em.repositoryMu.Lock()
+	defer em.repositoryMu.Unlock()
+	if em.repository == nil {
+		em.repository = NewEndpointRepository(em.discovery)
+	}
+	return em.repository
 }
 
 // GetEndpoint returns the endpoint for an operation, with auto-discovery
@@ -154,8 +167,12 @@ func (em *EndpointManager) RefreshForOperation(ctx context.Context, operation st
 	}
 	if state := em.refreshState; state != nil {
 		em.refreshMu.Unlock()
-		<-state.done
-		return state.err
+		select {
+		case <-state.done:
+			return state.err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
 	state := &endpointRefreshState{done: make(chan struct{})}
@@ -255,32 +272,14 @@ func (em *EndpointManager) UpdateEndpoint(operation, endpoint string) {
 	if em.discovery == nil {
 		return
 	}
-
-	// Update in discovery cache
-	cache := em.getCache()
-	if cache == nil {
-		cache = &EndpointCache{
-			Endpoints:   make(map[string]string),
-			Quarantined: make(map[string]string),
-			Features:    make(map[string]bool),
-			OpFeatures:  make(map[string][]string),
-			Timestamp:   time.Now(),
-		}
-	}
-	if cache.Quarantined == nil {
-		cache.Quarantined = make(map[string]string)
-	}
-
-	cache.Endpoints[operation] = endpoint
-	delete(cache.Quarantined, operation)
-	cache.Timestamp = time.Now()
-
-	// Save to disk
-	if err := em.discovery.SaveCache(cache); err != nil {
+	if err := em.getRepository().Mutate(func(cache *EndpointCache) error {
+		cache.Endpoints[operation] = endpoint
+		delete(cache.Quarantined, operation)
+		cache.Timestamp = time.Now()
+		return nil
+	}); err != nil {
 		log.Printf("[EndpointManager] Warning: failed to save cache: %v", err)
 	}
-
-	em.discovery.UpdateMemoryCache(cache)
 
 	if em.verbose {
 		log.Printf("[EndpointManager] Updated endpoint %s -> %s", operation, endpoint)
@@ -293,21 +292,14 @@ func (em *EndpointManager) ResetEndpoint(operation string) {
 		return
 	}
 
-	cache := em.getCache()
-	if cache == nil {
-		return
-	}
-
-	delete(cache.Endpoints, operation)
-	delete(cache.Quarantined, operation)
-	cache.Timestamp = time.Now()
-
-	// Save to disk
-	if err := em.discovery.SaveCache(cache); err != nil {
+	if err := em.getRepository().Mutate(func(cache *EndpointCache) error {
+		delete(cache.Endpoints, operation)
+		delete(cache.Quarantined, operation)
+		cache.Timestamp = time.Now()
+		return nil
+	}); err != nil {
 		log.Printf("[EndpointManager] Warning: failed to save cache: %v", err)
 	}
-
-	em.discovery.UpdateMemoryCache(cache)
 }
 
 // QuarantineEndpoint removes an operation from active endpoint selection after
@@ -317,34 +309,17 @@ func (em *EndpointManager) QuarantineEndpoint(operation, reason string) {
 	if em.discovery == nil || operation == "" {
 		return
 	}
-
-	cache := em.getCache()
-	if cache == nil {
-		cache = &EndpointCache{
-			Endpoints:   make(map[string]string),
-			Quarantined: make(map[string]string),
-			Features:    make(map[string]bool),
-			OpFeatures:  make(map[string][]string),
-		}
-	}
-	if cache.Endpoints == nil {
-		cache.Endpoints = make(map[string]string)
-	}
-	if cache.Quarantined == nil {
-		cache.Quarantined = make(map[string]string)
-	}
-
-	delete(cache.Endpoints, operation)
 	if reason == "" {
 		reason = "endpoint returned not found"
 	}
-	cache.Quarantined[operation] = reason
-	cache.Timestamp = time.Now()
-
-	if err := em.discovery.SaveCache(cache); err != nil {
+	if err := em.getRepository().Mutate(func(cache *EndpointCache) error {
+		delete(cache.Endpoints, operation)
+		cache.Quarantined[operation] = reason
+		cache.Timestamp = time.Now()
+		return nil
+	}); err != nil {
 		log.Printf("[EndpointManager] Warning: failed to save quarantined endpoint: %v", err)
 	}
-	em.discovery.UpdateMemoryCache(cache)
 }
 
 // IsQuarantined reports whether an operation has been isolated after a 404.
@@ -466,7 +441,7 @@ func (em *EndpointManager) CheckEndpoint(operation string) (bool, string) {
 // Invalidate clears all dynamic endpoints
 func (em *EndpointManager) Invalidate() {
 	if em.discovery != nil {
-		em.discovery.InvalidateCache()
+		_ = em.getRepository().Invalidate()
 	}
 }
 

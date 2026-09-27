@@ -49,9 +49,8 @@ var (
 	graphqlURLPattern             = regexp.MustCompile(`(?i)(?:/i/api)?/graphql/([A-Za-z0-9_%-]+)(?:/|%2f)([A-Za-z0-9_%-]+)`)
 
 	// Memory cache for in-session performance
-	memoryCache     *EndpointCache
-	memoryCacheMu   sync.RWMutex
-	memoryCacheOnce sync.Once
+	memoryCache   *EndpointCache
+	memoryCacheMu sync.RWMutex
 )
 
 // EndpointCache represents the cached endpoint data
@@ -67,15 +66,9 @@ type EndpointCache struct {
 
 // GetMemoryCache returns the singleton memory cache
 func GetMemoryCache() *EndpointCache {
-	memoryCacheOnce.Do(func() {
-		memoryCache = &EndpointCache{
-			Endpoints:   make(map[string]string),
-			Quarantined: make(map[string]string),
-			Features:    make(map[string]bool),
-			OpFeatures:  make(map[string][]string),
-		}
-	})
-	return memoryCache
+	memoryCacheMu.RLock()
+	defer memoryCacheMu.RUnlock()
+	return cloneEndpointCache(memoryCache)
 }
 
 // EndpointDiscovery manages dynamic endpoint extraction
@@ -842,40 +835,27 @@ func (ed *EndpointDiscovery) LoadCache() (*EndpointCache, error) {
 
 // UpdateMemoryCache updates the global memory cache (public for EndpointManager)
 func (ed *EndpointDiscovery) UpdateMemoryCache(cache *EndpointCache) {
+	if cache == nil {
+		return
+	}
 	memoryCacheMu.Lock()
 	defer memoryCacheMu.Unlock()
-
-	mc := GetMemoryCache()
-	mc.Endpoints = cache.Endpoints
-	mc.Quarantined = cache.Quarantined
-	mc.Features = cache.Features
-	mc.OpFeatures = cache.OpFeatures
-	mc.Timestamp = cache.Timestamp
-	mc.Version = cache.Version
-	mc.Fingerprint = cache.Fingerprint
+	memoryCache = cloneEndpointCache(cache)
 }
 
 // GetMemoryCache retrieves the memory cache (public for EndpointManager)
 func (ed *EndpointDiscovery) GetMemoryCache() *EndpointCache {
-	memoryCacheMu.RLock()
-	defer memoryCacheMu.RUnlock()
-
-	mc := GetMemoryCache()
-	if mc.Timestamp.IsZero() {
+	cache := GetMemoryCache()
+	if cache == nil || cache.Timestamp.IsZero() {
 		return nil
 	}
-	return mc
+	return cache
 }
 
 // InvalidateCache clears all caches
 func (ed *EndpointDiscovery) InvalidateCache() {
 	memoryCacheMu.Lock()
-	memoryCache = &EndpointCache{
-		Endpoints:   make(map[string]string),
-		Quarantined: make(map[string]string),
-		Features:    make(map[string]bool),
-		OpFeatures:  make(map[string][]string),
-	}
+	memoryCache = newEmptyEndpointCache()
 	memoryCacheMu.Unlock()
 
 	os.Remove(ed.cachePath)
@@ -894,7 +874,7 @@ func getEndpointCachePath() (string, error) {
 func GetDynamicGraphQLEndpoints() map[string]string {
 	discovery, err := NewEndpointDiscovery(Verbose)
 	if err != nil {
-		return GraphQLEndpoints // Fallback to static
+		return cloneStringMap(GraphQLEndpoints) // Fallback to static
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -905,17 +885,17 @@ func GetDynamicGraphQLEndpoints() map[string]string {
 		if Verbose {
 			log.Printf("[EndpointDiscovery] Failed to get cached endpoints: %v, using static fallback", err)
 		}
-		return GraphQLEndpoints
+		return cloneStringMap(GraphQLEndpoints)
 	}
 
-	return cache.Endpoints
+	return cloneStringMap(cache.Endpoints)
 }
 
 // GetDynamicFeatures returns feature flags from cache
 func GetDynamicFeatures() map[string]bool {
 	discovery, err := NewEndpointDiscovery(Verbose)
 	if err != nil {
-		return DefaultFeatures
+		return cloneBoolMap(DefaultFeatures)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -923,10 +903,10 @@ func GetDynamicFeatures() map[string]bool {
 
 	cache, err := discovery.GetCachedEndpoints(ctx)
 	if err != nil {
-		return DefaultFeatures
+		return cloneBoolMap(DefaultFeatures)
 	}
 
-	return cache.Features
+	return cloneBoolMap(cache.Features)
 }
 
 // GetDynamicOpFeatures returns operation-specific features
@@ -944,7 +924,23 @@ func GetDynamicOpFeatures(operation string) []string {
 		return nil
 	}
 
-	return cache.OpFeatures[operation]
+	return append([]string(nil), cache.OpFeatures[operation]...)
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	copy := make(map[string]string, len(values))
+	for key, value := range values {
+		copy[key] = value
+	}
+	return copy
+}
+
+func cloneBoolMap(values map[string]bool) map[string]bool {
+	copy := make(map[string]bool, len(values))
+	for key, value := range values {
+		copy[key] = value
+	}
+	return copy
 }
 
 // criticalEndpointsForCache returns health-check operations that exist in the
