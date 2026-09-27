@@ -5,7 +5,7 @@
 # Example: ./core/scripts/verify.sh 0.0.2
 #
 
-set -e
+set -euo pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -125,7 +125,26 @@ cd "$CORE_DIR"
 if go vet ./... 2>/dev/null; then
     print_success "go vet passed"
 else
-    print_warning "go vet found issues (non-blocking)"
+    print_error "go vet found issues"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# ============================================
+# STEP 3.1: Go tests and reproducible builds
+# ============================================
+print_step "Running Go tests and reproducible build matrix..."
+if go test ./... && go test -race ./...; then
+    print_success "Go tests passed"
+else
+    print_error "Go tests failed"
+    ERRORS=$((ERRORS + 1))
+fi
+
+if make all VERSION="$TARGET_VERSION"; then
+    print_success "All release targets built"
+else
+    print_error "Release build matrix failed"
+    ERRORS=$((ERRORS + 1))
 fi
 
 # ============================================
@@ -140,6 +159,7 @@ CRITICAL_FILES=(
     "$CORE_DIR/.github/workflows/release.yml"
     "$WEB_DIR/package.json"
     "$WEB_DIR/src/routes/+page.svelte"
+    "$CORE_DIR/.github/workflows/ci.yml"
 )
 
 for file in "${CRITICAL_FILES[@]}"; do
@@ -156,10 +176,11 @@ done
 # ============================================
 print_step "Building Web (SvelteKit)..."
 cd "$WEB_DIR"
-if npm run build 2>/dev/null >/dev/null; then
+if npm test && npm run verify:snapshot && npm run build 2>/dev/null >/dev/null; then
     print_success "Web build successful"
 else
-    print_warning "Web build failed or has warnings (verify manually)"
+    print_error "Web tests, command snapshot, or build failed"
+    ERRORS=$((ERRORS + 1))
 fi
 
 # ============================================

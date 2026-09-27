@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.24"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cgo: ["0", "1"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+      - name: Test
+        env:
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: go test ./...
+      - name: Vet
+        if: matrix.cgo == '1'
+        run: go vet ./...
+      - name: Race
+        if: matrix.cgo == '1'
+        run: go test -race ./...
+      - name: Fuzz smoke
+        if: matrix.cgo == '1'
+        run: |
+          go test ./core -run=^$ -fuzz=Fuzz -fuzztime=5s
+          go test ./browser -run=^$ -fuzz=Fuzz -fuzztime=5s
+
+  release-builds:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            output: xsh-linux-amd64
+          - goos: linux
+            goarch: arm64
+            output: xsh-linux-arm64
+          - goos: windows
+            goarch: amd64
+            output: xsh-windows-amd64.exe
+          - goos: windows
+            goarch: arm64
+            output: xsh-windows-arm64.exe
+          - goos: darwin
+            goarch: amd64
+            output: xsh-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            output: xsh-darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+      - name: Build target
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: go build -trimpath -buildvcs=false -o "${{ matrix.output }}" .
+      - name: Assert artifact
+        run: test -s "${{ matrix.output }}"
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Detect web workspace
+        id: web
+        run: |
+          if [ -f web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Install web dependencies
+        if: steps.web.outputs.present == 'true'
+        working-directory: web
+        run: npm ci
+      - name: Test web
+        if: steps.web.outputs.present == 'true'
+        working-directory: web
+        run: npm test
+      - name: Verify command snapshot
+        if: steps.web.outputs.present == 'true'
+        working-directory: web
+        run: npm run verify:snapshot
+      - name: Build web
+        if: steps.web.outputs.present == 'true'
+        working-directory: web
+        run: npm run build

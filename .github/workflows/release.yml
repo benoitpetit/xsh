@@ -56,12 +56,12 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          # Disable CGO for cross-compilation (all non-linux/amd64 targets)
-          CGO_ENABLED: ${{ (matrix.goos == 'linux' && matrix.goarch == 'amd64') && '1' || '0' }}
+          # All release artifacts use the CGO-free browser extraction path.
+          CGO_ENABLED: "0"
           GO111MODULE: on
         run: |
           output="xsh-${{ matrix.suffix }}"
-          go build -ldflags="-s -w -X github.com/benoitpetit/xsh/cmd.Version=${{ github.ref_name }}" -o "$output" .
+          go build -trimpath -buildvcs=false -ldflags="-s -w -X github.com/benoitpetit/xsh/cmd.Version=${{ github.ref_name }} -X github.com/benoitpetit/xsh/cmd.Commit=${{ github.sha }}" -o "$output" .
 
           # Also create compressed archive as alternative
           if [[ "${{ matrix.goos }}" == "windows" ]]; then
@@ -113,6 +113,7 @@ jobs:
           # Move archives (alternative)
           cp ./artifacts/archives/xsh-* ./release-assets/ 2>/dev/null || true
           ls -la ./release-assets/
+          test "$(find ./release-assets -type f | wc -l)" -eq 12
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
