@@ -432,6 +432,9 @@ func extractReferencedBundleURLs(js, baseURL string) []string {
 // expandBundleURLs follows the first-level imports of entry bundles. The cap
 // prevents a malformed page from turning discovery into an unbounded crawl.
 func (ed *EndpointDiscovery) expandBundleURLs(ctx context.Context, initial []string) []string {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	const maxBundles = 256
 	seen := make(map[string]bool, len(initial))
 	urls := make([]string, 0, min(len(initial), maxBundles))
@@ -443,6 +446,9 @@ func (ed *EndpointDiscovery) expandBundleURLs(ctx context.Context, initial []str
 	}
 
 	for index := 0; index < len(urls) && index < maxBundles; index++ {
+		if err := ctx.Err(); err != nil {
+			return prioritizeBundles(urls)
+		}
 		bundleURL := urls[index]
 		js, err := ed.fetchBundle(ctx, bundleURL)
 		if err != nil {
@@ -452,6 +458,9 @@ func (ed *EndpointDiscovery) expandBundleURLs(ctx context.Context, initial []str
 			continue
 		}
 		for _, referenced := range extractReferencedBundleURLs(js, bundleURL) {
+			if err := ctx.Err(); err != nil {
+				return prioritizeBundles(urls)
+			}
 			if seen[referenced] || len(urls) >= maxBundles {
 				continue
 			}
@@ -478,47 +487,104 @@ func prioritizeBundles(urls []string) []string {
 
 // extractOperationsConcurrent extracts GraphQL operations from bundles concurrently
 func (ed *EndpointDiscovery) extractOperationsConcurrent(ctx context.Context, bundleURLs []string) (map[string]string, map[string][]string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	endpoints := make(map[string]string)
 	opFeatures := make(map[string][]string)
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	// Semaphore to limit concurrent downloads
-	semaphore := make(chan struct{}, 5)
-
-	for _, url := range bundleURLs {
-		wg.Add(1)
-		go func(bundleURL string) {
-			defer wg.Done()
-
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			ops, feats, err := ed.extractFromBundle(ctx, bundleURL)
-			if err != nil {
-				if ed.verbose {
-					log.Printf("[EndpointDiscovery] Failed to extract from %s: %v", bundleURL, err)
-				}
-				return
-			}
-
-			mu.Lock()
-			for opName, endpoint := range ops {
-				if existing, ok := endpoints[opName]; ok && existing != endpoint {
-					if ed.verbose {
-						log.Printf("[EndpointDiscovery] Duplicate operation %s: %s vs %s", opName, existing, endpoint)
-					}
-				}
-				endpoints[opName] = endpoint
-			}
-			for opName, features := range feats {
-				opFeatures[opName] = features
-			}
-			mu.Unlock()
-		}(url)
+	if len(bundleURLs) == 0 {
+		return endpoints, opFeatures
 	}
 
-	wg.Wait()
+	type bundleJob struct {
+		index int
+		url   string
+	}
+	type bundleResult struct {
+		index    int
+		url      string
+		ops      map[string]string
+		features map[string][]string
+		err      error
+	}
+
+	jobs := make(chan bundleJob)
+	results := make(chan bundleResult, len(bundleURLs))
+	workerCount := min(5, len(bundleURLs))
+	var workers sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case job, ok := <-jobs:
+					if !ok {
+						return
+					}
+					ops, features, err := ed.extractFromBundle(ctx, job.url)
+					result := bundleResult{index: job.index, url: job.url, ops: ops, features: features, err: err}
+					select {
+					case results <- result:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+		}()
+	}
+
+	go func() {
+		defer close(jobs)
+		for index, bundleURL := range bundleURLs {
+			select {
+			case jobs <- bundleJob{index: index, url: bundleURL}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	go func() {
+		workers.Wait()
+		close(results)
+	}()
+
+	collected := make([]bundleResult, len(bundleURLs))
+	completed := make([]bool, len(bundleURLs))
+	for result := range results {
+		collected[result.index] = result
+		completed[result.index] = true
+	}
+
+	// Merge in prioritized bundle order, not completion order. The first
+	// occurrence is authoritative when X ships conflicting records.
+	for index, result := range collected {
+		if !completed[index] {
+			continue
+		}
+		if result.err != nil {
+			if ed.verbose {
+				log.Printf("[EndpointDiscovery] Failed to extract from %s: %v", result.url, result.err)
+			}
+			continue
+		}
+		for opName, endpoint := range result.ops {
+			if existing, ok := endpoints[opName]; ok && existing != endpoint {
+				if ed.verbose {
+					log.Printf("[EndpointDiscovery] Duplicate operation %s: %s vs %s", opName, existing, endpoint)
+				}
+				continue
+			}
+			endpoints[opName] = endpoint
+		}
+		for opName, features := range result.features {
+			if _, exists := opFeatures[opName]; !exists {
+				opFeatures[opName] = append([]string(nil), features...)
+			}
+		}
+	}
 	return endpoints, opFeatures
 }
 
@@ -534,6 +600,12 @@ func (ed *EndpointDiscovery) extractFromBundle(ctx context.Context, bundleURL st
 }
 
 func (ed *EndpointDiscovery) fetchBundle(ctx context.Context, bundleURL string) (string, error) {
+	if ed.client == nil {
+		return "", fmt.Errorf("bundle HTTP client unavailable")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	req, err := http.NewRequestWithContext(ctx, "GET", bundleURL, nil)
 	if err != nil {
 		return "", err

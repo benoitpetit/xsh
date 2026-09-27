@@ -2,11 +2,15 @@ package core
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDiscoveryUsesAuthenticatedHomePage(t *testing.T) {
@@ -162,7 +166,7 @@ func TestLoggedOutXWebShellIsNotAuthenticatedDiscoverySource(t *testing.T) {
 
 func TestExpandBundleURLsTraversesNestedImportsAndCycles(t *testing.T) {
 	bundles := map[string]string{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newEndpointTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		js, ok := bundles["http://"+r.Host+r.URL.Path]
 		if !ok {
 			http.NotFound(w, r)
@@ -200,6 +204,23 @@ func TestExpandBundleURLsTraversesNestedImportsAndCycles(t *testing.T) {
 	}
 }
 
+func newEndpointTestServer(t *testing.T, handler http.Handler) (server *httptest.Server) {
+	t.Helper()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if strings.Contains(strings.ToLower(recoveredString(recovered)), "operation not permitted") {
+				t.Skip("sandbox does not permit local TCP listeners")
+			}
+			panic(recovered)
+		}
+	}()
+	return httptest.NewServer(handler)
+}
+
+func recoveredString(value interface{}) string {
+	return fmt.Sprint(value)
+}
+
 func TestExtractOperationsFromJSSupportsQuotedReversedRecords(t *testing.T) {
 	js := `{"operationName":"HomeTimeline","queryId":"abc-123"}`
 
@@ -233,5 +254,79 @@ func TestExtractOperationsFromJSIgnoresRuntimeGraphQLMetadata(t *testing.T) {
 	got, _ := extractOperationsFromJS(js)
 	if len(got) != 0 {
 		t.Fatalf("runtime metadata produced false endpoints: %#v", got)
+	}
+}
+
+func TestFetchHomepageRejectsTruncatedResponse(t *testing.T) {
+	ed := &EndpointDiscovery{client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(strings.Repeat("x", 10*1024*1024+1))), Header: make(http.Header), Request: req}, nil
+	})}}
+	_, _, err := ed.fetchHomepageWithClient(context.Background(), ed.client)
+	var limitErr *BodyLimitError
+	if !errors.As(err, &limitErr) {
+		t.Fatalf("fetchHomepageWithClient() error = %v, want BodyLimitError", err)
+	}
+}
+
+func TestFetchBundleRejectsTruncatedResponse(t *testing.T) {
+	ed := &EndpointDiscovery{client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(strings.Repeat("x", 5*1024*1024+1))), Header: make(http.Header), Request: req}, nil
+	})}}
+	_, err := ed.fetchBundle(context.Background(), "https://example.test/bundle.js")
+	var limitErr *BodyLimitError
+	if !errors.As(err, &limitErr) {
+		t.Fatalf("fetchBundle() error = %v, want BodyLimitError", err)
+	}
+}
+
+func TestExtractOperationsConcurrentKeepsPrioritizedBundleOrder(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if strings.Contains(req.URL.Path, "second") {
+			time.Sleep(30 * time.Millisecond)
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`queryId:"second-id",operationName:"Duplicate"`)), Header: make(http.Header), Request: req}, nil
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`queryId:"first-id",operationName:"Duplicate"`)), Header: make(http.Header), Request: req}, nil
+	})}
+	ed := &EndpointDiscovery{client: client}
+	endpoints, _ := ed.extractOperationsConcurrent(context.Background(), []string{
+		"https://example.test/first.js",
+		"https://example.test/second.js",
+	})
+	if got := endpoints["Duplicate"]; got != "first-id/Duplicate" {
+		t.Fatalf("Duplicate endpoint = %q, want prioritized first bundle", got)
+	}
+}
+
+func TestExtractOperationsConcurrentStopsWorkersOnCancellation(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})}
+	ed := &EndpointDiscovery{client: client}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan struct{})
+	go func() {
+		_, _ = ed.extractOperationsConcurrent(ctx, []string{
+			"https://example.test/one.js", "https://example.test/two.js", "https://example.test/three.js",
+			"https://example.test/four.js", "https://example.test/five.js", "https://example.test/six.js",
+		})
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("extractOperationsConcurrent did not stop after cancellation")
+	}
+}
+
+func TestExtractOperationsFromJSMalformedFeatureSwitchDoesNotDiscardOperation(t *testing.T) {
+	js := `queryId:"abc-123",operationName:"HomeTimeline",featureSwitches:["unterminated"`
+	endpoints, features := extractOperationsFromJS(js)
+	if endpoints["HomeTimeline"] != "abc-123/HomeTimeline" {
+		t.Fatalf("malformed feature switch discarded endpoint: %#v", endpoints)
+	}
+	if len(features) != 0 {
+		t.Fatalf("malformed feature switch produced features: %#v", features)
 	}
 }
