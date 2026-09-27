@@ -84,11 +84,11 @@ func (tg *TransactionGenerator) isCacheValid() bool {
 
 // getCacheDir returns the directory for cache files
 func (tg *TransactionGenerator) getCacheDir() string {
-	home, err := os.UserHomeDir()
+	paths, err := GetPaths()
 	if err != nil {
 		return "."
 	}
-	return filepath.Join(home, ".config", "xsh")
+	return paths.ConfigDir
 }
 
 // loadFromDisk loads cached data from disk
@@ -133,7 +133,7 @@ func (tg *TransactionGenerator) loadFromDisk() bool {
 // saveToDisk saves cached data to disk
 func (tg *TransactionGenerator) saveToDisk() error {
 	cacheDir := tg.getCacheDir()
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := EnsurePrivateDir(cacheDir); err != nil {
 		return err
 	}
 
@@ -157,7 +157,7 @@ func (tg *TransactionGenerator) saveToDisk() error {
 	}
 
 	cacheFile := filepath.Join(cacheDir, transactionCacheFile)
-	return os.WriteFile(cacheFile, data, 0644)
+	return WriteFileAtomic(cacheFile, data, 0600)
 }
 
 // fetchData fetches the homepage and ondemand JS from X.com

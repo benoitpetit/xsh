@@ -163,7 +163,9 @@ func (rc *ResponseCache) loadFromDisk(key string) (interface{}, bool) {
 
 // saveToDisk persists a cache entry to disk
 func (rc *ResponseCache) saveToDisk(key string, entry *CacheEntry) {
-	os.MkdirAll(rc.cacheDir, 0755)
+	if err := EnsurePrivateDir(rc.cacheDir); err != nil {
+		return
+	}
 
 	path := filepath.Join(rc.cacheDir, key+".json")
 	data, err := json.Marshal(entry)
@@ -171,7 +173,7 @@ func (rc *ResponseCache) saveToDisk(key string, entry *CacheEntry) {
 		return
 	}
 
-	os.WriteFile(path, data, 0600)
+	_ = WriteFileAtomic(path, data, 0600)
 }
 
 // deleteFromDisk removes a cache entry from disk
@@ -182,11 +184,11 @@ func (rc *ResponseCache) deleteFromDisk(key string) {
 
 // getResponseCacheDir returns the cache directory
 func getResponseCacheDir() (string, error) {
-	home, err := os.UserHomeDir()
+	paths, err := GetPaths()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".cache", "xsh", "responses"), nil
+	return filepath.Join(paths.ConfigDir, "responses"), nil
 }
 
 // Global response cache instance

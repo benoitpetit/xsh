@@ -815,11 +815,11 @@ func (ed *EndpointDiscovery) SaveCache(cache *EndpointCache) error {
 	}
 
 	dir := filepath.Dir(ed.cachePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := EnsurePrivateDir(dir); err != nil {
 		return err
 	}
 
-	return os.WriteFile(ed.cachePath, data, 0600)
+	return WriteFileAtomic(ed.cachePath, data, 0600)
 }
 
 // LoadCache loads cache from disk (public for EndpointManager)
@@ -831,7 +831,10 @@ func (ed *EndpointDiscovery) LoadCache() (*EndpointCache, error) {
 
 	var cache EndpointCache
 	if err := json.Unmarshal(data, &cache); err != nil {
-		return nil, err
+		if backupErr := preserveCorruptFile(ed.cachePath); backupErr != nil {
+			return nil, fmt.Errorf("invalid endpoint cache: %v; preserving corrupt cache failed: %w", err, backupErr)
+		}
+		return nil, fmt.Errorf("invalid endpoint cache; corrupt source preserved at %s.bak: %w", ed.cachePath, err)
 	}
 
 	return &cache, nil

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
@@ -97,7 +98,11 @@ func LoadConfig() (*Config, error) {
 
 	// Load from file
 	if _, err := toml.DecodeFile(configPath, cfg); err != nil {
-		return nil, fmt.Errorf("failed to decode config: %w", err)
+		decodeErr := fmt.Errorf("failed to decode config: %w", err)
+		if backupErr := preserveCorruptFile(configPath); backupErr != nil {
+			return nil, fmt.Errorf("%v; preserving corrupt config failed: %w", decodeErr, backupErr)
+		}
+		return nil, fmt.Errorf("%v; corrupt source preserved at %s.bak", decodeErr, configPath)
 	}
 
 	return cfg, nil
@@ -110,12 +115,9 @@ func (c *Config) Save() error {
 		return err
 	}
 
-	file, err := os.Create(configPath)
-	if err != nil {
+	var encoded bytes.Buffer
+	if err := toml.NewEncoder(&encoded).Encode(c); err != nil {
 		return err
 	}
-	defer file.Close()
-
-	encoder := toml.NewEncoder(file)
-	return encoder.Encode(c)
+	return WriteFileAtomic(configPath, encoded.Bytes(), 0600)
 }
