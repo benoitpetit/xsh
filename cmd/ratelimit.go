@@ -32,13 +32,13 @@ Examples:
 			// Make a lightweight request to populate rate limit headers
 			client, err := getClient("")
 			if err != nil {
-				fmt.Println(display.Error(err.Error()))
+				fmt.Fprintln(runtimeError(), display.Error(err.Error()))
 				abortCommand(core.ExitAuthError)
 				return nil
 			}
 			defer client.Close()
 
-			fmt.Println(display.Muted("Probing rate limits..."))
+			fmt.Fprintln(runtimeError(), display.Muted("Probing rate limits..."))
 
 			// Probe a few common endpoints
 			probeEndpoints(client)
@@ -47,7 +47,7 @@ Examples:
 		limits := core.GetRateLimits()
 
 		if len(limits) == 0 {
-			fmt.Println(display.Muted("No rate limit data yet. Run some commands first, or use --probe."))
+			fmt.Fprintln(runtimeError(), display.Muted("No rate limit data yet. Run some commands first, or use --probe."))
 			return nil
 		}
 

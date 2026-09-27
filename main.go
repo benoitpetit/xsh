@@ -88,9 +88,11 @@ func main() {
 
 	// Run startup check for endpoint obsolescence
 	// Only for specific commands that need API access, not for help/config
-	if shouldRunStartupCheck() {
+	if shouldRunStartupCheck() && !hasMachineOutputFlag() {
 		// Run synchronously for critical API commands
-		core.RunStartupCheck()
+		if err := core.RunStartupCheck(ctx, os.Stderr); err != nil && ctx.Err() == nil {
+			fmt.Fprintln(os.Stderr, "startup endpoint check skipped:", err)
+		}
 
 		// Start background endpoint monitoring for long-running commands
 		if isLongRunningCommand() {
@@ -102,6 +104,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(cmd.ExitCode(err))
 	}
+}
+
+func hasMachineOutputFlag() bool {
+	for _, arg := range os.Args[1:] {
+		if arg == "--json" || arg == "--yaml" || arg == "--compact" ||
+			strings.HasPrefix(arg, "--json=") || strings.HasPrefix(arg, "--yaml=") || strings.HasPrefix(arg, "--compact=") {
+			return true
+		}
+	}
+	return false
 }
 
 // isLongRunningCommand returns true for commands that might run for a while

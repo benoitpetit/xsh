@@ -2,7 +2,9 @@
 package core
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,8 +59,17 @@ func (sc *StartupChecker) MarkChecked() {
 }
 
 // QuickCheckEndpoints performs a quick check of critical endpoints
-func (sc *StartupChecker) QuickCheckEndpoints() ([]string, error) {
-	fmt.Println("🔍 Checking API endpoints...")
+func (sc *StartupChecker) QuickCheckEndpoints(ctx context.Context, errOut io.Writer) ([]string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if errOut == nil {
+		errOut = io.Discard
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	fmt.Fprintln(errOut, "🔍 Checking API endpoints...")
 
 	// Create a temporary client for checking
 	client, err := NewXClient(nil, "", "")
@@ -78,14 +89,17 @@ func (sc *StartupChecker) QuickCheckEndpoints() ([]string, error) {
 	}
 
 	for _, operation := range endpointsToCheck {
-		fmt.Printf("   Checking %s... ", operation)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		fmt.Fprintf(errOut, "   Checking %s... ", operation)
 
 		// Try a minimal request
 		if err := sc.checkEndpoint(client, operation); err != nil {
-			fmt.Printf("❌\n")
+			fmt.Fprintln(errOut, "❌")
 			obsolete = append(obsolete, operation)
 		} else {
-			fmt.Printf("✓\n")
+			fmt.Fprintln(errOut, "✓")
 		}
 	}
 
@@ -137,46 +151,49 @@ func (sc *StartupChecker) checkEndpoint(client *XClient, operation string) error
 }
 
 // ShowUpdatePrompt shows a prompt to update endpoints if needed
-func (sc *StartupChecker) ShowUpdatePrompt(obsoleteEndpoints []string) {
+func (sc *StartupChecker) ShowUpdatePrompt(obsoleteEndpoints []string, errOut io.Writer) {
 	if len(obsoleteEndpoints) == 0 {
 		return
+	}
+	if errOut == nil {
+		errOut = io.Discard
 	}
 
 	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAD1F")).Bold(true)
 
-	fmt.Println()
-	fmt.Println(warningStyle.Render("⚠️  Some API endpoints are obsolete!"))
-	fmt.Println()
-	fmt.Printf("The following endpoints need to be updated: %v\n", obsoleteEndpoints)
-	fmt.Println()
-	fmt.Println("You can fix this by running:")
-	fmt.Println()
-	fmt.Println("  1. Automatic update (recommended):")
-	fmt.Println("     xsh auto-update")
-	fmt.Println()
-	fmt.Println("  2. Manual update:")
-	fmt.Println("     xsh endpoints update <operation> <new-id>")
-	fmt.Println()
-	fmt.Println("  3. Check endpoint status:")
-	fmt.Println("     xsh endpoints check <operation>")
-	fmt.Println()
+	fmt.Fprintln(errOut)
+	fmt.Fprintln(errOut, warningStyle.Render("⚠️  Some API endpoints are obsolete!"))
+	fmt.Fprintln(errOut)
+	fmt.Fprintf(errOut, "The following endpoints need to be updated: %v\n", obsoleteEndpoints)
+	fmt.Fprintln(errOut)
+	fmt.Fprintln(errOut, "You can fix this by running:")
+	fmt.Fprintln(errOut)
+	fmt.Fprintln(errOut, "  1. Automatic update (recommended):")
+	fmt.Fprintln(errOut, "     xsh auto-update")
+	fmt.Fprintln(errOut)
+	fmt.Fprintln(errOut, "  2. Manual update:")
+	fmt.Fprintln(errOut, "     xsh endpoints update <operation> <new-id>")
+	fmt.Fprintln(errOut)
+	fmt.Fprintln(errOut, "  3. Check endpoint status:")
+	fmt.Fprintln(errOut, "     xsh endpoints check <operation>")
+	fmt.Fprintln(errOut)
 }
 
 // RunStartupCheck performs the full startup check workflow
-func RunStartupCheck() {
+func RunStartupCheck(ctx context.Context, errOut io.Writer) error {
 	checker := NewStartupChecker()
 
 	if !checker.ShouldCheck() {
-		return
+		return nil
 	}
 
-	obsolete, err := checker.QuickCheckEndpoints()
+	obsolete, err := checker.QuickCheckEndpoints(ctx, errOut)
 	if err != nil {
-		// Silently fail - don't block CLI usage
-		return
+		return err
 	}
 
 	if len(obsolete) > 0 {
-		checker.ShowUpdatePrompt(obsolete)
+		checker.ShowUpdatePrompt(obsolete, errOut)
 	}
+	return nil
 }

@@ -292,16 +292,15 @@ func isWatchMode() bool {
 // runWithWatch runs a fetch-and-display function once, or in a polling loop if --watch is set.
 // fetchAndDisplay should fetch data and call output() or print directly. It returns an error
 // if the fetch fails. The loop catches SIGINT/SIGTERM for graceful exit.
-func runWithWatch(fetchAndDisplay func() error) {
+func runWithWatch(fetchAndDisplay func() error) error {
 	// Run once immediately
 	if err := fetchAndDisplay(); err != nil {
-		fmt.Println(display.Error(err.Error()))
-		abortCommand(core.ExitError)
-		return
+		recordRuntimeFailure(err)
+		return err
 	}
 
 	if !isWatchMode() {
-		return
+		return nil
 	}
 
 	// Watch mode: poll at the given interval
@@ -313,6 +312,7 @@ func runWithWatch(fetchAndDisplay func() error) {
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -320,17 +320,21 @@ func runWithWatch(fetchAndDisplay func() error) {
 	for {
 		select {
 		case <-sigChan:
-			fmt.Println("\n" + display.Muted("Watch mode stopped."))
-			return
+			fmt.Fprintln(runtimeError(), display.Muted("Watch mode stopped."))
+			return nil
+		case <-runtimeContext().Done():
+			err := runtimeContext().Err()
+			recordRuntimeFailure(err)
+			return err
 		case <-ticker.C:
 			// Clear terminal
-			fmt.Print("\033[2J\033[H")
-			fmt.Println(display.Muted(fmt.Sprintf("Auto-refresh every %ds · %s · Ctrl+C to stop",
+			fmt.Fprintln(runtimeError(), "\033[2J\033[H")
+			fmt.Fprintln(runtimeError(), display.Muted(fmt.Sprintf("Auto-refresh every %ds · %s · Ctrl+C to stop",
 				watchInterval, time.Now().Format("15:04:05"))))
-			fmt.Println()
+			fmt.Fprintln(runtimeError())
 
 			if err := fetchAndDisplay(); err != nil {
-				fmt.Println(display.Error(fmt.Sprintf("Refresh failed: %v", err)))
+				fmt.Fprintln(runtimeError(), display.Error(fmt.Sprintf("Refresh failed: %v", err)))
 				// Don't exit — keep trying on next tick
 			}
 		}

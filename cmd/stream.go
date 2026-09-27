@@ -51,7 +51,7 @@ Examples:
 
 		client, err := getClient("")
 		if err != nil {
-			fmt.Fprintln(os.Stderr, display.Error(err.Error()))
+			fmt.Fprintln(runtimeError(), display.Error(err.Error()))
 			abortCommand(core.ExitAuthError)
 			return nil
 		}
@@ -61,96 +61,98 @@ Examples:
 			streamInterval = 10
 		}
 
-		fmt.Fprintln(os.Stderr, display.Muted(fmt.Sprintf("Streaming %s every %ds (Ctrl+C to stop)...", source, streamInterval)))
+		fmt.Fprintln(runtimeError(), display.Muted(fmt.Sprintf("Streaming %s every %ds (Ctrl+C to stop)...", source, streamInterval)))
 
 		// Track seen tweet IDs to only emit new ones
 		seen := make(map[string]bool)
-		encoder := json.NewEncoder(os.Stdout)
+		encoder := json.NewEncoder(runtimeOutput())
 
 		// Signal handling
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigCh)
 
 		ticker := time.NewTicker(time.Duration(streamInterval) * time.Second)
 		defer ticker.Stop()
 
 		// Run immediately, then on each tick
-		streamOnce(client, source, sourceArgs, seen, encoder)
+		if err := streamOnce(client, source, sourceArgs, seen, encoder); err != nil {
+			return err
+		}
 
 		for {
 			select {
 			case <-sigCh:
-				fmt.Fprintln(os.Stderr, display.Muted("\nStream stopped."))
+				fmt.Fprintln(runtimeError(), display.Muted("\nStream stopped."))
 				return nil
+			case <-runtimeContext().Done():
+				return runtimeContext().Err()
 			case <-ticker.C:
-				streamOnce(client, source, sourceArgs, seen, encoder)
+				if err := streamOnce(client, source, sourceArgs, seen, encoder); err != nil {
+					return err
+				}
 			}
 		}
 	},
 }
 
-func streamOnce(client *core.XClient, source string, args []string, seen map[string]bool, encoder *json.Encoder) {
+func streamOnce(client *core.XClient, source string, args []string, seen map[string]bool, encoder *json.Encoder) error {
 	switch source {
 	case "feed":
-		streamFeed(client, seen, encoder)
+		return streamFeed(client, seen, encoder)
 	case "search":
 		if len(args) == 0 {
-			fmt.Fprintln(os.Stderr, display.Error("search requires a query argument"))
-			return
+			return fmt.Errorf("search requires a query argument")
 		}
-		streamSearch(client, strings.Join(args, " "), seen, encoder)
+		return streamSearch(client, strings.Join(args, " "), seen, encoder)
 	case "user":
 		if len(args) == 0 {
-			fmt.Fprintln(os.Stderr, display.Error("user requires a handle argument"))
-			return
+			return fmt.Errorf("user requires a handle argument")
 		}
-		streamUser(client, args[0], seen, encoder)
+		return streamUser(client, args[0], seen, encoder)
 	case "notifications":
-		streamNotifications(client, seen, encoder)
+		return streamNotifications(client, seen, encoder)
 	default:
-		fmt.Fprintln(os.Stderr, display.Error(fmt.Sprintf("unknown source: %s", source)))
+		return fmt.Errorf("unknown source: %s", source)
 	}
 }
 
-func streamFeed(client *core.XClient, seen map[string]bool, encoder *json.Encoder) {
+func streamFeed(client *core.XClient, seen map[string]bool, encoder *json.Encoder) error {
 	response, err := core.GetHomeTimeline(client, "ForYou", 20, "")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, display.Muted(fmt.Sprintf("Feed error: %v", err)))
-		return
+		fmt.Fprintln(runtimeError(), display.Muted(fmt.Sprintf("Feed error: %v", err)))
+		return err
 	}
-	emitNewTweets(response.Tweets, seen, encoder)
+	return emitNewTweets(response.Tweets, seen, encoder)
 }
 
-func streamSearch(client *core.XClient, query string, seen map[string]bool, encoder *json.Encoder) {
+func streamSearch(client *core.XClient, query string, seen map[string]bool, encoder *json.Encoder) error {
 	response, err := core.SearchTweets(client, query, "Latest", 20, "")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, display.Muted(fmt.Sprintf("Search error: %v", err)))
-		return
+		fmt.Fprintln(runtimeError(), display.Muted(fmt.Sprintf("Search error: %v", err)))
+		return err
 	}
-	emitNewTweets(response.Tweets, seen, encoder)
+	return emitNewTweets(response.Tweets, seen, encoder)
 }
 
-func streamUser(client *core.XClient, handle string, seen map[string]bool, encoder *json.Encoder) {
+func streamUser(client *core.XClient, handle string, seen map[string]bool, encoder *json.Encoder) error {
 	handle = strings.TrimPrefix(handle, "@")
 	user, err := core.GetUserByHandle(client, handle)
 	if err != nil || user == nil {
-		fmt.Fprintln(os.Stderr, display.Muted(fmt.Sprintf("User lookup error: %v", err)))
-		return
+		return fmt.Errorf("user lookup error: %w", err)
 	}
 
 	response, err := core.GetUserTweets(client, user.ID, 20, "", false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, display.Muted(fmt.Sprintf("User tweets error: %v", err)))
-		return
+		return fmt.Errorf("user tweets error: %w", err)
 	}
-	emitNewTweets(response.Tweets, seen, encoder)
+	return emitNewTweets(response.Tweets, seen, encoder)
 }
 
-func streamNotifications(client *core.XClient, seen map[string]bool, encoder *json.Encoder) {
+func streamNotifications(client *core.XClient, seen map[string]bool, encoder *json.Encoder) error {
 	resp, err := core.GetNotifications(client, 20, "")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, display.Muted(fmt.Sprintf("Notifications error: %v", err)))
-		return
+		return fmt.Errorf("notifications error: %w", err)
 	}
 
 	for _, n := range resp.Notifications {
@@ -170,11 +172,14 @@ func streamNotifications(client *core.XClient, seen map[string]bool, encoder *js
 		if n.TweetText != "" {
 			event["tweet_text"] = n.TweetText
 		}
-		_ = encoder.Encode(event)
+		if err := encoder.Encode(event); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func emitNewTweets(tweets []*models.Tweet, seen map[string]bool, encoder *json.Encoder) {
+func emitNewTweets(tweets []*models.Tweet, seen map[string]bool, encoder *json.Encoder) error {
 	// Emit in reverse chronological order (newest last for streaming)
 	newTweets := make([]*models.Tweet, 0)
 	for _, t := range tweets {
@@ -220,12 +225,15 @@ func emitNewTweets(tweets []*models.Tweet, seen map[string]bool, encoder *json.E
 			event["quoted_tweet_id"] = t.QuotedTweet.ID
 		}
 
-		_ = encoder.Encode(event)
+		if err := encoder.Encode(event); err != nil {
+			return err
+		}
 	}
 
 	if len(newTweets) > 0 {
-		fmt.Fprintln(os.Stderr, display.Muted(fmt.Sprintf("  +%d new items", len(newTweets))))
+		fmt.Fprintln(runtimeError(), display.Muted(fmt.Sprintf("  +%d new items", len(newTweets))))
 	}
+	return nil
 }
 
 func init() {
