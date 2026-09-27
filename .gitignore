@@ -55,3 +55,6 @@ temp/
 .env
 .env.local
 .env.*.local
+
+# Local CodeGraph index (never publish repository metadata)
+.codegraph/

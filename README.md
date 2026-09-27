@@ -180,6 +180,7 @@ These flags apply to every command:
 | `--yaml`           |       | Output as YAML                |
 | `--compact`        | `-c`  | Compact output for AI agents  |
 | `--verbose`        | `-v`  | Show HTTP requests (debug)    |
+| `--watch <seconds>` | `-w`  | Refresh output periodically   |
 
 ---
 
@@ -628,7 +629,9 @@ is emitted on stdout, diagnostics on stderr, and credentials are redacted.
 Long-running commands honor context cancellation and stop their refresh,
 stream, and watch loops without writing partial machine-readable records.
 
-Configuration is stored at `~/.config/xsh/config.toml`:
+Configuration is stored below the platform user configuration directory, or
+under the directory selected by `XSH_CONFIG_DIR`. Use `xsh config path` to
+display the exact file path on the current system:
 
 ```bash
 # Show current configuration
@@ -680,6 +683,16 @@ min_score        = 0
 `request.delay` controls the delay after read requests. Keep the default
 `1.5` for normal interactive use; set it to `0` for an explicitly fast local
 workflow. `request.timeout` controls the HTTP client timeout in seconds.
+
+### Platform compatibility
+
+The published Linux, Windows, and macOS binaries are built with `CGO_ENABLED=0`
+and include the portable Chromium/Firefox cookie-database readers. Browser
+profiles are discovered in the platform's standard locations, including
+common Snap and Flatpak layouts on Linux. Chromium-based browsers may still
+require access to the operating-system key store to decrypt protected cookies;
+when that store is unavailable, xsh reports the affected authentication cookie
+instead of silently using incomplete credentials.
 
 ---
 

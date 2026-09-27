@@ -16,7 +16,7 @@ go build -o xsh main.go
 ### Build with version
 
 ```bash
-make build VERSION=v0.0.8
+make build VERSION=v0.0.9
 ```
 
 ### Run tests
@@ -57,7 +57,7 @@ tokens, or endpoint cache files in fixtures.
 2. Create the GitHub release with `gh`:
 
 ```bash
-gh release create v0.0.8 --target master --generate-notes
+gh release create v0.0.9 --target master --generate-notes
 ```
 
 The GitHub Actions workflow will automatically:
