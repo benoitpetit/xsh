@@ -58,3 +58,6 @@ temp/
 
 # Local CodeGraph index (never publish repository metadata)
 .codegraph/
+
+# Internal planning documents
+/docs/superpowers/
