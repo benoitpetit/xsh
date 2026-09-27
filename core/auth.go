@@ -106,98 +106,20 @@ func GetAuthFile() (string, error) {
 
 // LoadStoredAuth loads credentials from stored auth file
 func LoadStoredAuth(account string) (*AuthCredentials, error) {
-	authFile, err := GetAuthFile()
+	store, err := defaultAuthStore()
 	if err != nil {
 		return nil, err
 	}
-
-	data, err := os.ReadFile(authFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	var authData AuthData
-	if err := json.Unmarshal(data, &authData); err != nil {
-		// Try legacy single-account format
-		var creds AuthCredentials
-		if err := json.Unmarshal(data, &creds); err != nil {
-			return nil, nil
-		}
-		return &creds, nil
-	}
-
-	if account != "" {
-		if acc, ok := authData.Accounts[account]; ok {
-			return acc, nil
-		}
-		return nil, nil
-	}
-
-	// Use default account
-	if authData.Default != "" && authData.Accounts != nil {
-		if acc, ok := authData.Accounts[authData.Default]; ok {
-			return acc, nil
-		}
-	}
-
-	return nil, nil
+	return store.Load(account)
 }
 
 // SaveAuth saves credentials to auth file
 func SaveAuth(creds *AuthCredentials, account string) error {
-	authFile, err := GetAuthFile()
+	store, err := defaultAuthStore()
 	if err != nil {
 		return err
 	}
-
-	// Ensure directory exists
-	dir := filepath.Dir(authFile)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
-	}
-
-	// Load existing data
-	authData := AuthData{
-		Accounts: make(map[string]*AuthCredentials),
-	}
-
-	if data, err := os.ReadFile(authFile); err == nil {
-		json.Unmarshal(data, &authData)
-	}
-
-	if authData.Accounts == nil {
-		authData.Accounts = make(map[string]*AuthCredentials)
-	}
-
-	accountName := account
-	if accountName == "" {
-		accountName = creds.AccountName
-	}
-	if accountName == "" {
-		accountName = "default"
-	}
-
-	creds.AccountName = accountName
-	authData.Accounts[accountName] = creds
-
-	if authData.Default == "" {
-		authData.Default = accountName
-	}
-
-	// Write with restrictive permissions
-	data, err := json.MarshalIndent(authData, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if err := os.WriteFile(authFile, data, 0600); err != nil {
-		return err
-	}
-
-	return nil
+	return store.Save(creds, account)
 }
 
 // ImportCookiesFromFile imports cookies from a Cookie Editor JSON export file
@@ -220,13 +142,9 @@ func ImportCookiesFromFile(filePath string) (*AuthCredentials, error) {
 
 	cookieMap := make(map[string]string)
 	for _, c := range cookies {
-		domain := strings.ToLower(c.Domain)
-		if strings.Contains(domain, ".x.com") ||
-			strings.Contains(domain, ".twitter.com") ||
-			domain == "x.com" ||
-			domain == "twitter.com" {
-			// Sanitize cookie value to remove invalid characters
-			cookieMap[c.Name] = SanitizeCookieValue(c.Value)
+		domain := strings.ToLower(strings.TrimSpace(c.Domain))
+		if isAllowedCookieDomain(domain) && isValidCookieImportValue(c.Value) {
+			cookieMap[c.Name] = c.Value
 		}
 	}
 
@@ -244,105 +162,43 @@ func ImportCookiesFromFile(filePath string) (*AuthCredentials, error) {
 	}, nil
 }
 
+func isAllowedCookieDomain(domain string) bool {
+	return domain == "x.com" || domain == "twitter.com" ||
+		strings.HasSuffix(domain, ".x.com") || strings.HasSuffix(domain, ".twitter.com")
+}
+
+func isValidCookieImportValue(value string) bool {
+	return value != "" && SanitizeCookieValue(value) == value
+}
+
 // ListAccounts lists all stored account names
 func ListAccounts() ([]string, error) {
-	authFile, err := GetAuthFile()
+	store, err := defaultAuthStore()
 	if err != nil {
 		return nil, err
 	}
-
-	data, err := os.ReadFile(authFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-
-	var authData AuthData
-	if err := json.Unmarshal(data, &authData); err != nil {
-		return []string{}, nil
-	}
-
-	accounts := make([]string, 0, len(authData.Accounts))
-	for name := range authData.Accounts {
-		accounts = append(accounts, name)
-	}
-	return accounts, nil
+	return store.List()
 }
 
 // SetDefaultAccount sets the default account
 func SetDefaultAccount(account string) error {
-	authFile, err := GetAuthFile()
+	store, err := defaultAuthStore()
 	if err != nil {
 		return err
 	}
-
-	data, err := os.ReadFile(authFile)
-	if err != nil {
-		return err
-	}
-
-	var authData AuthData
-	if err := json.Unmarshal(data, &authData); err != nil {
-		return err
-	}
-
-	if _, ok := authData.Accounts[account]; !ok {
-		return fmt.Errorf("account '%s' not found", account)
-	}
-
-	authData.Default = account
-
-	newData, err := json.MarshalIndent(authData, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(authFile, newData, 0600)
+	return store.SetDefault(account)
 }
 
 // RemoveAuth removes an account from storage
 func RemoveAuth(account string) error {
-	authFile, err := GetAuthFile()
+	store, err := defaultAuthStore()
 	if err != nil {
 		return err
 	}
-
-	data, err := os.ReadFile(authFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("no accounts stored")
-		}
-		return err
+	if _, loadErr := store.Load(account); loadErr != nil {
+		return loadErr
 	}
-
-	var authData AuthData
-	if err := json.Unmarshal(data, &authData); err != nil {
-		return err
-	}
-
-	if _, ok := authData.Accounts[account]; !ok {
-		return fmt.Errorf("account '%s' not found", account)
-	}
-
-	delete(authData.Accounts, account)
-
-	// If we removed the default, pick a new one
-	if authData.Default == account {
-		authData.Default = ""
-		for name := range authData.Accounts {
-			authData.Default = name
-			break
-		}
-	}
-
-	newData, err := json.MarshalIndent(authData, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(authFile, newData, 0600)
+	return store.Remove(account)
 }
 
 // GetAuthFromEnv gets credentials from environment variables
@@ -368,28 +224,49 @@ func GetAuthFromEnv() *AuthCredentials {
 
 // GetCredentials gets credentials using priority: env vars > stored > browser > error
 func GetCredentials(account string) (*AuthCredentials, error) {
-	// 1. Environment variables
-	creds := GetAuthFromEnv()
-	if creds != nil && creds.IsValid() {
+	cfg, _ := LoadConfig()
+	selectedAccount := account
+	if selectedAccount == "" && cfg != nil {
+		selectedAccount = cfg.DefaultAccount
+	}
+
+	// Explicit and configured accounts take precedence over environment and
+	// browser fallbacks. An empty selection may still use environment auth.
+	if selectedAccount != "" {
+		creds, err := LoadStoredAuth(selectedAccount)
+		if err != nil {
+			return nil, err
+		}
+		if creds != nil && creds.IsValid() {
+			return creds, nil
+		}
+	} else if creds := GetAuthFromEnv(); creds != nil && creds.IsValid() {
 		return creds, nil
 	}
 
-	// 2. Stored credentials
-	creds, err := LoadStoredAuth(account)
-	if err != nil {
-		return nil, err
-	}
-	if creds != nil && creds.IsValid() {
-		return creds, nil
+	// Stored default is used after environment auth when no account was
+	// explicitly/configured, preserving the historical fallback behavior.
+	if selectedAccount == "" {
+		creds, err := LoadStoredAuth("")
+		if err != nil {
+			return nil, err
+		}
+		if creds != nil && creds.IsValid() {
+			return creds, nil
+		}
 	}
 
 	// 3. Browser extraction (auto-fallback like Python)
 	// Try to extract from available browsers automatically
 	creds, browserName, err := tryBrowserExtraction()
 	if err == nil && creds != nil && creds.IsValid() {
-		// Auto-save extracted credentials as "default"
-		creds.AccountName = "default"
-		if saveErr := SaveAuth(creds, "default"); saveErr == nil {
+		// Save extracted credentials under the requested/configured account.
+		saveAccount := selectedAccount
+		if saveAccount == "" {
+			saveAccount = "default"
+		}
+		creds.AccountName = saveAccount
+		if saveErr := SaveAuth(creds, saveAccount); saveErr == nil {
 			return creds, nil
 		}
 		// Even if save fails, return the creds for this session
