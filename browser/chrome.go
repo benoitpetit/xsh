@@ -353,6 +353,9 @@ func isPrintableASCII(s string) bool {
 
 // aesCBCDecrypt decrypts using AES-128-CBC with PKCS7 unpadding
 func aesCBCDecrypt(key, iv, ciphertext []byte) (string, error) {
+	if len(iv) != aes.BlockSize {
+		return "", fmt.Errorf("invalid IV length")
+	}
 	if len(ciphertext) == 0 || len(ciphertext)%aes.BlockSize != 0 {
 		return "", fmt.Errorf("invalid ciphertext length")
 	}

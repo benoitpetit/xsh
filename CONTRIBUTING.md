@@ -35,9 +35,13 @@ release artifacts use the CGO-free path for all six advertised targets.
 Fuzz smoke tests are bounded and offline:
 
 ```bash
-go test ./core -run=^$ -fuzz=Fuzz -fuzztime=5s
-go test ./browser -run=^$ -fuzz=Fuzz -fuzztime=5s
-go test ./cmd -run=^$ -fuzz=Fuzz -fuzztime=5s
+for target in FuzzCookieSanitizationAndDomain FuzzGraphQLErrorClassification FuzzEndpointJavaScriptExtraction FuzzAPIErrorFormatting; do
+  go test ./core -run=^$ -fuzz="^${target}$" -fuzztime=5s
+done
+for target in FuzzCookieAccumulator FuzzChromeCBCInput; do
+  go test ./browser -run=^$ -fuzz="^${target}$" -fuzztime=5s
+done
+go test ./cmd -run=^$ -fuzz='^FuzzJSONRedaction$' -fuzztime=5s
 ```
 
 Keep `XSH_CONFIG_DIR` and `HOME` isolated for tests. Never place real cookies,

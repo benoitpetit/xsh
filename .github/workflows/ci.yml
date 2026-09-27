@@ -27,6 +27,8 @@ jobs:
       - name: Test
         env:
           CGO_ENABLED: ${{ matrix.cgo }}
+          XSH_CONFIG_DIR: ""
+          XDG_CONFIG_HOME: ""
         run: go test ./...
       - name: Vet
         if: matrix.cgo == '1'
@@ -37,8 +39,12 @@ jobs:
       - name: Fuzz smoke
         if: matrix.cgo == '1'
         run: |
-          go test ./core -run=^$ -fuzz=Fuzz -fuzztime=5s
-          go test ./browser -run=^$ -fuzz=Fuzz -fuzztime=5s
+          for target in FuzzCookieSanitizationAndDomain FuzzGraphQLErrorClassification FuzzEndpointJavaScriptExtraction FuzzAPIErrorFormatting; do
+            go test ./core -run=^$ -fuzz="^${target}$" -fuzztime=5s
+          done
+          for target in FuzzCookieAccumulator FuzzChromeCBCInput; do
+            go test ./browser -run=^$ -fuzz="^${target}$" -fuzztime=5s
+          done
 
   release-builds:
     runs-on: ubuntu-latest
@@ -82,15 +88,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
       - name: Detect web workspace
         id: web
         run: |
           if [ -f web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-node@v4
+        if: steps.web.outputs.present == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - name: Install web dependencies
         if: steps.web.outputs.present == 'true'
         working-directory: web

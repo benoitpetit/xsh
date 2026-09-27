@@ -79,7 +79,11 @@ func (t *uTLSTransport) roundTripHTTP1(req *http.Request) (*http.Response, error
 	}
 	stopCancel := context.AfterFunc(req.Context(), func() { _ = conn.Close() })
 
-	if err := req.Write(conn); err != nil {
+	writeRequest := req.Write
+	if t.proxy != "" {
+		writeRequest = req.WriteProxy
+	}
+	if err := writeRequest(conn); err != nil {
 		stopCancel()
 		_ = conn.Close()
 		return nil, err
@@ -112,19 +116,31 @@ func (b *connBody) Close() error {
 	return err
 }
 
-// dial creates a connection (direct or through proxy)
+// dial creates a plain HTTP/1.1 connection (direct or through an HTTP proxy).
+// HTTPS requests use dialTLS and the uTLS path below.
 func (t *uTLSTransport) dial(ctx context.Context, addr string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		host = addr
-		port = "443"
-		addr = net.JoinHostPort(host, port)
+	dialer := t.dialer
+	if dialer == nil {
+		dialer = &net.Dialer{Timeout: 10 * time.Second}
 	}
 
-	if t.proxy != "" {
-		return t.dialProxy(ctx, addr, host)
+	if t.proxy == "" {
+		return dialer.DialContext(ctx, "tcp", addr)
 	}
-	return t.dialDirect(ctx, addr, host)
+
+	proxyURL, err := ResolveProxy(t.proxy, func(string) string { return "" })
+	if err != nil {
+		return nil, err
+	}
+	if proxyURL == nil {
+		return nil, fmt.Errorf("proxy URL is empty")
+	}
+	proxyHost := proxyURL.Hostname()
+	proxyPort := proxyURL.Port()
+	if proxyPort == "" {
+		proxyPort = "80"
+	}
+	return dialer.DialContext(ctx, "tcp", net.JoinHostPort(proxyHost, proxyPort))
 }
 
 // dialDirect creates a direct TLS connection
