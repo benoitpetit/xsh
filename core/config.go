@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 	"github.com/benoitpetit/xsh/utils"
@@ -63,24 +62,20 @@ func DefaultConfig() *Config {
 
 // GetConfigDir returns the config directory, creating it if needed
 func GetConfigDir() (string, error) {
-	home, err := os.UserHomeDir()
+	paths, err := GetPaths()
 	if err != nil {
 		return "", err
 	}
-	configDir := filepath.Join(home, ".config", ConfigDirName)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return "", err
-	}
-	return configDir, nil
+	return paths.ConfigDir, nil
 }
 
 // GetConfigPath returns the path to the config file
 func GetConfigPath() (string, error) {
-	dir, err := GetConfigDir()
+	paths, err := GetPaths()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, ConfigFileName), nil
+	return paths.ConfigFile, nil
 }
 
 // LoadConfig loads config from TOML file, with defaults for missing values

@@ -881,11 +881,11 @@ func (ed *EndpointDiscovery) InvalidateCache() {
 
 // getEndpointCachePath returns the path to the endpoint cache file
 func getEndpointCachePath() (string, error) {
-	home, err := os.UserHomeDir()
+	paths, err := GetPaths()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", ConfigDirName, "graphql_ops.json"), nil
+	return paths.EndpointCache, nil
 }
 
 // GetDynamicGraphQLEndpoints returns endpoints from cache or fetches new ones

@@ -15,6 +15,23 @@ func TestDiscoveryUsesAuthenticatedHomePage(t *testing.T) {
 	}
 }
 
+func TestEndpointCachePathUsesPortablePaths(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XSH_CONFIG_DIR", root)
+
+	paths, err := GetPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cachePath, err := getEndpointCachePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cachePath != paths.EndpointCache {
+		t.Fatalf("getEndpointCachePath() = %q, want %q", cachePath, paths.EndpointCache)
+	}
+}
+
 func TestApplyDiscoveryAuthAddsSessionHeadersWithoutLoggingValues(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, HomepageURL, nil)
 	if err != nil {

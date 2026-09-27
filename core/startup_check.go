@@ -4,6 +4,7 @@ package core
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,9 +19,13 @@ type StartupChecker struct {
 
 // NewStartupChecker creates a new startup checker
 func NewStartupChecker() *StartupChecker {
-	home, _ := os.UserHomeDir()
+	paths, err := GetPaths()
+	lastCheckFile := ""
+	if err == nil {
+		lastCheckFile = paths.StartupMarker
+	}
 	return &StartupChecker{
-		lastCheckFile: home + "/.config/xsh/.last_endpoint_check",
+		lastCheckFile: lastCheckFile,
 		checkInterval: 24 * time.Hour, // Check once per day
 	}
 }
@@ -43,7 +48,10 @@ func (sc *StartupChecker) ShouldCheck() bool {
 
 // MarkChecked marks that we've done a check
 func (sc *StartupChecker) MarkChecked() {
-	os.MkdirAll(os.ExpandEnv("$HOME/.config/xsh"), 0755)
+	if sc.lastCheckFile == "" {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(sc.lastCheckFile), 0700)
 	data, _ := time.Now().MarshalText()
 	os.WriteFile(sc.lastCheckFile, data, 0644)
 }
