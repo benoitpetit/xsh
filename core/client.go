@@ -928,11 +928,29 @@ func (c *XClient) RestGet(urlStr string, params map[string]interface{}) (map[str
 
 // RestPost makes a POST request to the REST API v1.1 (used for media upload, social actions)
 func (c *XClient) RestPost(urlStr string, data map[string]string) (map[string]interface{}, error) {
-	return c.RestPostWithOptions(urlStr, data, nil, 30)
+	return c.RestPostWithOptionsContext(context.Background(), urlStr, data, nil, 30)
 }
 
 // RestPostWithOptions makes a REST POST request with full control
 func (c *XClient) RestPostWithOptions(urlStr string, data map[string]string, jsonBody map[string]interface{}, timeout int) (map[string]interface{}, error) {
+	return c.RestPostWithOptionsContext(context.Background(), urlStr, data, jsonBody, timeout)
+}
+
+// RestPostWithOptionsContext makes an authenticated REST POST request that is
+// bounded by both the caller context and the requested timeout.
+func (c *XClient) RestPostWithOptionsContext(ctx context.Context, urlStr string, data map[string]string, jsonBody map[string]interface{}, timeout int) (map[string]interface{}, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if timeout <= 0 {
+		timeout = int(c.effectivePolicy().Timeout / time.Second)
+		if timeout <= 0 {
+			timeout = 30
+		}
+	}
+	requestContext, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	defer cancel()
+
 	creds, err := c.getCredentials()
 	if err != nil {
 		return nil, err
@@ -976,7 +994,7 @@ func (c *XClient) RestPostWithOptions(urlStr string, data map[string]string, jso
 	cookies := creds.GetSanitizedCookies()
 
 	// Create request
-	req, err := http.NewRequest("POST", urlStr, body)
+	req, err := http.NewRequestWithContext(requestContext, "POST", urlStr, body)
 	if err != nil {
 		return nil, err
 	}

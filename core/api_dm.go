@@ -2,10 +2,11 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/benoitpetit/xsh/models"
@@ -215,16 +216,13 @@ func DeleteDM(client *XClient, messageID string) (map[string]interface{}, error)
 
 // restGetWithParams makes a GET request with query parameters
 func (c *XClient) restGetWithParams(urlStr string, params map[string]string) (map[string]interface{}, error) {
-	// Build query string
-	first := true
-	for k, v := range params {
-		if first {
-			urlStr += "?"
-			first = false
-		} else {
-			urlStr += "&"
-		}
-		urlStr += fmt.Sprintf("%s=%s", k, v)
+	query := url.Values{}
+	for key, value := range params {
+		query.Set(key, value)
+	}
+	urlStr, err := AddQueryParams(urlStr, query)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get credentials
@@ -234,7 +232,7 @@ func (c *XClient) restGetWithParams(urlStr string, params map[string]string) (ma
 	}
 
 	// Build request
-	req, err := http.NewRequest("GET", urlStr, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", urlStr, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +265,7 @@ func (c *XClient) restGetWithParams(urlStr string, params map[string]string) (ma
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := ReadLimitedBody(resp.Body, c.effectivePolicy().MaxResponseBytes)
 	if err != nil {
 		return nil, err
 	}

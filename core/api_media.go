@@ -2,8 +2,8 @@
 package core
 
 import (
+	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
@@ -199,88 +199,79 @@ func makeUploadRequest(client *XClient, data url.Values) (map[string]interface{}
 }
 
 // makeUploadRequestWithTimeout makes an upload request with a custom timeout
-func makeUploadRequestWithTimeout(client *XClient, data url.Values, _ int) (map[string]interface{}, error) {
-	// Get credentials
-	creds, err := client.getCredentials()
-	if err != nil {
-		return nil, err
+func makeUploadRequestWithTimeout(client *XClient, data url.Values, timeout int) (map[string]interface{}, error) {
+	formData := make(map[string]string, len(data))
+	for key, values := range data {
+		if len(values) > 0 {
+			formData[key] = values[0]
+		}
 	}
-
-	// Build request
-	req, err := http.NewRequest("POST", UploadURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, err
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", client.userAgent())
-	req.Header.Set("Authorization", "Bearer "+BearerToken)
-	req.Header.Set("X-Csrf-Token", creds.Ct0)
-	req.Header.Set("Referer", BaseURL+"/compose/tweet")
-
-	// Set cookies
-	cookies := creds.GetSanitizedCookies()
-	var cookieParts []string
-	for k, v := range cookies {
-		cookieParts = append(cookieParts, fmt.Sprintf("%s=%s", k, v))
-	}
-	if len(cookieParts) > 0 {
-		req.Header.Set("Cookie", strings.Join(cookieParts, "; "))
-	}
-
-	// Execute request
-	httpClient, err := client.getHTTPClient()
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check status
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("upload request failed: HTTP %d - %s", resp.StatusCode, string(body))
-	}
-
-	// Parse JSON
-	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse upload response: %w", err)
-	}
-
-	return result, nil
+	return client.RestPostWithOptionsContext(context.Background(), UploadURL, formData, nil, timeout)
 }
 
 // DownloadMedia downloads a file from a URL to the specified path
 func DownloadMedia(mediaURL, outputPath string) error {
-	resp, err := http.Get(mediaURL)
+	return DownloadMediaContext(context.Background(), http.DefaultClient, mediaURL, outputPath, defaultMaxResponseBytes)
+}
+
+// DownloadMediaContext downloads a bounded response through client and
+// publishes it atomically at outputPath after the transfer succeeds.
+func DownloadMediaContext(ctx context.Context, client *http.Client, mediaURL, outputPath string, maxBytes int64) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	if maxBytes <= 0 {
+		maxBytes = defaultMaxResponseBytes
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
 	}
 
-	// Create output file
-	file, err := os.Create(outputPath)
+	dir := filepath.Dir(outputPath)
+	base := filepath.Base(outputPath)
+	temp, err := os.CreateTemp(dir, "."+base+".tmp-*")
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	tempPath := temp.Name()
+	removeTemp := true
+	defer func() {
+		_ = temp.Close()
+		if removeTemp {
+			_ = os.Remove(tempPath)
+		}
+	}()
 
-	// Copy data
-	_, err = io.Copy(file, resp.Body)
-	return err
+	written, err := io.Copy(temp, io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return err
+	}
+	if written > maxBytes {
+		return &BodyLimitError{Limit: maxBytes, Size: written}
+	}
+	if err := temp.Sync(); err != nil {
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, outputPath); err != nil {
+		return err
+	}
+	removeTemp = false
+	return nil
 }
