@@ -1,458 +1,195 @@
-# xsh - Guide for LLM
+# xsh — Agent Guide
 
-Reference guide for using xsh (Twitter/X CLI) via Model Context Protocol (MCP) or direct commands.
+Use this guide when an AI agent must read, search, analyze, or act on Twitter/X through `xsh`. xsh is a local Go CLI and an MCP server. It authenticates with browser cookies; it does not require an X API key.
 
-## What is xsh?
+## Operating rules
 
-CLI for Twitter/X using browser cookie authentication. No API key required. Works in terminal mode (human) or JSON mode (LLM/AI).
+1. Prefer read operations first. Before any post, delete, like, follow, block, mute, DM, list change, schedule, or download, confirm that the requested remote side effect is intentional.
+2. Use `--json` or `--compact` for automation. Never parse the human-oriented terminal rendering.
+3. Treat tweet IDs, list IDs, cursors, and handles as untrusted input. Quote shell values when they contain spaces or punctuation.
+4. Never print, copy, or ask for `auth_token`, `ct0`, cookie files, or browser profiles. `auth status` is safe: credentials are redacted in output.
+5. Paginate deliberately. `--count` is per page; `--pages` fetches more pages; a returned cursor can be passed to a later command.
+6. If a command fails because an X GraphQL operation is stale, inspect health and refresh endpoints before retrying the business operation.
 
-## Quick Installation
+## Choose an interface
+
+| Situation | Use |
+|---|---|
+| One-off command, shell pipeline, export, or cron job | CLI: `xsh ...` |
+| An MCP-capable host needs discoverable typed tools | MCP: `xsh mcp` |
+| Long-running polling into another process | `xsh stream ...` (NDJSON) |
+| Several stored accounts must run the same action | `xsh multi ...` |
+
+The CLI and MCP server use the same local configuration and authenticated account. MCP exposes tools, not every CLI command; use the CLI for communities, Spaces, analytics, stream, compose, endpoint maintenance, and multi-account orchestration.
+
+## Install and authenticate
 
 ```bash
-# Option 1: Via Go
 go install github.com/benoitpetit/xsh@latest
+# or: curl -fsSL https://xsh.devbyben.fr/install | bash
 
-# Option 2: Linux/macOS Script
-curl -fsSL https://xsh.devbyben.fr/install | bash
-
-# Option 3: Direct Binary
-wget https://github.com/benoitpetit/xsh/releases/latest/download/xsh-linux-amd64 -O xsh
-chmod +x xsh && sudo mv xsh /usr/local/bin/
+xsh auth login                         # auto-detect Chrome/Firefox/Brave/Edge/Chromium
+xsh auth status --json                 # verify without exposing secrets
+xsh auth whoami --json                  # verify the active X identity
 ```
 
-## Authentication (Required)
-
-Before any command, authenticate:
+Cookie Editor export and named accounts:
 
 ```bash
-# Auto cookie extraction from browser
-xsh auth login
-
-# Or import from Cookie Editor
-xsh auth import cookies.json
-
-# Check status
-xsh auth status
+xsh auth import cookies.json --account work
+xsh auth accounts --json
+xsh auth switch work
+xsh feed --account work --json
+xsh auth logout --account work
 ```
 
-**Multi-account:**
+Authentication is local. If the browser extractor cannot find a session, use `xsh auth login --browser <name>` or import a Cookie Editor JSON export. Do not put cookie values in prompts, scripts, or issue reports.
+
+## CLI contract for agents
+
+Global flags are available on commands: `--account`, `--json`, `--yaml`, `--compact`, `--verbose`, and `--watch`. Prefer explicit output mode even though xsh automatically switches to JSON when stdout is not a TTY.
+
 ```bash
-xsh auth login --account work    # Create named account
-xsh auth switch work             # Switch account
-xsh auth accounts                # List accounts
+xsh feed --json
+xsh search 'golang' --type Latest --count 50 --pages 2 --json
+xsh feed --compact | jq -c '.[]'
+xsh user tweets ben --json | jq -r '.items[]?.text // .[].text'
 ```
 
-## Output Formats (Important for LLM)
+`--json` is readable, indented JSON. `--compact` is smaller, agent-oriented JSON and may omit presentation fields. `--yaml` is useful for inspection, not usually for programmatic pipelines. `--verbose` is diagnostic output and should not be mixed into a machine-readable pipeline.
 
-All commands support:
-
-```bash
---json      # Full JSON
---compact   # Minimal JSON (essential only)
---yaml      # YAML
-```
-
-**Auto-detection mode:** If stdout is redirected (pipe), JSON is automatically used.
-
-## Commands by Usage
-
-### 1. Timeline & Discovery
+### High-value read recipes
 
 ```bash
-# Personal timeline
-xsh feed --count 20 --json
-xsh feed --type following --count 50
-
-# Search
-xsh search "golang" --type Latest --pages 2 --json
-xsh search "python" --type Top --count 100
-
-# Trends
-xsh trends --location "France"
-xsh trends --woeid 615702  # Paris
-```
-
-### 2. Tweets
-
-```bash
-# View a tweet
-xsh tweet view <tweet_id> --thread --json
-
-# Publish
-xsh tweet post "Hello World!"
-xsh tweet post "With image" --image photo.jpg
-xsh tweet post "Reply" --reply-to <tweet_id>
-xsh tweet post "Quote" --quote <tweet_url>
-
-# Long-form Note Tweet (confirmation required)
-xsh tweet note "Long-form content"
-xsh tweet note --file essay.txt
-
-# Engagement
-xsh tweet like <tweet_id>
-xsh tweet retweet <tweet_id>
-xsh tweet bookmark <tweet_id>
-
-# Quick actions (root level)
-xsh unlike <tweet_id>
-xsh unretweet <tweet_id>
-xsh unbookmark <tweet_id>
-
-# Delete
-xsh tweet delete <tweet_id>
-```
-
-### 3. Users
-
-```bash
-# Profile
+xsh feed --type following --count 50 --pages 2 --json
+xsh search 'from:golang since:2026-01-01' --type Latest --json
+xsh tweet view <tweet-id> --thread --json
 xsh user <handle> --json
-
-# User's tweets
-xsh user tweets <handle> --count 50 --json
-xsh user tweets <handle> --replies  # Include replies
-
-# User media and relationship discovery
-xsh user media <handle> --count 50 --json
-xsh user followers-you-know <handle> --count 50 --json
-xsh user blue-verified-followers <handle> --count 50 --json
-
-# Likes
-xsh user likes <handle> --count 50
-
-# Network
-xsh user followers <handle> --count 100
-xsh user following <handle> --count 100
-
-# Social actions
-xsh follow <handle>
-xsh unfollow <handle>
-xsh block <handle>
-xsh mute <handle>
-
-# Read relationship lists
-xsh social blocked --count 50 --json
-xsh social muted --count 50 --json
-```
-
-### 4. Batch Operations (Multiple IDs)
-
-```bash
-# Fetch multiple tweets
-xsh tweets <id1> <id2> <id3> --json
-
-# Fetch multiple users
-xsh users <handle1> <handle2> <handle3> --json
-```
-
-### 5. Lists
-
-```bash
-# List my lists
-xsh lists --json
-
-# View tweets from a list
-xsh lists view <list_id> --count 50
-
-# Read metadata and memberships
-xsh lists info <list_id> --json
-xsh lists memberships --json
-
-# Manage
-xsh lists create "My List" --description "Description"
-xsh lists add-member <list_id> <handle>
-xsh lists remove-member <list_id> <handle>
-xsh lists delete <list_id>
-
-# Update metadata (confirmation required; JSON requires --force)
-xsh lists update <list_id> --name "New name"
-xsh lists update <list_id> --private=false --force --json
-```
-
-### 6. Bookmarks
-
-```bash
+xsh user tweets <handle> --replies --count 50 --json
+xsh user followers <handle> --count 100 --json
 xsh bookmarks --count 50 --json
-xsh bookmarks-folders
-xsh bookmarks-folder <folder_id>
+xsh lists view <list-id> --count 50 --json
+xsh notifications --count 50 --json
+xsh trends --location 'France' --json
+xsh jobs search 'software engineer' --location 'Paris' --json
 ```
 
-### 7. Direct Messages
+Other read areas include `community view|tweets`, `space view|search`, `quotes`, `thread`, `pinned`, `analytics`, `social blocked|muted`, `bookmarks-folders`, and `bookmarks-folder`.
+
+### Mutations
 
 ```bash
-xsh dm inbox --json
-xsh dm send <handle> "Message text"
-xsh dm delete <message_id>
+xsh tweet post 'Hello from xsh'
+xsh tweet post 'Reply' --reply-to <tweet-id>
+xsh tweet like <tweet-id>
+xsh follow <handle>
+xsh dm send <handle> 'Message text'
+xsh schedule 'Future post' --at '2026-04-01 09:00'
+xsh lists create 'Research' --description 'Sources to monitor'
 ```
 
-### 8. Scheduled Tweets
+Undo or destructive operations include `tweet unlike|unretweet|unbookmark|delete`, `unfollow`, `unblock`, `unmute`, `dm delete`, `unschedule`, and list deletion/member removal. `tweet note` and `lists update` require explicit confirmation; JSON mode additionally requires `--force` where the command says so. `compose --dry-run` previews a thread without posting.
+
+### Batch, export, and streaming
 
 ```bash
-xsh schedule "Future tweet" --at "2026-04-01 09:00"
-xsh scheduled --json
-xsh unschedule <scheduled_tweet_id>
-```
-
-### 9. Jobs
-
-```bash
-xsh jobs search "software engineer" --location "Paris" --json
-xsh jobs search "devops" --location-type remote --count 50
-xsh jobs view <job_id>
-```
-
-### 10. Media & Export
-
-```bash
-# Download media from a tweet
-xsh download <tweet_id> --output-dir ./media
-
-# Export to different formats
-xsh export feed --format json --output tweets.json
-xsh export feed --format csv --output tweets.csv
-xsh export search "golang" --format jsonl --output results.jsonl
+xsh tweets <id-1> <id-2> <id-3> --json
+xsh users <handle-1> <handle-2> --json
+xsh export feed --format json --output timeline.json
+xsh export search 'golang' --format csv --output results.csv
 xsh export bookmarks --format md --output bookmarks.md
-
-# Supported formats: json, jsonl, csv, tsv, md
+xsh export feed --format jsonl --output - | jq -c .
+xsh stream search 'xsh' --interval 30
+xsh multi whoami --json
 ```
 
-### 11. Thread Composition
+Supported export formats are `json`, `jsonl`, `csv`, `tsv`, and `md`. `stream` emits one complete JSON object per line; its minimum polling interval is 10 seconds.
+
+Do not assume one universal JSON envelope: some commands return an array, while paginated commands may return an object with items and cursors. Inspect one real response before writing a filter:
 
 ```bash
-# Interactive mode
-xsh compose
-
-# From file
-xsh compose --file thread.txt --dry-run
+xsh search 'golang' --count 2 --json > /tmp/xsh-sample.json
+jq 'type, (if type == "object" then keys else length end)' /tmp/xsh-sample.json
 ```
 
-### 12. Utilities
+## MCP server
 
-```bash
-# Count characters
-xsh count "Tweet text"
-xsh count --file draft.txt
+Start xsh with stdio transport:
 
-# Diagnostics
-xsh doctor --json
-xsh status --json
-
-# Endpoints (internal management)
-xsh endpoints list
-xsh endpoints refresh
-xsh auto-update
-```
-
-## JSON Schemas
-
-### Tweet
-
-```json
-{
-  "id": "1234567890",
-  "text": "Tweet content",
-  "author_id": "987654321",
-  "author_name": "Name",
-  "author_handle": "username",
-  "author_verified": true,
-  "created_at": "2024-01-15T10:30:00Z",
-  "engagement": {
-    "likes": 42,
-    "retweets": 12,
-    "replies": 5,
-    "views": 1500,
-    "bookmarks": 8,
-    "quotes": 2
-  },
-  "media": [
-    {
-      "type": "photo",
-      "url": "https://..."
-    }
-  ],
-  "is_retweet": false,
-  "reply_to_id": "",
-  "conversation_id": "1234567890"
-}
-```
-
-### User
-
-```json
-{
-  "id": "987654321",
-  "handle": "username",
-  "name": "Full Name",
-  "bio": "Description...",
-  "location": "Paris",
-  "website": "https://...",
-  "verified": true,
-  "followers_count": 1000,
-  "following_count": 500,
-  "tweet_count": 5000,
-  "created_at": "2020-01-01T00:00:00Z",
-  "profile_image_url": "https://..."
-}
-```
-
-### Timeline Response
-
-```json
-{
-  "tweets": [...],
-  "cursor_top": "...",
-  "cursor_bottom": "...",
-  "has_more": true
-}
-```
-
-## MCP Server (Model Context Protocol)
-
-Start the MCP server:
 ```bash
 xsh mcp
+# For a named account, pass the global flag after the subcommand:
+xsh mcp --account work
 ```
 
-### Claude Desktop Configuration
-
-`~/Library/Application Support/Claude/claude_desktop_config.json`:
+Example Claude Desktop configuration (the executable must be on the host PATH):
 
 ```json
 {
   "mcpServers": {
     "xsh": {
       "command": "xsh",
-      "args": ["mcp"]
+      "args": ["mcp", "--account", "work"]
     }
   }
 }
 ```
 
-### Available MCP Tools (59)
+The server currently registers 54 distinct tools in the source. Tool availability is version-dependent; ask the MCP client to list tools instead of assuming this number after an upgrade.
 
-**Read (24):**
-- `get_feed`, `search`, `get_tweet`, `get_tweet_thread`
-- `get_tweets_batch`, `get_users_batch`
-- `get_user`, `get_user_tweets`, `get_user_likes`, `get_user_media`
-- `get_followers`, `get_following`, `get_followers_you_know`, `get_blue_verified_followers`
-- `get_blocked_accounts`, `get_muted_accounts`
-- `list_bookmarks`, `get_bookmark_folders`, `get_bookmark_folder_timeline`
-- `get_lists`, `get_list_info`, `get_list_memberships`, `get_list_timeline`, `get_list_members`
-- `dm_inbox`, `get_trending`, `search_jobs`, `get_job`, `auth_status`
+### MCP read tools
 
-**Write (14):**
-- `post_tweet`, `delete_tweet`
-- `like`, `unlike`, `retweet`, `unretweet`, `bookmark`, `unbookmark`
-- `follow`, `unfollow`, `block`, `unblock`, `mute`, `unmute`
+`get_feed`, `search`, `get_tweet`, `get_user`, `auth_status`, `list_bookmarks`, `get_bookmark_folders`, `get_bookmark_folder_timeline`, `get_lists`, `get_list_info`, `get_list_memberships`, `get_list_timeline`, `get_list_members`, `get_tweets_batch`, `get_users_batch`, `get_user_tweets`, `get_user_likes`, `get_user_media`, `get_followers`, `get_following`, `get_followers_you_know`, `get_blue_verified_followers`, `get_blocked_accounts`, `get_muted_accounts`, `dm_inbox`, `search_jobs`, `get_job`, and `get_trending`.
 
-**Admin (14):**
-- `create_list`, `delete_list`, `add_list_member`, `remove_list_member`, `pin_list`, `unpin_list`
-- `schedule_tweet`, `list_scheduled_tweets`, `cancel_scheduled_tweet`
-- `dm_send`, `dm_delete`
-- `download_media`
+Typical calls:
 
-### Mutation safety
+```text
+search({"query":"golang","type":"Latest","count":20})
+get_tweet({"id":"<tweet-id>","thread":true})
+get_user_tweets({"handle":"<handle>","count":50})
+get_tweets_batch({"tweet_ids":["<id-1>","<id-2>"]})
+```
 
-Use read tools for diagnostics and smoke tests. `lists update` requires an
-explicit field and confirmation; JSON calls additionally require `--force`.
-`tweet note` accepts a file or text, validates 25,000 characters, and requires
-the same confirmation discipline. Do not invoke write tools during a health
-check unless a real remote change is intended.
+Handles are passed without `@`; tweet and list IDs are strings. Read tools are the right choice for discovery, verification, and health checks.
 
-The endpoint inventory may contain operations removed by X. `TweetQuotes` is
-kept as a candidate but `quotes` uses the stable search query fallback;
-`CommunitiesMainPageTimeline` is not exposed as a command while it returns
-404 after endpoint refresh.
+### MCP write and administrative tools
 
-## Examples for LLM / Scripts
+Tweet/social tools: `post_tweet`, `delete_tweet`, `like`, `unlike`, `retweet`, `unretweet`, `bookmark`, `unbookmark`, `follow`, `unfollow`, `block`, `unblock`, `mute`, `unmute`.
 
-### Processing Pipeline
+List tools: `create_list`, `delete_list`, `add_list_member`, `remove_list_member`, `pin_list`, `unpin_list`.
+
+Messaging, scheduling, and media: `dm_send`, `dm_delete`, `schedule_tweet`, `list_scheduled_tweets`, `cancel_scheduled_tweet`, `download_media`.
+
+Before calling one, state the intended side effect and target. For ambiguous requests, gather IDs with a read tool first. There is no dry-run parameter for most MCP mutations.
+
+## Diagnostics and endpoint recovery
 
 ```bash
-# Extract tweet texts
-xsh feed --json | jq '.[].text'
-
-# Filter by engagement
-xsh search "golang" --json | jq '[.[] | select(.engagement.likes > 100)]'
-
-# Followers analysis
-xsh user followers elonmusk --json | jq 'map(.followers_count) | add'
+xsh status --json
+xsh status --check --json
+xsh doctor --json
+xsh endpoints status --json
+xsh endpoints list --json
+xsh endpoints refresh --json
+xsh auto-update --dry-run
+xsh ratelimit --json
 ```
 
-### Export for Analysis
+Run diagnostics without writes during a health check. Endpoint discovery is authenticated and cached; an endpoint inventory can contain operations removed by X. Refreshing endpoints is a maintenance action and may make network requests, but it does not post or engage with content.
 
-```bash
-# Export full timeline
-xsh export feed --format json --output timeline.json
+## Configuration and exit codes
 
-# Convert to CSV for Excel
-xsh export search "keyword" --format csv --output results.csv
-```
+The default configuration is `~/.config/xsh/config.toml`. Use `xsh config path`, `xsh config show`, `xsh config get <key>`, and `xsh config set <key> <value>` rather than editing blindly. Relevant settings include request timeout/retries/delay, proxy, display, and default result count.
 
-### Continuous Monitoring
-
-```bash
-# Monitor mentions
-while true; do
-  xsh search "@myaccount" --json | jq '.[].text'
-  sleep 60
-done
-```
-
-## Configuration
-
-File: `~/.config/xsh/config.toml`
-
-```toml
-default_count = 20
-
-[display]
-theme = "default"
-show_engagement = true
-max_width = 100
-
-[request]
-delay = 1.5
-timeout = 30
-max_retries = 3
-```
-
-## Exit Codes
-
-| Code | Meaning |
-|------|---------------|
+| Exit code | Meaning |
+|---:|---|
 | 0 | Success |
-| 1 | General error |
+| 1 | General or validation error |
 | 2 | Authentication error |
 | 3 | Rate limit |
 
-## Troubleshooting
+For a failed command, preserve stderr for diagnosis, check the exit code, and do not retry a mutation automatically. Use `--help` for the exact flags of the installed version: `xsh <command> --help`.
 
-```bash
-# Check system health
-xsh doctor
+## Agent checklist
 
-# Refresh endpoints
-xsh endpoints refresh
-
-# Update obsolete endpoints
-xsh auto-update
-
-# Verbose mode (debug)
-xsh feed --verbose
-```
-
-## Best Practices
-
-1. **Rate Limiting**: Use `--delay` or configure `delay` in config.toml
-2. **Batch**: Prefer `tweets` and `users` for multiple IDs
-3. **Pipes**: Commands auto-detect pipes and output JSON
-4. **Accounts**: Use named accounts to manage multiple profiles
-5. **Export**: Use `export` to bulk save data
-
-## Security
-
-- Credentials stored with 0600 permissions
-- TLS fingerprinting (uTLS) to avoid bot detection
-- No data sent to third parties
-- Local configuration only
+Before acting: authenticate the intended account, choose CLI or MCP, choose a machine-readable format, and identify the exact target. After reading: validate IDs and cursors and report the source command/tool. Before writing: confirm the side effect, avoid duplicate retries, and verify the result with a read operation when practical.
