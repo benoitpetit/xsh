@@ -599,6 +599,35 @@ Add to your `claude_desktop_config.json`:
 
 ## Configuration
 
+### Authentication and local storage
+
+xsh resolves credentials in this order: explicit environment variables
+(`X_AUTH_TOKEN`/`X_CT0`, then legacy `TWITTER_AUTH_TOKEN`/`TWITTER_CT0`), the
+selected `--account`, the configured default account, and finally browser
+extraction. Use `XSH_CONFIG_DIR` to select an isolated configuration root;
+otherwise xsh follows the platform XDG/OS configuration directory.
+
+Credentials and caches are written with private directory/file permissions and
+atomic replacement. If a JSON file is corrupted, xsh preserves it as a `.bak`
+file before returning the error. Remove or restore that backup only after
+inspection.
+
+### Endpoint cache and discovery
+
+Endpoint snapshots are bounded and versioned. Discovery fetches an
+authenticated homepage (10 MiB limit) and JavaScript bundles (5 MiB limit),
+follows imports with a bounded worker pool, and merges duplicate operations in
+bundle priority order. A stale operation is retried only for safe reads; write
+operations are never replayed automatically. A quarantined operation is not
+retried until discovery supplies a replacement endpoint.
+
+### Output and cancellation
+
+`--json`, `--yaml`, and `--compact` are mutually exclusive. Structured output
+is emitted on stdout, diagnostics on stderr, and credentials are redacted.
+Long-running commands honor context cancellation and stop their refresh,
+stream, and watch loops without writing partial machine-readable records.
+
 Configuration is stored at `~/.config/xsh/config.toml`:
 
 ```bash

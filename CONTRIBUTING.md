@@ -22,8 +22,26 @@ make build VERSION=v0.0.8
 ### Run tests
 
 ```bash
-go test ./...
+testhome=$(mktemp -d)
+env -u XSH_CONFIG_DIR -u XDG_CONFIG_HOME HOME="$testhome" go test ./...
+rm -rf "$testhome"
+go test -race ./...
+go vet ./...
 ```
+
+For browser compatibility, also run `CGO_ENABLED=0 go test ./browser`. The
+release artifacts use the CGO-free path for all six advertised targets.
+
+Fuzz smoke tests are bounded and offline:
+
+```bash
+go test ./core -run=^$ -fuzz=Fuzz -fuzztime=5s
+go test ./browser -run=^$ -fuzz=Fuzz -fuzztime=5s
+go test ./cmd -run=^$ -fuzz=Fuzz -fuzztime=5s
+```
+
+Keep `XSH_CONFIG_DIR` and `HOME` isolated for tests. Never place real cookies,
+tokens, or endpoint cache files in fixtures.
 
 ### Run with verbose output
 
@@ -62,6 +80,10 @@ GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o xsh-darwin-amd64 main.go
 # macOS Apple Silicon
 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o xsh-darwin-arm64 main.go
 ```
+
+The reproducible release path is `make release VERSION=0.0.9`. It builds
+Linux/Windows/macOS amd64 and arm64 artifacts with `-trimpath -buildvcs=false`
+and `CGO_ENABLED=0`, then verifies every binary and archive exists.
 
 ## Project Structure
 

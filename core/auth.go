@@ -33,6 +33,9 @@ func SanitizeCookieValue(value string) string {
 
 	// Remove surrounding quotes if present
 	value = strings.Trim(value, `"`)
+	// Removing a quote can expose whitespace that was outside the original
+	// value. Trim again so sanitization is idempotent.
+	value = strings.TrimSpace(value)
 
 	// Filter out invalid characters
 	// Valid cookie value characters per RFC 6265: printable ASCII except DQUOTE, comma, semicolon, backslash
@@ -44,7 +47,7 @@ func SanitizeCookieValue(value string) string {
 		}
 	}
 
-	return result.String()
+	return strings.TrimSpace(result.String())
 }
 
 // SanitizeCookies sanitizes all cookie values in a map
