@@ -786,7 +786,7 @@ go build -o xsh .
 go test ./...
 
 # Build with version info
-make build VERSION=v0.0.8
+make build VERSION=v0.1.0
 ```
 
 ### Project Structure

@@ -2,7 +2,7 @@
 #
 # verify.sh - Release verification and preparation script for xsh
 # Usage: ./core/scripts/verify.sh [VERSION]
-# Example: ./core/scripts/verify.sh 0.0.2
+# Example: ./core/scripts/verify.sh 0.1.0
 #
 
 set -euo pipefail
@@ -35,7 +35,7 @@ echo ""
 if [ -z "$1" ]; then
     print_info "Current version detected: $(grep 'var Version' "$CORE_DIR/cmd/version.go" | sed 's/.*"\(.*\)".*/\1/')"
     echo ""
-    read -p "Enter new version (e.g., 0.0.2): " TARGET_VERSION
+    read -p "Enter new version (e.g., 0.1.0): " TARGET_VERSION
 else
     TARGET_VERSION="$1"
 fi

@@ -16,7 +16,7 @@ go build -o xsh main.go
 ### Build with version
 
 ```bash
-make build VERSION=v0.0.9
+make build VERSION=v0.1.0
 ```
 
 ### Run tests
@@ -57,7 +57,7 @@ tokens, or endpoint cache files in fixtures.
 2. Create the GitHub release with `gh`:
 
 ```bash
-gh release create v0.0.9 --target master --generate-notes
+gh release create v0.1.0 --target master --generate-notes
 ```
 
 The GitHub Actions workflow will automatically:
@@ -81,7 +81,7 @@ GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o xsh-darwin-amd64 main.go
 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o xsh-darwin-arm64 main.go
 ```
 
-The reproducible release path is `make release VERSION=0.0.9`. It builds
+The reproducible release path is `make release VERSION=0.1.0`. It builds
 Linux/Windows/macOS amd64 and arm64 artifacts with `-trimpath -buildvcs=false`
 and `CGO_ENABLED=0`, then verifies every binary and archive exists.
 
