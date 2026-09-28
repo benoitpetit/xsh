@@ -51,19 +51,21 @@ func NewResponseCache(maxSize int, maxAge time.Duration) (*ResponseCache, error)
 // Get retrieves a cached response
 func (rc *ResponseCache) Get(key string) (interface{}, bool) {
 	rc.mu.RLock()
-	defer rc.mu.RUnlock()
-
 	entry, ok := rc.entries[key]
-	if !ok {
-		// Try to load from disk
-		return rc.loadFromDisk(key)
+	if ok {
+		valid := entry.IsValid()
+		data := entry.Data
+		rc.mu.RUnlock()
+		if !valid {
+			return nil, false
+		}
+		return data, true
 	}
+	rc.mu.RUnlock()
 
-	if !entry.IsValid() {
-		return nil, false
-	}
-
-	return entry.Data, true
+	// Disk loading takes the write lock to populate memory, so it must happen
+	// after releasing the read lock.
+	return rc.loadFromDisk(key)
 }
 
 // Set stores a response in cache
@@ -155,7 +157,11 @@ func (rc *ResponseCache) loadFromDisk(key string) (interface{}, bool) {
 
 	// Add to memory cache
 	rc.mu.Lock()
-	rc.entries[key] = &entry
+	if current, ok := rc.entries[key]; ok && current.IsValid() {
+		entry = *current
+	} else {
+		rc.entries[key] = &entry
+	}
 	rc.mu.Unlock()
 
 	return entry.Data, true

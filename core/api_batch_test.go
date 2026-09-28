@@ -81,6 +81,42 @@ func TestGetUsersByHandlesChunksMoreThanOneHundredHandles(t *testing.T) {
 	}
 }
 
+func TestGetUsersByIDsChunksMoreThanOneHundredIDs(t *testing.T) {
+	var batches [][]string
+	client := &XClient{requestWithOperationHook: func(_, _ string, params, _ map[string]interface{}, _ int, _, operation string) (map[string]interface{}, error) {
+		if operation != "UsersByRestIds" {
+			t.Fatalf("operation = %q, want UsersByRestIds", operation)
+		}
+		variables := params["variables"].(map[string]interface{})
+		ids := variables["userIds"].([]string)
+		batches = append(batches, ids)
+		return batchUsersResponse(ids...), nil
+	}}
+
+	ids := make([]string, 205)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("user-%d", i)
+	}
+	users, err := GetUsersByIDs(client, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(batches) != 3 || len(batches[0]) != 100 || len(batches[1]) != 100 || len(batches[2]) != 5 {
+		t.Fatalf("batch sizes = %#v, want [100 100 5]", batchSizes(batches))
+	}
+	if len(users) != len(ids) || users[len(users)-1].Handle != "user-204" {
+		t.Fatalf("users length/last handle = %d/%q, want 205/user-204", len(users), users[len(users)-1].Handle)
+	}
+}
+
+func batchSizes(batches [][]string) []int {
+	sizes := make([]int, len(batches))
+	for i, batch := range batches {
+		sizes[i] = len(batch)
+	}
+	return sizes
+}
+
 func batchUsersResponse(handles ...string) map[string]interface{} {
 	results := make([]interface{}, 0, len(handles))
 	for _, handle := range handles {

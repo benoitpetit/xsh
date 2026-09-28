@@ -170,35 +170,30 @@ func GetUsersByIDs(client *XClient, userIDs []string) ([]*models.User, error) {
 		return []*models.User{}, nil
 	}
 
-	// Limit to 100 IDs per request
-	if len(userIDs) > 100 {
-		userIDs = userIDs[:100]
-	}
-
-	variables := map[string]interface{}{
-		"userIds": userIDs,
-	}
-
-	data, err := client.GraphQLGet("UsersByRestIds", variables)
-	if err != nil {
-		return nil, err
-	}
-
 	var users []*models.User
+	const maxIDsPerRequest = 100
+	for start := 0; start < len(userIDs); start += maxIDsPerRequest {
+		end := min(start+maxIDsPerRequest, len(userIDs))
+		data, err := client.GraphQLGet("UsersByRestIds", map[string]interface{}{
+			"userIds": userIDs[start:end],
+		})
+		if err != nil {
+			return nil, err
+		}
 
-	// Parse results
-	if result, ok := data["data"].(map[string]interface{}); ok {
-		if usersResults, ok := result["users"].([]interface{}); ok {
-			for _, ur := range usersResults {
-				if urMap, ok := ur.(map[string]interface{}); ok {
-					if result, ok := urMap["result"].(map[string]interface{}); ok {
-						// Skip unavailable users
-						if typeName, ok := result["__typename"].(string); ok && typeName == "UserUnavailable" {
-							continue
-						}
-						user := models.UserFromAPIResult(result)
-						if user != nil {
-							users = append(users, user)
+		// Parse results from this request before moving to the next chunk.
+		if result, ok := data["data"].(map[string]interface{}); ok {
+			if usersResults, ok := result["users"].([]interface{}); ok {
+				for _, ur := range usersResults {
+					if urMap, ok := ur.(map[string]interface{}); ok {
+						if result, ok := urMap["result"].(map[string]interface{}); ok {
+							if typeName, ok := result["__typename"].(string); ok && typeName == "UserUnavailable" {
+								continue
+							}
+							user := models.UserFromAPIResult(result)
+							if user != nil {
+								users = append(users, user)
+							}
 						}
 					}
 				}

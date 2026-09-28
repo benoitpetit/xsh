@@ -116,7 +116,7 @@ The cookie file should be in JSON format exported from x.com with 'auth_token' a
 		// Generate account name if not provided
 		if accountName == "" {
 			// Try to verify credentials and get username
-			client, err := core.NewXClient(creds, "", "")
+			client, err := newRuntimeClient(creds, "", "")
 			if err == nil {
 				// Try to get user info by searching for a known user
 				// Since we don't have a direct "get me" endpoint, use the imported filename

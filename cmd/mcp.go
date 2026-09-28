@@ -255,7 +255,7 @@ func handleGetFeed(arguments map[string]interface{}) (*mcp.CallToolResult, error
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -282,7 +282,7 @@ func handleSearch(arguments map[string]interface{}) (*mcp.CallToolResult, error)
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -304,7 +304,7 @@ func handleGetTweet(arguments map[string]interface{}) (*mcp.CallToolResult, erro
 		showThread = t
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -335,7 +335,7 @@ func handleGetTweet(arguments map[string]interface{}) (*mcp.CallToolResult, erro
 func handleGetUser(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	handle, _ := arguments["handle"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -359,7 +359,7 @@ func handleListBookmarks(arguments map[string]interface{}) (*mcp.CallToolResult,
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -386,7 +386,7 @@ func handlePostTweet(arguments map[string]interface{}) (*mcp.CallToolResult, err
 		quote = q
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -403,7 +403,7 @@ func handlePostTweet(arguments map[string]interface{}) (*mcp.CallToolResult, err
 func handleDeleteTweet(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	tweetID, _ := arguments["id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -420,7 +420,7 @@ func handleDeleteTweet(arguments map[string]interface{}) (*mcp.CallToolResult, e
 func handleLike(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	tweetID, _ := arguments["id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -437,7 +437,7 @@ func handleLike(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 func handleUnlike(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	tweetID, _ := arguments["id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -454,7 +454,7 @@ func handleUnlike(arguments map[string]interface{}) (*mcp.CallToolResult, error)
 func handleRetweet(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	tweetID, _ := arguments["id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -471,7 +471,7 @@ func handleRetweet(arguments map[string]interface{}) (*mcp.CallToolResult, error
 func handleUnretweet(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	tweetID, _ := arguments["id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -488,7 +488,7 @@ func handleUnretweet(arguments map[string]interface{}) (*mcp.CallToolResult, err
 func handleBookmark(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	tweetID, _ := arguments["id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -505,7 +505,7 @@ func handleBookmark(arguments map[string]interface{}) (*mcp.CallToolResult, erro
 func handleUnbookmark(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	tweetID, _ := arguments["id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}

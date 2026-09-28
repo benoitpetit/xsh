@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -37,6 +38,51 @@ func TestGraphQLRequestRetryFlowOn404(t *testing.T) {
 	}
 	if script.ReadDelayCalls != 1 {
 		t.Fatalf("readDelayCalls = %d, want 1", script.ReadDelayCalls)
+	}
+}
+
+func TestGraphQLRetryPassesClientContextToEndpointRefresh(t *testing.T) {
+	resetEndpointTestState()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client := &XClient{}
+	client.SetContext(ctx)
+	var requests, refreshes int
+	client.requestWithOperationHook = func(_, _ string, _, _ map[string]interface{}, _ int, _, _ string) (map[string]interface{}, error) {
+		requests++
+		return nil, &StaleEndpointError{APIError: APIError{Message: "stale endpoint", StatusCode: 404}}
+	}
+	client.refreshEndpointsContextHook = func(got context.Context, _ string) error {
+		refreshes++
+		if got != ctx {
+			t.Fatal("refresh did not receive the command context")
+		}
+		cancel()
+		return got.Err()
+	}
+
+	_, err := client.GraphQLGet("SearchTimeline", nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("GraphQL error = %v, want context cancellation", err)
+	}
+	if requests != 1 || refreshes != 1 {
+		t.Fatalf("requests/refreshes = %d/%d, want 1/1", requests, refreshes)
+	}
+}
+
+func TestRateLimitWaitHonorsClientContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &XClient{}
+	client.SetContext(ctx)
+	cancel()
+
+	started := time.Now()
+	err := client.waitForRetryAfter(time.Hour)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("rate limit wait error = %v, want context cancellation", err)
+	}
+	if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
+		t.Fatalf("cancelled rate limit wait took %s, want prompt return", elapsed)
 	}
 }
 

@@ -96,29 +96,63 @@ func (em *EndpointManager) getRepository() EndpointRepository {
 
 // GetEndpoint returns the endpoint for an operation, with auto-discovery
 func (em *EndpointManager) GetEndpoint(operation string) string {
-	cache := em.getCache()
-	if cache != nil {
-		if _, quarantined := cache.Quarantined[operation]; quarantined {
-			return operation
-		}
-	}
+	return em.resolveEndpoint(em.getCache(), operation)
+}
 
-	// Check dynamic cache first
+// resolveOperation reads endpoint, feature flags, and quarantine state from a
+// single immutable cache snapshot. Request paths should use this instead of
+// separately asking for each piece of operation metadata.
+func (em *EndpointManager) resolveOperation(operation string) (string, map[string]bool, bool) {
+	cache := em.getCache()
+	return em.resolveEndpoint(cache, operation), operationFeatures(cache, operation), isOperationQuarantined(cache, operation)
+}
+
+func (em *EndpointManager) resolveEndpoint(cache *EndpointCache, operation string) string {
+	if isOperationQuarantined(cache, operation) {
+		return operation
+	}
 	if cache != nil {
 		if endpoint, ok := cache.Endpoints[operation]; ok {
 			return endpoint
 		}
 	}
-
-	// Check static fallback
 	if endpoint, ok := GraphQLEndpoints[operation]; ok {
 		if em.verbose {
 			log.Printf("[EndpointManager] Using static fallback for %s", operation)
 		}
 		return endpoint
 	}
-
 	return operation
+}
+
+func isOperationQuarantined(cache *EndpointCache, operation string) bool {
+	if cache == nil {
+		return false
+	}
+	_, quarantined := cache.Quarantined[operation]
+	return quarantined
+}
+
+func operationFeatures(cache *EndpointCache, operation string) map[string]bool {
+	features := make(map[string]bool)
+	if cache == nil {
+		for key, value := range DefaultFeatures {
+			features[key] = value
+		}
+	} else if keys := cache.OpFeatures[operation]; len(keys) == 0 {
+		for key, value := range DefaultFeatures {
+			features[key] = value
+		}
+	} else {
+		for _, key := range cache.OpFeatures[operation] {
+			if value, ok := cache.Features[key]; ok {
+				features[key] = value
+			} else {
+				features[key] = true
+			}
+		}
+	}
+	return features
 }
 
 // GetEndpointWithRefresh returns endpoint, refreshing if necessary
@@ -202,36 +236,7 @@ func (em *EndpointManager) RefreshForOperation(ctx context.Context, operation st
 
 // GetOpFeatures returns feature switches for a specific operation
 func (em *EndpointManager) GetOpFeatures(operation string) map[string]bool {
-	result := make(map[string]bool)
-
-	cache := em.getCache()
-	if cache == nil {
-		// Return default features
-		for k, v := range DefaultFeatures {
-			result[k] = v
-		}
-		return result
-	}
-
-	keys, ok := cache.OpFeatures[operation]
-	if !ok || len(keys) == 0 {
-		// Return default features
-		for k, v := range DefaultFeatures {
-			result[k] = v
-		}
-		return result
-	}
-
-	// Get specific features for this operation
-	for _, key := range keys {
-		if val, ok := cache.Features[key]; ok {
-			result[key] = val
-		} else {
-			result[key] = true // Default to true
-		}
-	}
-
-	return result
+	return operationFeatures(em.getCache(), operation)
 }
 
 // RefreshEndpoints fetches fresh endpoints from X.com
@@ -240,9 +245,12 @@ func (em *EndpointManager) RefreshEndpoints(ctx context.Context) error {
 		return fmt.Errorf("discovery not available")
 	}
 
-	_, err := em.discovery.DiscoverEndpoints(ctx)
+	cache, err := em.discovery.DiscoverEndpoints(ctx)
 	if err != nil {
 		return fmt.Errorf("discovery failed: %w", err)
+	}
+	if err := em.publishDiscoveredEndpoints(cache); err != nil {
+		return fmt.Errorf("failed to publish discovered endpoints: %w", err)
 	}
 
 	if em.verbose {
@@ -252,6 +260,13 @@ func (em *EndpointManager) RefreshEndpoints(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func (em *EndpointManager) publishDiscoveredEndpoints(cache *EndpointCache) error {
+	if repository := em.getRepository(); repository != nil {
+		return repository.Replace(cache)
+	}
 	return nil
 }
 
@@ -335,10 +350,11 @@ func (em *EndpointManager) IsQuarantined(operation string) bool {
 // ListEndpoints returns all current endpoints
 func (em *EndpointManager) ListEndpoints() map[string]string {
 	result := make(map[string]string)
+	cache := em.getCache()
 
 	// Start with static fallbacks
 	for k, v := range GraphQLEndpoints {
-		if cache := em.getCache(); cache != nil {
+		if cache != nil {
 			if _, quarantined := cache.Quarantined[k]; quarantined {
 				continue
 			}
@@ -347,7 +363,6 @@ func (em *EndpointManager) ListEndpoints() map[string]string {
 	}
 
 	// Override with dynamic endpoints
-	cache := em.getCache()
 	if cache != nil {
 		for k, v := range cache.Endpoints {
 			if _, quarantined := cache.Quarantined[k]; quarantined {

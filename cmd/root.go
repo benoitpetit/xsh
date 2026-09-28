@@ -245,7 +245,21 @@ func getClient(acc string) (*core.XClient, error) {
 		cfg = core.DefaultConfig()
 	}
 
-	return core.NewXClientWithRequestConfig(nil, acc, cfg.Network.Proxy, cfg.Request)
+	client, err := core.NewXClientWithRequestConfig(nil, acc, cfg.Network.Proxy, cfg.Request)
+	if err != nil {
+		return nil, err
+	}
+	client.SetContext(runtimeContext())
+	return client, nil
+}
+
+func newRuntimeClient(credentials *core.AuthCredentials, acc, proxy string) (*core.XClient, error) {
+	client, err := core.NewXClient(credentials, acc, proxy)
+	if err != nil {
+		return nil, err
+	}
+	client.SetContext(runtimeContext())
+	return client, nil
 }
 
 // output handles output in the appropriate format (YAML, JSON, Compact, or human-readable)

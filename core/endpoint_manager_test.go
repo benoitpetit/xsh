@@ -29,6 +29,87 @@ func TestEndpointStatsDistinguishesStaticAndDynamicEndpoints(t *testing.T) {
 	}
 }
 
+func TestListEndpointsTakesOneCacheSnapshot(t *testing.T) {
+	repository := &countingEndpointRepository{cache: &EndpointCache{
+		Endpoints:   map[string]string{"DynamicOperation": "dynamic/DynamicOperation"},
+		Quarantined: map[string]string{},
+		Features:    map[string]bool{},
+		OpFeatures:  map[string][]string{},
+		Timestamp:   time.Now(),
+	}}
+	manager := &EndpointManager{discovery: &EndpointDiscovery{}, repository: repository}
+
+	endpoints := manager.ListEndpoints()
+	if _, ok := endpoints["DynamicOperation"]; !ok {
+		t.Fatal("ListEndpoints() omitted dynamic endpoint")
+	}
+	if repository.snapshots != 1 {
+		t.Fatalf("cache snapshots = %d, want exactly one", repository.snapshots)
+	}
+}
+
+func TestResolveOperationUsesOneCacheSnapshot(t *testing.T) {
+	repository := &countingEndpointRepository{cache: &EndpointCache{
+		Endpoints:   map[string]string{"SearchTimeline": "dynamic/SearchTimeline"},
+		Quarantined: map[string]string{},
+		Features:    map[string]bool{"switch": false},
+		OpFeatures:  map[string][]string{"SearchTimeline": {"switch"}},
+		Timestamp:   time.Now(),
+	}}
+	manager := &EndpointManager{discovery: &EndpointDiscovery{}, repository: repository}
+
+	endpoint, features, quarantined := manager.resolveOperation("SearchTimeline")
+	if endpoint != "dynamic/SearchTimeline" || features["switch"] || quarantined {
+		t.Fatalf("resolved endpoint/features/quarantine = %q/%#v/%t", endpoint, features, quarantined)
+	}
+	if repository.snapshots != 1 {
+		t.Fatalf("cache snapshots = %d, want exactly one", repository.snapshots)
+	}
+}
+
+func TestPublishDiscoveredEndpointsUpdatesRepositorySnapshot(t *testing.T) {
+	repository := &countingEndpointRepository{cache: &EndpointCache{
+		Endpoints: map[string]string{"SearchTimeline": "old/SearchTimeline"},
+		Timestamp: time.Now(),
+	}}
+	manager := &EndpointManager{discovery: &EndpointDiscovery{}, repository: repository}
+	cache := &EndpointCache{
+		Endpoints: map[string]string{"SearchTimeline": "new/SearchTimeline"},
+		Timestamp: time.Now(),
+	}
+
+	if err := manager.publishDiscoveredEndpoints(cache); err != nil {
+		t.Fatalf("publishDiscoveredEndpoints() error = %v", err)
+	}
+	if got := repository.Snapshot().Endpoints["SearchTimeline"]; got != "new/SearchTimeline" {
+		t.Fatalf("repository endpoint = %q, want newly discovered endpoint", got)
+	}
+}
+
+type countingEndpointRepository struct {
+	cache     *EndpointCache
+	snapshots int
+}
+
+func (r *countingEndpointRepository) Snapshot() *EndpointCache {
+	r.snapshots++
+	return cloneEndpointCache(r.cache)
+}
+
+func (r *countingEndpointRepository) Replace(cache *EndpointCache) error {
+	r.cache = cloneEndpointCache(cache)
+	return nil
+}
+
+func (r *countingEndpointRepository) Mutate(mutator func(*EndpointCache) error) error {
+	return mutator(r.cache)
+}
+
+func (r *countingEndpointRepository) Invalidate() error {
+	r.cache = newEmptyEndpointCache()
+	return nil
+}
+
 func TestRefreshForOperationUsesCooldownAfterFailure(t *testing.T) {
 	var refreshes int
 	manager := &EndpointManager{

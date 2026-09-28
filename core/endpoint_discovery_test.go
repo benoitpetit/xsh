@@ -7,8 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -201,6 +204,92 @@ func TestExpandBundleURLsTraversesNestedImportsAndCycles(t *testing.T) {
 		if !found {
 			t.Fatalf("expandBundleURLs() missing %s: %#v", want, got)
 		}
+	}
+}
+
+func TestDiscoveryReusesFetchedBundleBodiesForExtraction(t *testing.T) {
+	const entry = "/entry.js"
+	const child = "/child.js"
+	var mu sync.Mutex
+	requests := make(map[string]int)
+	server := newEndpointTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests[r.URL.Path]++
+		mu.Unlock()
+		body := map[string]string{
+			entry: `import "./child.js"; queryId:"entry-id",operationName:"EntryOperation"`,
+			child: `queryId:"child-id",operationName:"ChildOperation"`,
+		}[r.URL.Path]
+		if body == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript")
+		_, _ = io.WriteString(w, body)
+	}))
+	defer server.Close()
+
+	ed := &EndpointDiscovery{client: server.Client()}
+	_, endpoints, _ := ed.discoverBundleOperations(context.Background(), []string{server.URL + entry})
+
+	if endpoints["EntryOperation"] != "entry-id/EntryOperation" || endpoints["ChildOperation"] != "child-id/ChildOperation" {
+		t.Fatalf("extracted endpoints = %#v, want entry and child operations", endpoints)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if requests[entry] != 1 || requests[child] != 1 {
+		t.Fatalf("bundle requests = %#v, want one fetch per bundle", requests)
+	}
+}
+
+func TestDiscoverEndpointsDoesNotPublishPartialCacheAfterCancellation(t *testing.T) {
+	t.Setenv("X_AUTH_TOKEN", "test-auth-token")
+	t.Setenv("X_CT0", "test-csrf-token")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cachePath := filepath.Join(t.TempDir(), "graphql_ops.json")
+
+	memoryCacheMu.Lock()
+	previousMemoryCache := cloneEndpointCache(memoryCache)
+	memoryCache = newEmptyEndpointCache()
+	memoryCacheMu.Unlock()
+	defer func() {
+		memoryCacheMu.Lock()
+		memoryCache = previousMemoryCache
+		memoryCacheMu.Unlock()
+	}()
+
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		var body string
+		switch req.URL.Path {
+		case "/home":
+			body = `<script src="https://abs.twimg.com/entry.js"></script>`
+		case "/entry.js":
+			body = `import "./child.js"; queryId:"entry-id",operationName:"EntryOperation"`
+		case "/child.js":
+			cancel()
+			return nil, req.Context().Err()
+		default:
+			return nil, fmt.Errorf("unexpected request path %q", req.URL.Path)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})}
+	ed := &EndpointDiscovery{client: client, cachePath: cachePath}
+
+	_, err := ed.DiscoverEndpoints(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("DiscoverEndpoints() error = %v, want context cancellation", err)
+	}
+	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
+		t.Fatalf("cache file stat error = %v, want no partial cache file", err)
+	}
+	if cache := ed.GetMemoryCache(); cache != nil {
+		t.Fatalf("partial memory cache was published: %#v", cache)
 	}
 }
 

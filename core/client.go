@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -64,14 +65,32 @@ type XClient struct {
 	readDelayConfigured  bool
 	requestTimeout       time.Duration
 	policy               RequestPolicy
+	ctx                  context.Context
 
 	// Test hooks
-	requestWithOperationHook func(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error)
-	refreshEndpointsHook     func() error
-	invalidateCacheHook      func()
-	readDelayHook            func()
-	writeDelayHook           func()
-	readDelayFunc            func(float64)
+	requestWithOperationHook    func(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error)
+	refreshEndpointsHook        func() error
+	refreshEndpointsContextHook func(context.Context, string) error
+	invalidateCacheHook         func()
+	readDelayHook               func()
+	writeDelayHook              func()
+	readDelayFunc               func(float64)
+}
+
+// SetContext binds command cancellation to requests made by this client.
+// Configure it before using the client; a nil context resets it to Background.
+func (c *XClient) SetContext(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	c.ctx = ctx
+}
+
+func (c *XClient) requestContext() context.Context {
+	if c == nil || c.ctx == nil {
+		return context.Background()
+	}
+	return c.ctx
 }
 
 func (c *XClient) effectivePolicy() RequestPolicy {
@@ -414,7 +433,7 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 		if attempt > 0 {
 			logVerbose("Retry attempt %d/%d", attempt+1, maxRetries)
 			policy := c.effectivePolicy()
-			if err := utils.BackoffDelayWithContext(context.Background(), attempt, policy.BackoffMin.Seconds(), policy.BackoffMax.Seconds()); err != nil {
+			if err := utils.BackoffDelayWithContext(c.requestContext(), attempt, policy.BackoffMin.Seconds(), policy.BackoffMax.Seconds()); err != nil {
 				return nil, err
 			}
 		}
@@ -453,7 +472,7 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 
 		logVerbose("Request: %s %s", method, fullURL)
 
-		req, err := http.NewRequest(method, fullURL, body)
+		req, err := http.NewRequestWithContext(c.requestContext(), method, fullURL, body)
 		if err != nil {
 			lastErr = err
 			continue
@@ -571,10 +590,8 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 			return nil, &AuthError{Message: "Authentication failed. Cookies may be expired."}
 		case 429:
 			if attempt < maxRetries-1 && policy.CanRetry(method, operation, resp.StatusCode, nil) {
-				if retryAfter > 0 {
-					if err := utils.SleepWithContext(context.Background(), retryAfter); err != nil {
-						return nil, err
-					}
+				if err := c.waitForRetryAfter(retryAfter); err != nil {
+					return nil, err
 				}
 				continue
 			}
@@ -619,6 +636,13 @@ func (c *XClient) requestWithOperation(method, urlStr string, params, jsonData m
 	return nil, &APIError{Message: fmt.Sprintf("Request failed after %d retries: %v", maxRetries, lastErr)}
 }
 
+func (c *XClient) waitForRetryAfter(delay time.Duration) error {
+	if delay <= 0 {
+		return c.requestContext().Err()
+	}
+	return utils.SleepWithContext(c.requestContext(), delay)
+}
+
 // GraphQLGet makes a GraphQL GET request with auto-retry on stale endpoint IDs.
 // Matches Python's _graphql_request behavior exactly.
 func (c *XClient) GraphQLGet(operation string, variables map[string]interface{}) (map[string]interface{}, error) {
@@ -651,26 +675,24 @@ func (c *XClient) graphqlRequest(
 	features map[string]bool,
 	referer string,
 ) (map[string]interface{}, error) {
-	resolvedFeatures := features
-	if resolvedFeatures == nil {
-		resolvedFeatures = c.getOpFeatures(operation)
+	if err := c.requestContext().Err(); err != nil {
+		return nil, err
 	}
-	if GetEndpointManager().IsQuarantined(operation) {
-		return nil, &APIError{
-			Message:    fmt.Sprintf("GraphQL operation %q is quarantined after a 404; refresh discovery before retrying", operation),
-			StatusCode: http.StatusNotFound,
-		}
-	}
+	manager := GetEndpointManager()
 
 	// Try up to 2 times (like Python: for attempt in range(2))
 	for attempt := 0; attempt < 2; attempt++ {
-		// Get fresh endpoints on each attempt (after cache invalidation)
-		endpoints := GetGraphQLEndpoints()
-		endpoint, ok := endpoints[operation]
-		if !ok {
-			// Fallback to endpoint manager
-			manager := GetEndpointManager()
-			endpoint = manager.GetEndpoint(operation)
+		// Resolve endpoint, flags, and quarantine from one cache snapshot.
+		endpoint, cachedFeatures, quarantined := manager.resolveOperation(operation)
+		if quarantined {
+			return nil, &APIError{
+				Message:    fmt.Sprintf("GraphQL operation %q is quarantined after a 404; refresh discovery before retrying", operation),
+				StatusCode: http.StatusNotFound,
+			}
+		}
+		resolvedFeatures := features
+		if resolvedFeatures == nil {
+			resolvedFeatures = cachedFeatures
 		}
 
 		urlStr := GraphQLBase + "/" + endpoint
@@ -729,17 +751,8 @@ func (c *XClient) graphqlRequest(
 					// First attempt: invalidate cache, refresh endpoints from X.com, and retry
 					logVerbose("HTTP 404 for '%s' — operation IDs may be stale, "+
 						"refreshing endpoints from X.com and retrying...", operation)
-					c.refreshEndpointsForRetry(operation)
-					if GetEndpointManager().IsQuarantined(operation) {
-						return nil, &APIError{
-							Message:    fmt.Sprintf("GraphQL operation %q has no verified endpoint after refresh", operation),
-							StatusCode: http.StatusNotFound,
-						}
-					}
-
-					// Refresh features if they came from cache
-					if features == nil {
-						resolvedFeatures = c.getOpFeatures(operation)
+					if err := c.refreshEndpointsForRetry(operation); errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+						return nil, err
 					}
 					continue // Retry with fresh cache
 				}
@@ -759,11 +772,10 @@ func (c *XClient) graphqlRequest(
 			if isGraphQLUnprocessableError(err) {
 				if attempt == 0 && (method == "GET" || IsIdempotentOperation(operation)) {
 					logVerbose("HTTP 422 for '%s' — endpoint/variables may be stale, refreshing endpoints and retrying...", operation)
-					c.refreshEndpointsForRetry(operation)
-
-					if features == nil {
-						resolvedFeatures = c.getOpFeatures(operation)
+					if err := c.refreshEndpointsForRetry(operation); errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+						return nil, err
 					}
+
 					continue
 				}
 			}
@@ -776,16 +788,8 @@ func (c *XClient) graphqlRequest(
 					GetEndpointManager().QuarantineEndpoint(operation, "GraphQL response reported query not found")
 				}
 				logVerbose("GraphQL response indicates obsolete endpoint for '%s' — refreshing endpoints and retrying...", operation)
-				c.refreshEndpointsForRetry(operation)
-				if GetEndpointManager().IsQuarantined(operation) {
-					return nil, &APIError{
-						Message:    fmt.Sprintf("GraphQL operation %q has no verified endpoint after refresh", operation),
-						StatusCode: http.StatusNotFound,
-					}
-				}
-
-				if features == nil {
-					resolvedFeatures = c.getOpFeatures(operation)
+				if err := c.refreshEndpointsForRetry(operation); errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return nil, err
 				}
 				continue
 			}
@@ -814,13 +818,23 @@ func (c *XClient) graphqlRequest(
 }
 
 func (c *XClient) executeRequestWithOperation(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error) {
+	if err := c.requestContext().Err(); err != nil {
+		return nil, err
+	}
 	if c.requestWithOperationHook != nil {
 		return c.requestWithOperationHook(method, urlStr, params, jsonData, maxRetries, referer, operation)
 	}
 	return c.requestWithOperation(method, urlStr, params, jsonData, maxRetries, referer, operation)
 }
 
-func (c *XClient) refreshEndpointsForRetry(operation string) {
+func (c *XClient) refreshEndpointsForRetry(operation string) error {
+	ctx := c.requestContext()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if c.refreshEndpointsContextHook != nil {
+		return c.refreshEndpointsContextHook(ctx, operation)
+	}
 	if c.invalidateCacheHook != nil || c.refreshEndpointsHook != nil {
 		// Preserve deterministic retry hooks used by tests and integrations.
 		if c.invalidateCacheHook != nil {
@@ -829,17 +843,20 @@ func (c *XClient) refreshEndpointsForRetry(operation string) {
 		if c.refreshEndpointsHook != nil {
 			if err := c.refreshEndpointsHook(); err != nil {
 				logVerbose("Failed to refresh endpoints for '%s': %v", operation, err)
+				return err
 			}
 		}
-		return
+		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	refreshCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	if err := GetEndpointManager().RefreshForOperation(ctx, operation); err != nil {
+	if err := GetEndpointManager().RefreshForOperation(refreshCtx, operation); err != nil {
 		logVerbose("Failed to discover fresh endpoints for '%s': %v", operation, err)
+		return err
 	}
+	return nil
 }
 
 func (c *XClient) applyReadDelay() {
@@ -899,30 +916,6 @@ func isGraphQLEndpointNotFoundResponse(result map[string]interface{}) bool {
 func isGraphQLUnprocessableError(err error) bool {
 	apiErr, ok := err.(*APIError)
 	return ok && apiErr.StatusCode == 422
-}
-
-// getOpFeatures gets operation-specific features from cache
-func (c *XClient) getOpFeatures(operation string) map[string]bool {
-	opFeaturesList := GetDynamicOpFeatures(operation)
-	features := make(map[string]bool)
-
-	if len(opFeaturesList) > 0 {
-		cachedFeatures := GetDynamicFeatures()
-		for _, feat := range opFeaturesList {
-			if val, ok := cachedFeatures[feat]; ok {
-				features[feat] = val
-			} else {
-				features[feat] = true
-			}
-		}
-	} else {
-		// Fallback to defaults
-		for k, v := range DefaultFeatures {
-			features[k] = v
-		}
-	}
-
-	return features
 }
 
 // Close closes the HTTP client

@@ -148,7 +148,7 @@ func checkNetwork() CheckResult {
 }
 
 func checkTLS() CheckResult {
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return CheckResult{
 			Name:        "TLS",

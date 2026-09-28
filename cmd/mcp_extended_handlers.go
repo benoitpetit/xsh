@@ -12,7 +12,7 @@ import (
 // ===================== READ TOOLS =====================
 
 func handleGetBookmarkFolders(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -33,7 +33,7 @@ func handleGetBookmarkFolderTimeline(args map[string]interface{}) (*mcp.CallTool
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -48,7 +48,7 @@ func handleGetBookmarkFolderTimeline(args map[string]interface{}) (*mcp.CallTool
 }
 
 func handleGetLists(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -64,7 +64,7 @@ func handleGetLists(args map[string]interface{}) (*mcp.CallToolResult, error) {
 
 func handleGetListInfo(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	listID, _ := args["list_id"].(string)
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -82,7 +82,7 @@ func handleGetListMemberships(args map[string]interface{}) (*mcp.CallToolResult,
 	if c, ok := args["count"].(float64); ok {
 		count = c
 	}
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -109,7 +109,7 @@ func handleGetListTimeline(args map[string]interface{}) (*mcp.CallToolResult, er
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -130,7 +130,7 @@ func handleGetListMembers(args map[string]interface{}) (*mcp.CallToolResult, err
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -161,7 +161,7 @@ func handleGetTweetsBatch(args map[string]interface{}) (*mcp.CallToolResult, err
 		}
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -188,7 +188,7 @@ func handleGetUsersBatch(args map[string]interface{}) (*mcp.CallToolResult, erro
 		}
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -212,7 +212,7 @@ func handleGetUserTweets(args map[string]interface{}) (*mcp.CallToolResult, erro
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -238,7 +238,7 @@ func handleGetUserLikes(args map[string]interface{}) (*mcp.CallToolResult, error
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -263,7 +263,7 @@ func handleGetUserMedia(args map[string]interface{}) (*mcp.CallToolResult, error
 	if c, ok := args["count"].(float64); ok {
 		count = c
 	}
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -287,7 +287,7 @@ func handleGetFollowers(args map[string]interface{}) (*mcp.CallToolResult, error
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -317,7 +317,7 @@ func handleGetFollowing(args map[string]interface{}) (*mcp.CallToolResult, error
 		count = c
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -354,7 +354,7 @@ func handleRelationshipUsers(args map[string]interface{}, followersYouKnow bool)
 	if c, ok := args["count"].(float64); ok {
 		count = c
 	}
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -389,7 +389,7 @@ func handleViewerRelationshipUsers(args map[string]interface{}, blocked bool) (*
 	if c, ok := args["count"].(float64); ok {
 		count = c
 	}
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -408,7 +408,7 @@ func handleViewerRelationshipUsers(args map[string]interface{}, blocked bool) (*
 }
 
 func handleDMInbox(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -432,7 +432,7 @@ func handleCreateList(args map[string]interface{}) (*mcp.CallToolResult, error) 
 		isPrivate = p
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -449,7 +449,7 @@ func handleCreateList(args map[string]interface{}) (*mcp.CallToolResult, error) 
 func handleDeleteList(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	listID, _ := args["list_id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -467,7 +467,7 @@ func handleAddListMember(args map[string]interface{}) (*mcp.CallToolResult, erro
 	listID, _ := args["list_id"].(string)
 	handle, _ := args["handle"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -490,7 +490,7 @@ func handleRemoveListMember(args map[string]interface{}) (*mcp.CallToolResult, e
 	listID, _ := args["list_id"].(string)
 	handle, _ := args["handle"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -512,7 +512,7 @@ func handleRemoveListMember(args map[string]interface{}) (*mcp.CallToolResult, e
 func handlePinList(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	listID, _ := args["list_id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -529,7 +529,7 @@ func handlePinList(args map[string]interface{}) (*mcp.CallToolResult, error) {
 func handleUnpinList(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	listID, _ := args["list_id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -547,7 +547,7 @@ func handleDMSend(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	handle, _ := args["handle"].(string)
 	text, _ := args["text"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -569,7 +569,7 @@ func handleDMSend(args map[string]interface{}) (*mcp.CallToolResult, error) {
 func handleDMDelete(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	messageID, _ := args["message_id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -590,7 +590,7 @@ func handleScheduleTweet(args map[string]interface{}) (*mcp.CallToolResult, erro
 		executeAt = int64(e)
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -605,7 +605,7 @@ func handleScheduleTweet(args map[string]interface{}) (*mcp.CallToolResult, erro
 }
 
 func handleListScheduledTweets(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -622,7 +622,7 @@ func handleListScheduledTweets(args map[string]interface{}) (*mcp.CallToolResult
 func handleCancelScheduledTweet(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	id, _ := args["id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -643,7 +643,7 @@ func handleDownloadMedia(args map[string]interface{}) (*mcp.CallToolResult, erro
 		outputDir = o
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -664,7 +664,7 @@ func handleDownloadMedia(args map[string]interface{}) (*mcp.CallToolResult, erro
 
 func handleFollow(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	handle, _ := args["handle"].(string)
-	client, _ := core.NewXClient(nil, "", "")
+	client, _ := newRuntimeClient(nil, "", "")
 	defer client.Close()
 
 	user, err := core.GetUserByHandle(client, handle)
@@ -681,7 +681,7 @@ func handleFollow(args map[string]interface{}) (*mcp.CallToolResult, error) {
 
 func handleUnfollow(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	handle, _ := args["handle"].(string)
-	client, _ := core.NewXClient(nil, "", "")
+	client, _ := newRuntimeClient(nil, "", "")
 	defer client.Close()
 
 	user, err := core.GetUserByHandle(client, handle)
@@ -698,7 +698,7 @@ func handleUnfollow(args map[string]interface{}) (*mcp.CallToolResult, error) {
 
 func handleBlock(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	handle, _ := args["handle"].(string)
-	client, _ := core.NewXClient(nil, "", "")
+	client, _ := newRuntimeClient(nil, "", "")
 	defer client.Close()
 
 	user, err := core.GetUserByHandle(client, handle)
@@ -715,7 +715,7 @@ func handleBlock(args map[string]interface{}) (*mcp.CallToolResult, error) {
 
 func handleUnblock(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	handle, _ := args["handle"].(string)
-	client, _ := core.NewXClient(nil, "", "")
+	client, _ := newRuntimeClient(nil, "", "")
 	defer client.Close()
 
 	user, err := core.GetUserByHandle(client, handle)
@@ -732,7 +732,7 @@ func handleUnblock(args map[string]interface{}) (*mcp.CallToolResult, error) {
 
 func handleMute(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	handle, _ := args["handle"].(string)
-	client, _ := core.NewXClient(nil, "", "")
+	client, _ := newRuntimeClient(nil, "", "")
 	defer client.Close()
 
 	user, err := core.GetUserByHandle(client, handle)
@@ -749,7 +749,7 @@ func handleMute(args map[string]interface{}) (*mcp.CallToolResult, error) {
 
 func handleUnmute(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	handle, _ := args["handle"].(string)
-	client, _ := core.NewXClient(nil, "", "")
+	client, _ := newRuntimeClient(nil, "", "")
 	defer client.Close()
 
 	user, err := core.GetUserByHandle(client, handle)
@@ -800,7 +800,7 @@ func handleSearchJobs(args map[string]interface{}) (*mcp.CallToolResult, error) 
 		}
 	}
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -817,7 +817,7 @@ func handleSearchJobs(args map[string]interface{}) (*mcp.CallToolResult, error) 
 func handleGetJob(args map[string]interface{}) (*mcp.CallToolResult, error) {
 	jobID, _ := args["job_id"].(string)
 
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -837,7 +837,7 @@ func handleGetJob(args map[string]interface{}) (*mcp.CallToolResult, error) {
 // ===================== TRENDING TOOLS =====================
 
 func handleGetTrending(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	client, err := core.NewXClient(nil, "", "")
+	client, err := newRuntimeClient(nil, "", "")
 	if err != nil {
 		return errorResult(err), nil
 	}
