@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/benoitpetit/xsh/core"
@@ -51,8 +52,26 @@ var endpointsListCmd = &cobra.Command{
 			"Bookmarks": {"Bookmarks", "BookmarkSearchTimeline"},
 			"Write":     {"CreateTweet", "DeleteTweet", "FavoriteTweet", "UnfavoriteTweet", "CreateRetweet", "DeleteRetweet", "CreateBookmark", "DeleteBookmark"},
 		}
+		shown := make(map[string]bool, len(endpoints))
+		for _, ops := range categories {
+			for _, op := range ops {
+				shown[op] = true
+			}
+		}
+		for op := range endpoints {
+			if !shown[op] {
+				categories["Other"] = append(categories["Other"], op)
+			}
+		}
+		sort.Strings(categories["Other"])
+		categoryNames := make([]string, 0, len(categories))
+		for name := range categories {
+			categoryNames = append(categoryNames, name)
+		}
+		sort.Strings(categoryNames)
 
-		for category, ops := range categories {
+		for _, category := range categoryNames {
+			ops := categories[category]
 			fmt.Println(display.Subtitle(category))
 			for _, op := range ops {
 				if endpoint, ok := endpoints[op]; ok {

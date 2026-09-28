@@ -89,6 +89,18 @@ chmod +x xsh && \
 sudo mv xsh /usr/local/bin/
 ```
 
+To update an installed release binary:
+
+```bash
+xsh update --check  # Check the latest compatible stable release
+xsh update          # Download, verify SHA-256, and install it
+```
+
+The updater selects the binary for your OS and architecture. It needs write
+access to the installed executable; installations in protected directories may
+require running `xsh update` with elevated privileges. `xsh auto-update` is a
+separate command that refreshes X GraphQL endpoint IDs.
+
 ### From Source
 
 ```bash
@@ -238,12 +250,14 @@ xsh feed --count 50 --pages 3         # 150 tweets total
 xsh feed --filter top --top 20        # Top 20 by engagement
 xsh feed --filter score --threshold 100
 xsh feed --cursor <cursor>            # Paginate
+xsh feed --page-json --json           # Include next_cursor and has_more
 
 # Search
 xsh search "golang"
 xsh search "golang" --type Latest     # Types: Top, Latest, Photos, Videos
 xsh search "golang" --count 50 --pages 2
 xsh search "golang" --cursor <cursor>
+xsh search "golang" --page-json --json # Include next_cursor and has_more
 ```
 
 ---
@@ -541,6 +555,8 @@ xsh user tweets ben | jq '.items[] | .text'
 # Cursor-based commands return an envelope in structured modes:
 # {"items": [...], "next_cursor": "...", "has_more": true}
 # Pass next_cursor back with --cursor to fetch the next page.
+# feed and search keep their historical flat output by default; add --page-json
+# to include the pagination envelope in JSON, YAML, or compact output.
 
 # Compact JSON is one line, suitable for pipes and agents
 xsh user followers ben --compact | jq -c .
@@ -760,7 +776,8 @@ operations and are not interchangeable with `Followers`.
 ```bash
 # System status: auth, endpoints, cache health
 xsh status
-xsh status --check   # Run fresh endpoint health check
+xsh status --check   # Validate cached endpoint metadata and required operations
+xsh status --local   # Skip connectivity and endpoint checks; use local state only
 xsh status --json
 
 # Full diagnostic report

@@ -17,6 +17,7 @@ var (
 	feedCount     int
 	feedPages     int
 	feedCursor    string
+	feedPageJSON  bool
 	feedFilter    string
 	feedTopN      int
 	feedThreshold float64
@@ -28,6 +29,10 @@ var feedCmd = &cobra.Command{
 	Short: "View your timeline",
 	Long:  "Fetch your home timeline (for-you or following).",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validatePaginationArgs(feedCount, feedPages); err != nil {
+			return err
+		}
+
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
@@ -39,6 +44,7 @@ var feedCmd = &cobra.Command{
 		runWithWatch(func() error {
 			allTweets := []*models.Tweet{}
 			cursor := feedCursor
+			hasMore := false
 
 			// Like Python: fetch count tweets per page, for pages iterations
 			for i := 0; i < feedPages; i++ {
@@ -48,6 +54,7 @@ var feedCmd = &cobra.Command{
 				}
 				allTweets = append(allTweets, response.Tweets...)
 				cursor = response.CursorBottom
+				hasMore = response.HasMore
 				if !response.HasMore {
 					break
 				}
@@ -70,10 +77,13 @@ var feedCmd = &cobra.Command{
 				allTweets = utils.FilterTweets(allTweets, feedFilter, feedThreshold, feedTopN, &cfg.Filter)
 			}
 
-			output(allTweets, func() {
+			humanOutput := func() {
 				fmt.Println(display.FormatTweetList(allTweets))
-			})
-			return nil
+			}
+			if feedPageJSON {
+				return outputPage(allTweets, cursor, hasMore, humanOutput)
+			}
+			return output(allTweets, humanOutput)
 		})
 
 		return nil
@@ -87,6 +97,7 @@ func init() {
 	feedCmd.Flags().IntVarP(&feedCount, "count", "n", 20, "Number of tweets per page")
 	feedCmd.Flags().IntVarP(&feedPages, "pages", "p", 1, "Number of pages to fetch")
 	feedCmd.Flags().StringVar(&feedCursor, "cursor", "", "Pagination cursor from previous response")
+	feedCmd.Flags().BoolVar(&feedPageJSON, "page-json", false, "Include cursor pagination metadata in structured output (--json, --yaml, or --compact)")
 	feedCmd.Flags().StringVar(&feedFilter, "filter", "", "Filter: all, top, score")
 	feedCmd.Flags().IntVar(&feedTopN, "top", 10, "Top N for filter mode")
 	feedCmd.Flags().Float64Var(&feedThreshold, "threshold", 0.0, "Score threshold")

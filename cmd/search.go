@@ -17,10 +17,11 @@ var (
 )
 
 var (
-	searchType   string
-	searchCount  int
-	searchPages  int
-	searchCursor string
+	searchType     string
+	searchCount    int
+	searchPages    int
+	searchCursor   string
+	searchPageJSON bool
 )
 
 // searchCmd represents the search command
@@ -36,6 +37,9 @@ var searchCmd = &cobra.Command{
 			abortCommand(core.ExitError)
 			return nil
 		}
+		if err := validatePaginationArgs(searchCount, searchPages); err != nil {
+			return err
+		}
 
 		client, err := getClient("")
 		if err != nil {
@@ -48,6 +52,7 @@ var searchCmd = &cobra.Command{
 		runWithWatch(func() error {
 			var allTweets []*models.Tweet
 			cursor := searchCursor
+			hasMore := false
 
 			for i := 0; i < searchPages; i++ {
 				response, err := core.SearchTweets(client, query, searchType, searchCount, cursor)
@@ -56,6 +61,7 @@ var searchCmd = &cobra.Command{
 				}
 				allTweets = append(allTweets, response.Tweets...)
 				cursor = response.CursorBottom
+				hasMore = response.HasMore
 				if !response.HasMore {
 					break
 				}
@@ -67,10 +73,13 @@ var searchCmd = &cobra.Command{
 				allTweets = utils.FilterTweets(allTweets, searchFilter, searchThreshold, searchTopN, &cfg.Filter)
 			}
 
-			output(allTweets, func() {
+			humanOutput := func() {
 				fmt.Println(display.FormatTweetList(allTweets))
-			})
-			return nil
+			}
+			if searchPageJSON {
+				return outputPage(allTweets, cursor, hasMore, humanOutput)
+			}
+			return output(allTweets, humanOutput)
 		})
 
 		return nil
@@ -84,6 +93,7 @@ func init() {
 	searchCmd.Flags().IntVarP(&searchCount, "count", "n", 20, "Number of tweets")
 	searchCmd.Flags().IntVarP(&searchPages, "pages", "p", 1, "Number of pages")
 	searchCmd.Flags().StringVar(&searchCursor, "cursor", "", "Cursor for pagination (from previous response)")
+	searchCmd.Flags().BoolVar(&searchPageJSON, "page-json", false, "Include cursor pagination metadata in structured output (--json, --yaml, or --compact)")
 	searchCmd.Flags().StringVar(&searchFilter, "filter", "", "Filter: all, top, score")
 	searchCmd.Flags().IntVar(&searchTopN, "top", 10, "Top N for filter mode")
 	searchCmd.Flags().Float64Var(&searchThreshold, "threshold", 0.0, "Score threshold")

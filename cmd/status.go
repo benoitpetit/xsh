@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
+	"net"
+	"net/http"
 	"time"
 
 	"github.com/benoitpetit/xsh/core"
@@ -23,17 +25,10 @@ var statusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		showJSON, _ := cmd.Flags().GetBool("json")
 		checkNow, _ := cmd.Flags().GetBool("check")
+		localOnly, _ := cmd.Flags().GetBool("local")
 
-		status := collectSystemStatus(checkNow)
-
-		if showJSON || isJSONMode() || isYAMLMode() {
-			output(status, func() {})
-			return nil
-		}
-
-		displayStatus(status)
-
-		return nil
+		status := collectSystemStatus(checkNow, !localOnly)
+		return outputSystemStatus(status, showJSON)
 	},
 }
 
@@ -62,12 +57,28 @@ type cacheStatus struct {
 }
 
 type connectivityStatus struct {
-	CanReachX      bool   `json:"can_reach_x"`
-	DiscoveryWorks bool   `json:"discovery_works"`
-	Message        string `json:"message,omitempty"`
+	Checked          bool   `json:"checked"`
+	CanReachX        bool   `json:"can_reach_x"`
+	DiscoveryChecked bool   `json:"discovery_checked"`
+	DiscoveryWorks   bool   `json:"discovery_works"`
+	Message          string `json:"message,omitempty"`
 }
 
-func collectSystemStatus(checkNow bool) *systemStatus {
+type statusChecks struct {
+	connectivity   func(context.Context) connectivityStatus
+	endpointHealth func(context.Context) (bool, []string)
+}
+
+func collectSystemStatus(checkNow bool, allowNetwork bool) *systemStatus {
+	return collectSystemStatusWithChecks(checkNow, allowNetwork, statusChecks{
+		connectivity: checkConnectivity,
+		endpointHealth: func(ctx context.Context) (bool, []string) {
+			return core.CheckEndpointHealth(ctx, nil)
+		},
+	})
+}
+
+func collectSystemStatusWithChecks(checkNow bool, allowNetwork bool, checks statusChecks) *systemStatus {
 	status := &systemStatus{
 		Timestamp: time.Now(),
 	}
@@ -88,87 +99,109 @@ func collectSystemStatus(checkNow bool) *systemStatus {
 		FeatureCount:  stats.FeatureCount,
 	}
 
-	status.Connectivity = checkConnectivity()
+	if allowNetwork {
+		ctx, cancel := context.WithTimeout(runtimeContext(), 10*time.Second)
+		status.Connectivity = checks.connectivity(ctx)
+		cancel()
+	} else {
+		status.Connectivity.Message = "Skipped (--local)"
+	}
 
-	if checkNow {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if checkNow && allowNetwork {
+		ctx, cancel := context.WithTimeout(runtimeContext(), 30*time.Second)
 		defer cancel()
 
-		healthy, issues := core.CheckEndpointHealth(ctx, nil)
+		healthy, issues := checks.endpointHealth(ctx)
 		status.EndpointHealth = endpointHealth{
 			Healthy:         healthy,
 			TotalEndpoints:  stats.TotalCount,
 			FailedEndpoints: issues,
-			Message:         "Checked just now",
+			Message:         "Endpoint metadata validated",
 		}
 		if !healthy && len(issues) > 0 {
-			status.EndpointHealth.Message = fmt.Sprintf("%d issues found", len(issues))
+			status.EndpointHealth.Message = fmt.Sprintf("%d endpoint metadata issues found", len(issues))
+		}
+	} else if checkNow {
+		status.EndpointHealth = endpointHealth{
+			Healthy:        status.CacheStatus.Valid,
+			TotalEndpoints: stats.TotalCount,
+			Message:        "Endpoint check skipped (--local); showing local cache status",
 		}
 	} else {
 		status.EndpointHealth = endpointHealth{
 			Healthy:        status.CacheStatus.Valid,
 			TotalEndpoints: stats.TotalCount,
-			Message:        "Using cached status (use --check for fresh check)",
+			Message:        "Using cached endpoint metadata (use --check to validate it)",
 		}
 	}
 
 	return status
 }
 
-func checkConnectivity() connectivityStatus {
-	conn := connectivityStatus{
-		CanReachX:      false,
-		DiscoveryWorks: false,
-	}
-
-	discovery, err := core.NewEndpointDiscovery(false)
-	if err != nil {
-		conn.Message = "Endpoint discovery unavailable"
-		return conn
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	_, err = discovery.GetCachedEndpoints(ctx)
-	if err != nil {
-		conn.CanReachX = !isDiscoveryNetworkError(err)
-		conn.DiscoveryWorks = false
-		if conn.CanReachX {
-			conn.Message = fmt.Sprintf("X.com reachable, but endpoint discovery failed: %v", err)
-		} else {
-			conn.Message = fmt.Sprintf("Cannot reach X.com: %v", err)
-		}
-		return conn
-	}
-
-	conn.CanReachX = true
-	conn.DiscoveryWorks = true
-
-	return conn
+func checkConnectivity(ctx context.Context) connectivityStatus {
+	return probeConnectivity(ctx, http.DefaultClient, "https://x.com/")
 }
 
-func isDiscoveryNetworkError(err error) bool {
+func probeConnectivity(ctx context.Context, client *http.Client, target string) connectivityStatus {
+	status := connectivityStatus{Checked: true}
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, target, nil)
+	if err != nil {
+		status.Message = fmt.Sprintf("Could not create X.com connectivity request: %v", err)
+		return status
+	}
+	response, err := client.Do(req)
+	if err != nil {
+		if isNetworkProbeError(err) {
+			status.Message = fmt.Sprintf("Cannot reach X.com: %v", err)
+		} else {
+			status.Message = fmt.Sprintf("X.com connectivity probe failed: %v", err)
+		}
+		return status
+	}
+	defer response.Body.Close()
+
+	status.CanReachX = true
+	status.Message = "X.com reachable; endpoint discovery was not checked"
+	if response.StatusCode >= http.StatusInternalServerError {
+		status.Message = fmt.Sprintf("X.com reachable but returned HTTP %d; endpoint discovery was not checked", response.StatusCode)
+	}
+	return status
+}
+
+func isNetworkProbeError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errText := strings.ToLower(err.Error())
-	for _, marker := range []string{
-		"no such host",
-		"temporary failure in name resolution",
-		"network is unreachable",
-		"connection refused",
-		"connection reset",
-		"i/o timeout",
-		"context deadline exceeded",
-		"tls handshake timeout",
-		"http request failed",
-	} {
-		if strings.Contains(errText, marker) {
-			return true
-		}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
 	}
-	return false
+	var operationErr *net.OpError
+	var dnsErr *net.DNSError
+	return errors.As(err, &operationErr) || errors.As(err, &dnsErr)
+}
+
+func connectivityStatusLabel(status connectivityStatus) string {
+	if !status.Checked {
+		return "Not checked"
+	}
+	if !status.CanReachX || (status.DiscoveryChecked && !status.DiscoveryWorks) {
+		return "Issues"
+	}
+	if status.DiscoveryChecked {
+		return "OK"
+	}
+	return "Reachable"
+}
+
+func outputSystemStatus(status *systemStatus, showJSON bool) error {
+	if showJSON {
+		return outputJSON(status)
+	}
+	if isJSONMode() || isYAMLMode() || isCompactMode() {
+		return output(status, func() {})
+	}
+	displayStatus(status)
+	return nil
 }
 
 func displayStatus(s *systemStatus) {
@@ -221,10 +254,13 @@ func displayStatus(s *systemStatus) {
 
 	// Connectivity
 	fmt.Println(display.Section("Connectivity"))
-	if s.Connectivity.CanReachX && s.Connectivity.DiscoveryWorks {
-		fmt.Println(display.KeyValue("Status:", display.Success("OK")))
-	} else {
-		fmt.Println(display.KeyValue("Status:", display.Error("Issues")))
+	switch label := connectivityStatusLabel(s.Connectivity); label {
+	case "Not checked":
+		fmt.Println(display.KeyValue("Status:", display.Muted(label)))
+	case "OK", "Reachable":
+		fmt.Println(display.KeyValue("Status:", display.Success(label)))
+	default:
+		fmt.Println(display.KeyValue("Status:", display.Error(label)))
 	}
 	if s.Connectivity.Message != "" {
 		fmt.Println(display.KeyValue("Message:", s.Connectivity.Message))
@@ -246,6 +282,7 @@ func displayStatus(s *systemStatus) {
 
 func init() {
 	rootCmd.AddCommand(statusCmd)
-	statusCmd.Flags().Bool("check", false, "Perform fresh endpoint health check")
+	statusCmd.Flags().Bool("check", false, "Validate cached endpoint freshness and required operations (may fetch discovery if cache is unavailable)")
+	statusCmd.Flags().Bool("local", false, "Use local cache only; skip connectivity and endpoint checks")
 	statusCmd.Flags().Bool("json", false, "Output as JSON")
 }

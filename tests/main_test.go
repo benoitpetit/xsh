@@ -12,6 +12,10 @@ func TestMain(m *testing.M) {
 
 // TestSuite verifies that all packages are testable
 func TestSuite(t *testing.T) {
+	// Legacy integration tests change HOME to isolate account/config files.
+	// A host XDG_CONFIG_HOME overrides HOME and otherwise leaks real user data.
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("XSH_CONFIG_DIR", "")
 	t.Run("Auth", func(t *testing.T) {
 		t.Run("Credentials", TestAuthCredentials)
 		t.Run("EnvAuth", TestEnvAuth)

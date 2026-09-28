@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 
 	"github.com/benoitpetit/xsh/browser"
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
+	"github.com/benoitpetit/xsh/models"
 	"github.com/spf13/cobra"
 )
 
@@ -15,6 +17,29 @@ var (
 	authAccount string
 	forceFlag   bool
 )
+
+func credentialHint(token string) string {
+	return redactCredential(token)
+}
+
+func authWhoamiPayload(accountName string, viewer *models.User) map[string]interface{} {
+	return map[string]interface{}{
+		"authenticated": true,
+		"account":       accountName,
+		"profile":       viewer,
+	}
+}
+
+func resolveAuthWhoamiProfile(fetchViewer func() (*models.User, error)) (*models.User, error) {
+	viewer, err := fetchViewer()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to fetch viewer profile: %w", err)
+	}
+	if viewer == nil {
+		return nil, errors.New("Could not resolve the authenticated X profile")
+	}
+	return viewer, nil
+}
 
 // authCmd represents the auth command
 var authCmd = &cobra.Command{
@@ -39,8 +64,8 @@ var authStatusCmd = &cobra.Command{
 
 		info := map[string]interface{}{
 			"authenticated": true,
-			"auth_token":    creds.AuthToken[:8] + "...",
-			"ct0":           creds.Ct0[:8] + "...",
+			"auth_token":    credentialHint(creds.AuthToken),
+			"ct0":           credentialHint(creds.Ct0),
 			"account":       creds.AccountName,
 		}
 
@@ -189,7 +214,7 @@ Examples:
 		}
 
 		fmt.Println(display.Success(fmt.Sprintf("Authenticated using %s! Saved as account '%s'", browserName, acc)))
-		fmt.Println(display.KeyValue("Token:", creds.AuthToken[:8]+"..."))
+		fmt.Println(display.KeyValue("Token:", credentialHint(creds.AuthToken)))
 
 		return nil
 	},
@@ -345,6 +370,13 @@ var authWhoamiCmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Show current user information",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		creds, err := core.GetCredentials(account)
+		if err != nil || creds == nil {
+			fmt.Println(display.Error("Not authenticated"))
+			abortCommand(core.ExitAuthError)
+			return nil
+		}
+
 		client, err := getClient("")
 		if err != nil {
 			fmt.Println(display.Error(err.Error()))
@@ -353,34 +385,19 @@ var authWhoamiCmd = &cobra.Command{
 		}
 		defer client.Close()
 
-		// Get current user by verifying credentials
-		creds, _ := core.GetCredentials(account)
-		if creds == nil {
-			fmt.Println(display.Error("Not authenticated"))
-			abortCommand(core.ExitAuthError)
-			return nil
-		}
-
-		// Try to get user info from API
-		// We'll use the home timeline to verify
-		response, err := core.GetHomeTimeline(client, "for-you", 1, "")
+		viewer, err := resolveAuthWhoamiProfile(func() (*models.User, error) {
+			return core.GetViewer(client)
+		})
 		if err != nil {
-			fmt.Println(display.Error(fmt.Sprintf("Failed to verify credentials: %v", err)))
+			fmt.Println(display.Error(err.Error()))
 			abortCommand(core.ExitAuthError)
 			return nil
 		}
 
-		output(map[string]interface{}{
-			"authenticated": true,
-			"account":       creds.AccountName,
-			"auth_token":    creds.AuthToken[:8] + "...",
-		}, func() {
+		output(authWhoamiPayload(creds.AccountName, viewer), func() {
 			fmt.Println(display.Success("Authenticated"))
 			fmt.Println(display.KeyValue("Account:", creds.AccountName))
-			fmt.Println(display.KeyValue("Token:", creds.AuthToken[:8]+"..."))
-			if len(response.Tweets) > 0 {
-				fmt.Println(display.KeyValue("API Status:", "OK (timeline accessible)"))
-			}
+			fmt.Println(display.KeyValue("Profile:", "@"+viewer.Handle))
 		})
 
 		return nil
