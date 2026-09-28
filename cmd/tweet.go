@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	tweetThread   bool
-	tweetCount    int
-	exportArticle string
+	tweetThread         bool
+	tweetCount          int
+	exportArticle       string
+	articleExportFormat string
 
 	// Bookmarks filter flags
 	bookmarksFilter    string
@@ -30,7 +31,9 @@ var tweetCmd = &cobra.Command{
 
 Examples:
   xsh tweet view 1234567890                # View a specific tweet
+  xsh tweet get 1234567890                 # Fetch only that tweet, without its thread
   xsh tweet view 1234567890 --thread       # View tweet with replies as thread tree
+  xsh tweet view 1234567890 --export article.json --export-format json
   xsh tweet post "Hello world"             # Post a new tweet
   xsh tweet note --file essay.txt          # Publish a long-form Note Tweet
   xsh tweet like 1234567890                # Like a tweet
@@ -50,10 +53,15 @@ var tweetViewCmd = &cobra.Command{
 	Short: "View a tweet and its thread",
 	Long: `View a tweet and its thread. 
 	
-For tweets containing articles (long-form content), use --export to save as Markdown:
-  xsh tweet view <id> --export article.md`,
+For tweets containing articles (long-form content), use --export to save as Markdown
+(the default) or JSON:
+  xsh tweet view <id> --export article.md
+  xsh tweet view <id> --export article.json --export-format json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateArticleExportOptions(exportArticle, articleExportFormat); err != nil {
+			return err
+		}
 		if !utils.ValidateTweetID(args[0]) {
 			fmt.Println(display.Error(fmt.Sprintf("Invalid tweet ID: %s", args[0])))
 			abortCommand(core.ExitError)
@@ -101,13 +109,13 @@ For tweets containing articles (long-form content), use --export to save as Mark
 				return nil
 			}
 
-			if err := core.ExportArticleToFile(articleData, focal, exportArticle); err != nil {
+			if err := writeArticleExport(articleData, focal, exportArticle, articleExportFormat); err != nil {
 				fmt.Println(display.Error(fmt.Sprintf("Failed to export article: %v", err)))
 				abortCommand(core.ExitError)
 				return nil
 			}
 
-			fmt.Println(display.Success(fmt.Sprintf("Article exported to %s", exportArticle)))
+			fmt.Println(display.Success(fmt.Sprintf("Article exported as %s to %s", articleExportFormat, exportArticle)))
 			return nil
 		}
 
@@ -666,6 +674,7 @@ func init() {
 
 	// Add subcommands to tweet
 	tweetCmd.AddCommand(tweetViewCmd)
+	tweetCmd.AddCommand(tweetGetCmd)
 	tweetCmd.AddCommand(tweetPostCmd)
 	tweetCmd.AddCommand(tweetNoteCmd)
 	tweetCmd.AddCommand(tweetDeleteCmd)
@@ -678,7 +687,8 @@ func init() {
 
 	tweetViewCmd.Flags().BoolVar(&tweetThread, "thread", false, "Show tweet with all replies as a thread tree")
 	tweetViewCmd.Flags().IntVarP(&tweetCount, "count", "n", 20, "Number of tweets/comments to fetch (max 100)")
-	tweetViewCmd.Flags().StringVarP(&exportArticle, "export", "o", "", "Export article to Markdown file (for tweets containing long-form articles)")
+	tweetViewCmd.Flags().StringVarP(&exportArticle, "export", "o", "", "Export article to a file (for tweets containing long-form articles)")
+	tweetViewCmd.Flags().StringVar(&articleExportFormat, "export-format", "markdown", "Article export format: markdown or json")
 	tweetPostCmd.Flags().String("reply-to", "", "Tweet ID to reply to")
 	tweetPostCmd.Flags().String("quote", "", "Tweet URL to quote")
 	tweetPostCmd.Flags().StringArrayP("image", "i", nil, "Image to attach (can be used multiple times, max 4)")

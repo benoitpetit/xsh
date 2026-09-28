@@ -21,6 +21,7 @@ No API keys required — authenticates directly via browser cookies.
   - [Tweet Operations](#tweet-operations)
   - [Timeline & Search](#timeline--search)
   - [Users](#users)
+  - [Communities](#communities)
   - [Social Actions](#social-actions)
   - [Bookmarks](#bookmarks)
   - [Direct Messages](#direct-messages)
@@ -51,6 +52,7 @@ No API keys required — authenticates directly via browser cookies.
 - **Resilient endpoint discovery** — authenticated recursive discovery of GraphQL operation IDs across modern X.com bundles
 - **Media support** — post up to 4 images per tweet, download media from any tweet
 - **Full coverage** — tweets, DMs, lists, bookmarks, jobs, trends, schedules, relationships, and more
+- **Community discovery** — browse communities and continue through cursor-based pages
 - **Long-form publishing** — publish Note Tweets from text or a file with explicit confirmation
 - **Endpoint-aware fallbacks** — stale X operations are detected; quote search falls back to `SearchTimeline`
 
@@ -203,6 +205,8 @@ These flags apply to every command:
 xsh tweet view <id>
 xsh tweet view <id> --thread
 xsh tweet view <id> --count 50
+xsh tweet get <id>                    # Fetch the tweet without its thread
+xsh tweet view <id> --export article.json --export-format json
 
 # Post a tweet
 xsh tweet post "Hello world!"
@@ -286,6 +290,21 @@ xsh user media <handle> --count 50
 xsh user followers-you-know <handle> --count 50
 xsh user blue-verified-followers <handle> --count 50
 xsh user media <handle> --json --cursor <cursor>
+```
+
+---
+
+### Communities
+
+```bash
+# Discover communities and fetch another page from its cursor
+xsh community explore --count 20
+xsh community explore --json --cursor <cursor>
+
+# Inspect a community, read its tweets, or join/leave it
+xsh community view <community-id>
+xsh community tweets <community-id>
+xsh community join <community-id>
 ```
 
 ---
@@ -498,6 +517,9 @@ xsh tweets <id1> <id2> <id3>
 
 # Fetch multiple user profiles
 xsh users <handle1> <handle2> <handle3>
+
+# Fetch multiple profiles by numeric user ID
+xsh users --id 44196397 --id 783214
 ```
 
 ---

@@ -13,10 +13,11 @@ import (
 // communityCmd represents the community parent command
 var communityCmd = &cobra.Command{
 	Use:   "community",
-	Short: "Community operations - view, tweets, join, leave",
+	Short: "Community operations - explore, view, tweets, join, leave",
 	Long: `View and interact with Twitter/X Communities.
 
 Examples:
+  xsh community explore                # Discover communities
   xsh community view 123456          # View community details
   xsh community tweets 123456        # View community tweets
   xsh community join 123456          # Join a community
