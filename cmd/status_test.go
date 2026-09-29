@@ -3,9 +3,9 @@ package cmd
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -45,21 +45,30 @@ func TestLocalStatusSkipsConnectivityAndEndpointChecks(t *testing.T) {
 }
 
 func TestProbeConnectivityUsesLiveHTTPResponseAndDoesNotClaimDiscovery(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	const target = "https://example.invalid/"
+	client := &http.Client{Transport: statusProbeRoundTripper(func(r *http.Request) (*http.Response, error) {
 		if r.Method != http.MethodHead {
 			t.Errorf("request method = %q, want HEAD", r.Method)
 		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
+		if r.URL.String() != target {
+			t.Errorf("request URL = %q, want %q", r.URL, target)
+		}
+		return &http.Response{StatusCode: http.StatusNoContent, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
+	})}
 
-	status := probeConnectivity(context.Background(), server.Client(), server.URL)
+	status := probeConnectivity(context.Background(), client, target)
 	if !status.Checked || !status.CanReachX {
 		t.Fatalf("successful probe status = %#v", status)
 	}
 	if status.DiscoveryChecked || status.DiscoveryWorks {
 		t.Fatalf("reachability probe claimed endpoint discovery was checked: %#v", status)
 	}
+}
+
+type statusProbeRoundTripper func(*http.Request) (*http.Response, error)
+
+func (rt statusProbeRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	return rt(r)
 }
 
 func TestDiscoveryNetworkErrorUsesErrorTypes(t *testing.T) {

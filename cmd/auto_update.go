@@ -58,27 +58,38 @@ used as a source of authenticated endpoints.`,
 		manager := core.GetEndpointManager()
 		before := manager.ListEndpoints()
 
-		discovery, err := core.NewEndpointDiscovery(verbose)
+		discovery, err := core.NewEndpointDiscoveryForAccount(verbose, account)
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Error initializing endpoint discovery: %v", err)))
 			abortCommand(core.ExitError)
 		}
 
-		var previousCache *core.EndpointCache
-		if autoUpdateDryRun {
-			previousCache, _ = discovery.LoadCache()
-		}
-
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
-		cache, err := discovery.DiscoverEndpoints(ctx)
+		var cache *core.EndpointCache
+		if autoUpdateDryRun {
+			cache, err = discovery.PreviewEndpoints(ctx)
+		} else {
+			err = manager.RefreshEndpointsForAccount(ctx, account)
+			if err == nil {
+				cache, err = discovery.LoadCache()
+			}
+		}
 		if err != nil {
 			fmt.Println(display.Error(fmt.Sprintf("Auto-update failed: %v", err)))
 			abortCommand(core.ExitError)
 		}
 
 		after := manager.ListEndpoints()
+		if autoUpdateDryRun {
+			for op, endpoint := range cache.Endpoints {
+				if manager.IsRejectedEndpoint(op, endpoint) {
+					continue
+				}
+				after[op] = endpoint
+			}
+		}
 		changed := make([]string, 0)
 		for op, newEndpoint := range after {
 			if oldEndpoint, ok := before[op]; ok && oldEndpoint != newEndpoint {
@@ -93,13 +104,6 @@ used as a source of authenticated endpoints.`,
 		sort.Strings(changed)
 
 		if autoUpdateDryRun {
-			if previousCache != nil {
-				_ = discovery.SaveCache(previousCache)
-				discovery.UpdateMemoryCache(previousCache)
-			} else {
-				core.InvalidateCache()
-			}
-
 			if len(changed) == 0 {
 				fmt.Println(display.Success("No endpoint changes detected"))
 				return nil

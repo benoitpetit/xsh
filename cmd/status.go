@@ -73,7 +73,12 @@ func collectSystemStatus(checkNow bool, allowNetwork bool) *systemStatus {
 	return collectSystemStatusWithChecks(checkNow, allowNetwork, statusChecks{
 		connectivity: checkConnectivity,
 		endpointHealth: func(ctx context.Context) (bool, []string) {
-			return core.CheckEndpointHealth(ctx, nil)
+			client, err := core.NewEndpointProbeClient(account)
+			if err != nil {
+				return false, []string{err.Error()}
+			}
+			defer client.Close()
+			return core.CheckEndpointHealth(ctx, client)
 		},
 	})
 }
@@ -116,10 +121,10 @@ func collectSystemStatusWithChecks(checkNow bool, allowNetwork bool, checks stat
 			Healthy:         healthy,
 			TotalEndpoints:  stats.TotalCount,
 			FailedEndpoints: issues,
-			Message:         "Endpoint metadata validated",
+			Message:         "Critical read operations verified; other endpoints were not probed",
 		}
 		if !healthy && len(issues) > 0 {
-			status.EndpointHealth.Message = fmt.Sprintf("%d endpoint metadata issues found", len(issues))
+			status.EndpointHealth.Message = fmt.Sprintf("%d endpoint check issues found", len(issues))
 		}
 	} else if checkNow {
 		status.EndpointHealth = endpointHealth{

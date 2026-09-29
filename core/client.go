@@ -686,7 +686,7 @@ func (c *XClient) graphqlRequest(
 		endpoint, cachedFeatures, quarantined := manager.resolveOperation(operation)
 		if quarantined {
 			return nil, &APIError{
-				Message:    fmt.Sprintf("GraphQL operation %q is quarantined after a 404; refresh discovery before retrying", operation),
+				Message:    fmt.Sprintf("GraphQL operation %q is quarantined after a confirmed 404; X may have removed or blocked it", operation),
 				StatusCode: http.StatusNotFound,
 			}
 		}
@@ -758,6 +758,9 @@ func (c *XClient) graphqlRequest(
 				}
 
 				// Second attempt failed too
+				if c.invalidateCacheHook == nil && c.refreshEndpointsHook == nil {
+					manager.QuarantineEndpoint(operation, "HTTP 404 after endpoint refresh")
+				}
 				return nil, &APIError{
 					Message: fmt.Sprintf(
 						"GraphQL endpoint '%s' not found (HTTP 404) "+
@@ -794,6 +797,9 @@ func (c *XClient) graphqlRequest(
 				continue
 			}
 
+			if c.invalidateCacheHook == nil && c.refreshEndpointsHook == nil {
+				manager.QuarantineEndpoint(operation, "GraphQL query not found after endpoint refresh")
+			}
 			return nil, &APIError{
 				Message: fmt.Sprintf(
 					"GraphQL endpoint '%s' appears obsolete after refresh (response indicates query not found)",
@@ -905,7 +911,7 @@ func isGraphQLEndpointNotFoundResponse(result map[string]interface{}) bool {
 		}
 
 		lower := strings.ToLower(msg)
-		if strings.Contains(lower, "query not found") || strings.Contains(lower, "not found") || strings.Contains(lower, "operation not found") {
+		if strings.Contains(lower, "query not found") || strings.Contains(lower, "operation not found") || strings.Contains(lower, "persistedquerynotfound") {
 			return true
 		}
 	}

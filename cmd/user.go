@@ -214,6 +214,14 @@ var userMediaCmd = &cobra.Command{
 	},
 }
 
+func showUserFollowersError(message string) {
+	if isJSONMode() || isYAMLMode() {
+		_ = output(map[string]string{"error": message}, func() {})
+		return
+	}
+	fmt.Fprintln(runtimeOutput(), display.Error(message))
+}
+
 // userFollowersCmd represents the user followers subcommand
 var userFollowersCmd = &cobra.Command{
 	Use:   "followers [handle]",
@@ -222,7 +230,7 @@ var userFollowersCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := getClient("")
 		if err != nil {
-			fmt.Println(display.Error(err.Error()))
+			showUserFollowersError(err.Error())
 			abortCommand(core.ExitAuthError)
 			return nil
 		}
@@ -230,19 +238,19 @@ var userFollowersCmd = &cobra.Command{
 
 		handle, valid := utils.ValidateTwitterHandle(args[0])
 		if !valid {
-			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
+			showUserFollowersError(fmt.Sprintf("Invalid Twitter handle: %s", args[0]))
 			abortCommand(core.ExitError)
 			return nil
 		}
 		user, err := core.GetUserByHandle(client, handle)
 		if err != nil {
-			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
+			showUserFollowersError(fmt.Sprintf("Failed to fetch user: %v", err))
 			abortCommand(core.ExitError)
 			return nil
 		}
 
 		if user == nil {
-			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
+			showUserFollowersError(fmt.Sprintf("User @%s not found", handle))
 			abortCommand(core.ExitError)
 			return nil
 		}
@@ -250,7 +258,7 @@ var userFollowersCmd = &cobra.Command{
 		cursor, _ := cmd.Flags().GetString("cursor")
 		users, nextCursor, err := core.GetFollowers(client, user.ID, userCount, cursor)
 		if err != nil {
-			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch followers: %v", err)))
+			showUserFollowersError(fmt.Sprintf("Failed to fetch followers: %v", err))
 			abortCommand(core.ExitError)
 			return nil
 		}

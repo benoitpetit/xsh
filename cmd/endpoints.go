@@ -97,7 +97,7 @@ var endpointsCheckCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			checkAllEndpoints()
+			checkAllEndpoints(cmd.Context())
 			return nil
 		}
 
@@ -105,21 +105,42 @@ var endpointsCheckCmd = &cobra.Command{
 		manager := core.GetEndpointManager()
 		endpoint := manager.GetEndpoint(operation)
 		isDynamic, status := manager.CheckEndpoint(operation)
-		opFeatures := manager.GetOpFeatures(operation)
+		opFeatures, featureSource := manager.GetOpFeaturesWithSource(operation)
 		quarantined := manager.IsQuarantined(operation)
 		_, hasStaticFallback := core.GraphQLEndpoints[operation]
 		if quarantined || (!isDynamic && !hasStaticFallback) {
 			endpoint = ""
 		}
+		discoveryState := endpointDiscoveryState(isDynamic, hasStaticFallback, quarantined)
+		probe := core.EndpointProbe{State: "unavailable", Message: "No endpoint is available"}
+		if endpoint != "" {
+			client, err := core.NewEndpointProbeClient(account)
+			if err != nil {
+				probe = core.EndpointProbe{State: "auth_error", Message: err.Error()}
+			} else {
+				defer client.Close()
+				probe = core.ProbeGraphQLEndpoint(cmd.Context(), client, operation, endpoint, opFeatures)
+			}
+		}
+		if manager.RecordProbeResult(operation, probe) {
+			quarantined = true
+			endpoint = ""
+			isDynamic, status = manager.CheckEndpoint(operation)
+			discoveryState = endpointDiscoveryState(isDynamic, hasStaticFallback, quarantined)
+		}
 
 		if isJSONMode() || isYAMLMode() {
 			output(map[string]interface{}{
-				"operation":   operation,
-				"endpoint":    endpoint,
-				"is_dynamic":  isDynamic,
-				"status":      status,
-				"quarantined": quarantined,
-				"features":    opFeatures,
+				"operation":       operation,
+				"endpoint":        endpoint,
+				"is_dynamic":      isDynamic,
+				"discovery_state": discoveryState,
+				"status":          status,
+				"quarantined":     quarantined,
+				"verified":        probe.State == "healthy",
+				"features":        opFeatures,
+				"feature_source":  featureSource,
+				"probe":           probe,
 			}, func() {})
 			return nil
 		}
@@ -133,11 +154,13 @@ var endpointsCheckCmd = &cobra.Command{
 		} else {
 			fmt.Println(display.KeyValue("URL:", fmt.Sprintf("%s/%s", core.GraphQLBase, endpoint)))
 		}
-		fmt.Println(display.KeyValue("Status:", display.StatusBadge(status)))
+		fmt.Println(display.KeyValue("Discovery:", discoveryState))
+		fmt.Println(display.KeyValue("Endpoint source:", display.StatusBadge(status)))
+		fmt.Println(display.KeyValue("Verification:", probe.State+" — "+probe.Message))
 
 		if len(opFeatures) > 0 {
 			fmt.Println()
-			fmt.Println(display.Section(fmt.Sprintf("Features (%d)", len(opFeatures))))
+			fmt.Println(display.Section(fmt.Sprintf("Features from %s (%d)", featureSource, len(opFeatures))))
 			for feat, val := range opFeatures {
 				if val {
 					fmt.Println(display.Bullet(display.Success(feat)))
@@ -151,7 +174,24 @@ var endpointsCheckCmd = &cobra.Command{
 	},
 }
 
+func endpointDiscoveryState(dynamic, hasStaticFallback, quarantined bool) string {
+	switch {
+	case quarantined:
+		return "quarantined"
+	case dynamic:
+		return "discovered"
+	case hasStaticFallback:
+		return "static_fallback"
+	default:
+		return "unavailable"
+	}
+}
+
 // endpointsRefreshCmd refreshes endpoints from X.com
+func showEndpointRefreshProgress() bool {
+	return !isJSONMode() && !isYAMLMode() && !isCompactMode()
+}
+
 var endpointsRefreshCmd = &cobra.Command{
 	Use:   "refresh",
 	Short: "Refresh endpoints from X.com",
@@ -169,13 +209,21 @@ as an authenticated endpoint source.
 
 The process may take 10-30 seconds depending on network speed.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println(display.Action("Refreshing endpoints from", "X.com"))
-		fmt.Println(display.Muted("This may take a moment..."))
+		if showEndpointRefreshProgress() {
+			fmt.Println(display.Action("Refreshing endpoints from", "X.com"))
+			fmt.Println(display.Muted("This may take a moment..."))
+		}
 
 		start := time.Now()
 
-		if err := core.RefreshEndpoints(); err != nil {
-			fmt.Println(display.Error(fmt.Sprintf("Refresh failed: %v", err)))
+		ctx, cancel := context.WithTimeout(cmd.Context(), 120*time.Second)
+		defer cancel()
+		if err := core.GetEndpointManager().RefreshEndpointsForAccount(ctx, account); err != nil {
+			if isJSONMode() || isYAMLMode() {
+				_ = output(map[string]interface{}{"success": false, "error": err.Error()}, func() {})
+			} else {
+				fmt.Println(display.Error(fmt.Sprintf("Refresh failed: %v", err)))
+			}
 			abortCommand(core.ExitError)
 			return nil
 		}
@@ -186,15 +234,16 @@ The process may take 10-30 seconds depending on network speed.`,
 
 		if isJSONMode() || isYAMLMode() {
 			output(map[string]interface{}{
-				"success":   true,
-				"duration":  duration.String(),
-				"endpoints": stats.TotalCount,
-				"features":  stats.FeatureCount,
+				"success":         true,
+				"duration":        duration.String(),
+				"endpoints":       stats.DynamicCount,
+				"total_endpoints": stats.TotalCount,
+				"features":        stats.FeatureCount,
 			}, func() {})
 			return nil
 		}
 
-		fmt.Println(display.Success(fmt.Sprintf("Refreshed %d endpoints in %s", stats.TotalCount, duration)))
+		fmt.Println(display.Success(fmt.Sprintf("Refreshed %d dynamic endpoints in %s", stats.DynamicCount, duration)))
 
 		return nil
 	},
@@ -210,40 +259,41 @@ var endpointsStatusCmd = &cobra.Command{
 
 		discovery, err := core.NewEndpointDiscovery(verbose)
 		var healthStatus string
-		var canDiscover bool
+		var cacheAvailable bool
 
 		if err != nil {
 			healthStatus = fmt.Sprintf("Discovery unavailable: %v", err)
-			canDiscover = false
 		} else {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			cache, err := discovery.GetCachedEndpoints(ctx)
+			cache, err := discovery.LoadCache()
 			if err != nil {
-				healthStatus = fmt.Sprintf("Cache error: %v", err)
-				canDiscover = false
+				healthStatus = "No dynamic endpoint cache"
+			} else if len(cache.Endpoints) == 0 {
+				healthStatus = "No dynamic endpoints (quarantine state retained)"
 			} else if cache.IsValid() {
-				healthStatus = "OK"
-				canDiscover = true
+				healthStatus = "Dynamic cache current"
+				cacheAvailable = true
+			} else if cache.IsUsable() {
+				healthStatus = "Dynamic cache stale but usable"
+				cacheAvailable = true
 			} else {
-				healthStatus = "Cache expired"
-				canDiscover = true
+				healthStatus = "Dynamic cache expired"
 			}
 		}
 
 		if isJSONMode() || isYAMLMode() {
 			output(map[string]interface{}{
-				"health":       healthStatus,
-				"can_discover": canDiscover,
-				"stats":        stats,
+				"health":            healthStatus,
+				"cache_available":   cacheAvailable,
+				"discovery_checked": false,
+				"stats":             stats,
 			}, func() {})
 			return nil
 		}
 
 		fmt.Println(display.Title("Endpoint System Status"))
 		fmt.Println(display.KeyValue("Health:", display.StatusBadge(healthStatus)))
-		fmt.Println(display.KeyValue("Auto-discover:", fmt.Sprintf("%v", canDiscover)))
+		fmt.Println(display.KeyValue("Dynamic cache:", fmt.Sprintf("%v", cacheAvailable)))
+		fmt.Println(display.KeyValue("Discovery checked:", "no (run xsh endpoints refresh)"))
 		fmt.Println(display.KeyValue("Available endpoints:", fmt.Sprintf("%d", stats.TotalCount)))
 		fmt.Println(display.KeyValue("Dynamic endpoints:", fmt.Sprintf("%d", stats.DynamicCount)))
 		fmt.Println(display.KeyValue("Static fallbacks:", fmt.Sprintf("%d", stats.StaticCount)))
@@ -329,46 +379,65 @@ var endpointsResetCmd = &cobra.Command{
 }
 
 // checkAllEndpoints checks all critical endpoints
-func checkAllEndpoints() {
+func checkAllEndpoints(ctx context.Context) {
 	manager := core.GetEndpointManager()
 
-	criticalOps := []string{
-		"HomeTimeline",
-		"HomeLatestTimeline",
-		"UserByScreenName",
-		"SearchTimeline",
-		"TweetDetail",
-		"UserTweets",
+	criticalOps := []string{"Viewer", "UserByScreenName", "SearchTimeline"}
+	for _, op := range []string{"HomeTimeline", "HomeLatestTimeline"} {
+		if dynamic, _ := manager.CheckEndpoint(op); dynamic {
+			criticalOps = append([]string{op}, criticalOps...)
+			break
+		}
 	}
 
 	fmt.Println(display.Title("Checking critical endpoints"))
 	fmt.Println()
 
+	client, clientErr := core.NewEndpointProbeClient(account)
+	if client != nil {
+		defer client.Close()
+	}
 	allOK := true
 	for _, op := range criticalOps {
 		endpoint := manager.GetEndpoint(op)
 		isDynamic, _ := manager.CheckEndpoint(op)
+		if manager.IsQuarantined(op) {
+			allOK = false
+			fmt.Println("  " + display.Warning("!") + " " + lipgloss.NewStyle().Width(25).Render(op) + " [" + display.Warning("quarantined") + "] " + display.Muted("endpoint excluded after confirmed 404"))
+			continue
+		}
+		if _, supported := core.GraphQLEndpoints[op]; !isDynamic && !supported {
+			continue
+		}
 
 		indicator := display.Muted("○")
 		if isDynamic {
 			indicator = display.Primary("◉")
 		}
 
-		status := display.Success("OK")
-		if !isDynamic {
-			status = display.Warning("STATIC")
+		probe := core.EndpointProbe{State: "auth_error", Message: "No stored authentication available"}
+		if clientErr == nil {
+			probe = core.ProbeGraphQLEndpoint(ctx, client, op, endpoint, manager.GetOpFeatures(op))
+		}
+		if manager.RecordProbeResult(op, probe) {
+			allOK = false
+			fmt.Println("  " + display.Warning("!") + " " + lipgloss.NewStyle().Width(25).Render(op) + " [" + display.Warning("quarantined") + "] " + display.Muted(probe.Message))
+			continue
+		}
+		status := display.Success(probe.State)
+		if probe.State != "healthy" {
+			status = display.Warning(probe.State)
 			allOK = false
 		}
 
-		fmt.Println("  " + indicator + " " + lipgloss.NewStyle().Width(25).Render(op) + " " + display.Muted("→") + " " + endpoint + " [" + status + "]")
+		fmt.Println("  " + indicator + " " + lipgloss.NewStyle().Width(25).Render(op) + " " + display.Muted("→") + " " + endpoint + " [" + status + "] " + display.Muted(probe.Message))
 	}
 
 	fmt.Println()
 	if allOK {
-		fmt.Println(display.Success("All critical endpoints are using dynamic discovery"))
+		fmt.Println(display.Success("All checked endpoints returned GraphQL data"))
 	} else {
-		fmt.Println(display.Warning("Some endpoints using static fallbacks"))
-		fmt.Println(display.Info("Run 'xsh endpoints refresh' to enable dynamic discovery"))
+		fmt.Println(display.Warning("Some endpoints could not be confirmed by a live request"))
 	}
 }
 

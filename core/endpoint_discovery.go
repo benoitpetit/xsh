@@ -55,13 +55,14 @@ var (
 
 // EndpointCache represents the cached endpoint data
 type EndpointCache struct {
-	Endpoints   map[string]string   `json:"endpoints"`
-	Quarantined map[string]string   `json:"quarantined,omitempty"`
-	Features    map[string]bool     `json:"features"`
-	OpFeatures  map[string][]string `json:"op_features"`
-	Timestamp   time.Time           `json:"timestamp"`
-	Version     string              `json:"version"`
-	Fingerprint string              `json:"fingerprint"` // Hash of X.com response for change detection
+	Endpoints      map[string]string   `json:"endpoints"`
+	Quarantined    map[string]string   `json:"quarantined,omitempty"`
+	QuarantinedIDs map[string]string   `json:"quarantined_ids,omitempty"`
+	Features       map[string]bool     `json:"features"`
+	OpFeatures     map[string][]string `json:"op_features"`
+	Timestamp      time.Time           `json:"timestamp"`
+	Version        string              `json:"version"`
+	Fingerprint    string              `json:"fingerprint"` // Hash of X.com response for change detection
 }
 
 // GetMemoryCache returns the singleton memory cache
@@ -77,6 +78,7 @@ type EndpointDiscovery struct {
 	publicClient *http.Client
 	cachePath    string
 	verbose      bool
+	credentials  *AuthCredentials
 }
 
 // NewEndpointDiscovery creates a new endpoint discovery instance
@@ -92,6 +94,31 @@ func NewEndpointDiscovery(verbose bool) (*EndpointDiscovery, error) {
 		cachePath:    cachePath,
 		verbose:      verbose,
 	}, nil
+}
+
+// NewEndpointDiscoveryForAccount selects a stored account without importing
+// browser cookies. An empty account uses the configured default.
+func NewEndpointDiscoveryForAccount(verbose bool, account string) (*EndpointDiscovery, error) {
+	ed, err := NewEndpointDiscovery(verbose)
+	if err != nil || account == "" {
+		return ed, err
+	}
+	creds, err := LoadStoredAuth(account)
+	if err != nil {
+		return nil, err
+	}
+	if creds == nil || !creds.IsValid() {
+		return nil, fmt.Errorf("no stored credentials for account %q", account)
+	}
+	ed.credentials = creds
+	return ed, nil
+}
+
+func (ed *EndpointDiscovery) discoveryCredentials() *AuthCredentials {
+	if ed != nil && ed.credentials != nil {
+		return ed.credentials
+	}
+	return getDiscoveryCredentials()
 }
 
 func createStandardDiscoveryHTTPClient() *http.Client {
@@ -135,13 +162,22 @@ func createDiscoveryHTTPClient() *http.Client {
 // DiscoverEndpoints performs full endpoint discovery from X.com
 // This is the main entry point equivalent to Python's _fetch_and_extract
 func (ed *EndpointDiscovery) DiscoverEndpoints(ctx context.Context) (*EndpointCache, error) {
+	return ed.discoverEndpoints(ctx, true)
+}
+
+// PreviewEndpoints extracts current operations without changing the active cache.
+func (ed *EndpointDiscovery) PreviewEndpoints(ctx context.Context) (*EndpointCache, error) {
+	return ed.discoverEndpoints(ctx, false)
+}
+
+func (ed *EndpointDiscovery) discoverEndpoints(ctx context.Context, publish bool) (*EndpointCache, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if ed.verbose {
 		log.Println("[EndpointDiscovery] Starting endpoint discovery from X.com...")
 	}
-	if getDiscoveryCredentials() == nil {
+	if ed.discoveryCredentials() == nil {
 		return nil, fmt.Errorf("authenticated X credentials required for endpoint discovery")
 	}
 
@@ -181,21 +217,22 @@ func (ed *EndpointDiscovery) DiscoverEndpoints(ctx context.Context) (*EndpointCa
 
 	// Build cache
 	cache := &EndpointCache{
-		Endpoints:   endpoints,
-		Quarantined: make(map[string]string),
-		Features:    features,
-		OpFeatures:  opFeatures,
-		Timestamp:   time.Now(),
-		Version:     "1.0",
-		Fingerprint: fingerprint,
+		Endpoints:      endpoints,
+		Quarantined:    make(map[string]string),
+		QuarantinedIDs: make(map[string]string),
+		Features:       features,
+		OpFeatures:     opFeatures,
+		Timestamp:      time.Now(),
+		Version:        "1.0",
+		Fingerprint:    fingerprint,
 	}
 
-	// Save to disk and memory
-	if err := ed.SaveCache(cache); err != nil && ed.verbose {
-		log.Printf("[EndpointDiscovery] Warning: failed to save cache: %v", err)
+	if publish {
+		if err := ed.SaveCache(cache); err != nil {
+			return nil, fmt.Errorf("failed to persist discovered endpoints: %w", err)
+		}
+		ed.UpdateMemoryCache(cache)
 	}
-
-	ed.UpdateMemoryCache(cache)
 
 	if ed.verbose {
 		log.Printf("[EndpointDiscovery] Discovered %d endpoints, %d features, %d op-feature mappings",
@@ -207,16 +244,34 @@ func (ed *EndpointDiscovery) DiscoverEndpoints(ctx context.Context) (*EndpointCa
 
 // fetchHomepage fetches X.com homepage and returns HTML + fingerprint
 func (ed *EndpointDiscovery) fetchHomepage(ctx context.Context) (string, string, error) {
-	return ed.fetchHomepageWithClient(ctx, ed.client)
+	var lastErr error
+	for _, page := range []string{HomepageURL, BaseURL + "/"} {
+		html, fingerprint, err := ed.fetchHomepageWithClientAt(ctx, ed.client, page)
+		if err == nil && !isLoggedOutShell(html) {
+			return html, fingerprint, nil
+		}
+		if err == nil {
+			err = fmt.Errorf("X returned a logged-out shell")
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			return "", "", ctx.Err()
+		}
+	}
+	return "", "", lastErr
 }
 
 func (ed *EndpointDiscovery) fetchHomepageWithClient(ctx context.Context, client *http.Client) (string, string, error) {
+	return ed.fetchHomepageWithClientAt(ctx, client, HomepageURL)
+}
+
+func (ed *EndpointDiscovery) fetchHomepageWithClientAt(ctx context.Context, client *http.Client, page string) (string, string, error) {
 	if client == nil {
 		return "", "", fmt.Errorf("homepage HTTP client unavailable")
 	}
 
-	creds := getDiscoveryCredentials()
-	req, err := ed.newHomepageRequest(ctx, creds != nil)
+	creds := ed.discoveryCredentials()
+	req, err := ed.newHomepageRequestAt(ctx, creds != nil, page)
 	if err != nil {
 		return "", "", err
 	}
@@ -254,7 +309,11 @@ func (ed *EndpointDiscovery) fetchHomepageWithClient(ctx context.Context, client
 }
 
 func (ed *EndpointDiscovery) newHomepageRequest(ctx context.Context, authenticated bool) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, HomepageURL, nil)
+	return ed.newHomepageRequestAt(ctx, authenticated, HomepageURL)
+}
+
+func (ed *EndpointDiscovery) newHomepageRequestAt(ctx context.Context, authenticated bool, page string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, page, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -279,10 +338,8 @@ func (ed *EndpointDiscovery) newHomepageRequest(ctx context.Context, authenticat
 	req.Header.Set("sec-ch-ua-full-version-list", GetSecChUaFullVersionListForVersion(BestChromeTarget()))
 	req.Header.Set("sec-ch-ua-model", `""`)
 	req.Header.Set("sec-ch-ua-platform-version", `"`+GetPlatformVersion()+`"`)
-	req.Header.Set("x-client-transaction-id", generateTransactionID())
-	req.Header.Set("x-twitter-client-language", "en")
 	if authenticated {
-		applyDiscoveryAuth(req, getDiscoveryCredentials())
+		applyDiscoveryBrowserCookies(req, ed.discoveryCredentials())
 	}
 	return req, nil
 }
@@ -292,6 +349,13 @@ func (ed *EndpointDiscovery) newHomepageRequest(ctx context.Context, authenticat
 // is configured; the normal CLI authentication flow remains responsible for
 // importing browser cookies.
 func getDiscoveryCredentials() *AuthCredentials {
+	// Keep discovery aligned with the account selected by normal CLI requests.
+	// Do not invoke GetCredentials here: its browser import has side effects.
+	if cfg, err := LoadConfig(); err == nil && cfg != nil && cfg.DefaultAccount != "" {
+		if creds, err := LoadStoredAuth(cfg.DefaultAccount); err == nil && creds != nil && creds.IsValid() {
+			return creds
+		}
+	}
 	if creds := GetAuthFromEnv(); creds != nil && creds.IsValid() {
 		return creds
 	}
@@ -315,6 +379,22 @@ func applyDiscoveryAuth(req *http.Request, creds *AuthCredentials) {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+BearerToken)
+	applyDiscoveryBrowserCookies(req, creds)
+	req.Header.Set("x-csrf-token", ct0)
+	req.Header.Set("x-twitter-active-user", "yes")
+	req.Header.Set("x-twitter-auth-type", "OAuth2Session")
+	req.Header.Set("x-twitter-client-language", "en")
+}
+
+func applyDiscoveryBrowserCookies(req *http.Request, creds *AuthCredentials) {
+	if req == nil || creds == nil || !creds.IsValid() {
+		return
+	}
+	authToken := creds.GetSanitizedAuthToken()
+	ct0 := creds.GetSanitizedCt0()
+	if authToken == "" || ct0 == "" {
+		return
+	}
 	cookies := creds.GetSanitizedCookies()
 	cookieNames := make([]string, 0, len(cookies))
 	for name := range cookies {
@@ -331,10 +411,6 @@ func applyDiscoveryAuth(req *http.Request, creds *AuthCredentials) {
 		cookieParts = []string{"auth_token=" + authToken, "ct0=" + ct0}
 	}
 	req.Header.Set("Cookie", strings.Join(cookieParts, "; "))
-	req.Header.Set("x-csrf-token", ct0)
-	req.Header.Set("x-twitter-active-user", "yes")
-	req.Header.Set("x-twitter-auth-type", "OAuth2Session")
-	req.Header.Set("x-twitter-client-language", "en")
 }
 
 func isLoggedOutShell(html string) bool {
@@ -852,8 +928,9 @@ func (ed *EndpointDiscovery) GetCachedEndpoints(ctx context.Context) (*EndpointC
 		return cache, nil
 	}
 
-	// Check disk cache
-	if cache, err := ed.LoadCache(); err == nil && cache.IsValid() {
+	// Check disk cache. Keep a recent copy if the source is temporarily blocked.
+	cache, _ := ed.LoadCache()
+	if cache != nil && cache.IsValid() {
 		if ed.verbose {
 			log.Println("[EndpointDiscovery] Using disk cache")
 		}
@@ -861,8 +938,21 @@ func (ed *EndpointDiscovery) GetCachedEndpoints(ctx context.Context) (*EndpointC
 		return cache, nil
 	}
 
-	// Fetch fresh
-	return ed.DiscoverEndpoints(ctx)
+	// Fetch fresh without removing the last usable cache first.
+	fresh, err := ed.DiscoverEndpoints(ctx)
+	if err == nil {
+		return fresh, nil
+	}
+	if cache != nil && cache.IsUsable() {
+		ed.UpdateMemoryCache(cache)
+		return cache, nil
+	}
+	return nil, err
+}
+
+// IsUsable permits a bounded stale fallback when discovery is unavailable.
+func (ec *EndpointCache) IsUsable() bool {
+	return ec != nil && (len(ec.Endpoints) > 0 || len(ec.Quarantined) > 0) && !ec.Timestamp.IsZero() && time.Since(ec.Timestamp) < MaxCacheAge
 }
 
 // IsValid checks if cache is still valid (not expired)
@@ -1058,10 +1148,10 @@ func cloneBoolMap(values map[string]bool) map[string]bool {
 // operations over time, so a hard-coded check would report a false failure.
 func criticalEndpointsForCache(cache *EndpointCache) []string {
 	if cache == nil {
-		return []string{"HomeTimeline", "UserByScreenName", "SearchTimeline"}
+		return []string{"HomeTimeline", "Viewer", "UserByScreenName", "SearchTimeline"}
 	}
 
-	result := make([]string, 0, 4)
+	result := make([]string, 0, 5)
 	for _, operation := range []string{
 		"HomeTimeline",
 		"HomeLatestTimeline",
@@ -1074,7 +1164,7 @@ func criticalEndpointsForCache(cache *EndpointCache) []string {
 		}
 	}
 
-	for _, operation := range []string{"UserByScreenName", "SearchTimeline", "TweetDetail", "UserTweets"} {
+	for _, operation := range []string{"Viewer", "UserByScreenName", "SearchTimeline", "TweetDetail", "UserTweets"} {
 		if _, ok := cache.Endpoints[operation]; ok {
 			result = append(result, operation)
 		}
@@ -1084,16 +1174,9 @@ func criticalEndpointsForCache(cache *EndpointCache) []string {
 
 // RefreshEndpoints forces a refresh of all endpoints
 func RefreshEndpoints() error {
-	discovery, err := NewEndpointDiscovery(Verbose)
-	if err != nil {
-		return err
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-
-	_, err = discovery.DiscoverEndpoints(ctx)
-	return err
+	return GetEndpointManager().RefreshEndpoints(ctx)
 }
 
 // CheckEndpointHealth checks if the current endpoints are still valid
@@ -1103,23 +1186,88 @@ func CheckEndpointHealth(ctx context.Context, client *XClient) (bool, []string) 
 		return false, []string{fmt.Sprintf("Failed to create discovery: %v", err)}
 	}
 
-	cache, err := discovery.GetCachedEndpoints(ctx)
-	if err != nil {
-		return false, []string{fmt.Sprintf("Failed to get endpoints: %v", err)}
-	}
+	cache, err := discovery.LoadCache()
 
 	var issues []string
 
 	// Check if cache is getting stale
-	if cache.IsStale() {
+	if cache != nil && cache.IsStale() {
 		issues = append(issues, "Endpoint cache is getting stale, consider refreshing")
 	}
-
-	// Test a few critical endpoints, adapting to current operation names.
-	for _, op := range criticalEndpointsForCache(cache) {
-		if _, ok := cache.Endpoints[op]; !ok {
-			issues = append(issues, fmt.Sprintf("Critical endpoint %s is missing", op))
+	if cache != nil {
+		quarantined := make([]string, 0, len(cache.Quarantined))
+		for op := range cache.Quarantined {
+			quarantined = append(quarantined, op)
 		}
+		sort.Strings(quarantined)
+		for _, op := range quarantined {
+			issues = append(issues, fmt.Sprintf("%s: quarantined after a confirmed obsolete response", op))
+		}
+	}
+	if err != nil {
+		issues = append(issues, fmt.Sprintf("Dynamic cache unavailable: %v; checking static fallbacks", err))
+	}
+	if cache != nil && !cache.IsUsable() {
+		issues = append(issues, "Dynamic cache expired; checking static fallbacks")
+		cache = nil
+	}
+
+	if client == nil {
+		creds := getDiscoveryCredentials()
+		if creds == nil {
+			issues = append(issues, "No stored authentication available for live endpoint checks")
+			return false, issues
+		}
+		client, err = NewXClientWithRequestConfig(creds, creds.AccountName, "", RequestConfig{Timeout: 10, MaxRetries: 1, MaxResponseBytes: defaultMaxResponseBytes})
+		if err != nil {
+			return false, append(issues, fmt.Sprintf("Could not create endpoint probe client: %v", err))
+		}
+		defer client.Close()
+	}
+	checked := 0
+	operations := criticalEndpointsForCache(cache)
+	if cache != nil && len(operations) == 0 {
+		operations = criticalEndpointsForCache(nil)
+	}
+	for _, op := range []string{"Viewer", "UserByScreenName", "SearchTimeline"} {
+		found := false
+		for _, candidate := range operations {
+			if candidate == op {
+				found = true
+				break
+			}
+		}
+		if !found {
+			operations = append(operations, op)
+		}
+	}
+	// Probe only operations with known safe inputs.
+	for _, op := range operations {
+		if _, _, supported := endpointProbeRequest(op); !supported {
+			continue
+		}
+		endpoint, ok := "", false
+		if cache != nil {
+			if _, quarantined := cache.Quarantined[op]; quarantined {
+				continue
+			}
+			endpoint, ok = cache.GetEndpoint(op)
+		}
+		if !ok {
+			endpoint, ok = GraphQLEndpoints[op]
+		}
+		if !ok {
+			issues = append(issues, fmt.Sprintf("%s: no endpoint available", op))
+			continue
+		}
+		checked++
+		probe := ProbeGraphQLEndpoint(ctx, client, op, endpoint, operationFeatures(cache, op))
+		if probe.State != "healthy" {
+			issues = append(issues, fmt.Sprintf("%s: %s (%s)", op, probe.Message, probe.State))
+		}
+	}
+	if checked == 0 {
+		issues = append(issues, "No operation has a safe live probe")
 	}
 
 	return len(issues) == 0, issues

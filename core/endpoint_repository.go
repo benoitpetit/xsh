@@ -106,13 +106,21 @@ func mergeQuarantines(previous, next *EndpointCache) {
 	if next.Quarantined == nil {
 		next.Quarantined = make(map[string]string)
 	}
+	if next.QuarantinedIDs == nil {
+		next.QuarantinedIDs = make(map[string]string)
+	}
 	for operation, reason := range previous.Quarantined {
-		if _, replaced := next.Endpoints[operation]; replaced {
+		rejectedID := previous.QuarantinedIDs[operation]
+		if discoveredID, replaced := next.Endpoints[operation]; replaced && (rejectedID == "" || discoveredID != rejectedID) {
 			delete(next.Quarantined, operation)
+			delete(next.QuarantinedIDs, operation)
 			continue
 		}
 		if _, explicitlyQuarantined := next.Quarantined[operation]; !explicitlyQuarantined {
 			next.Quarantined[operation] = reason
+		}
+		if rejectedID != "" {
+			next.QuarantinedIDs[operation] = rejectedID
 		}
 		delete(next.Endpoints, operation)
 	}
@@ -120,10 +128,11 @@ func mergeQuarantines(previous, next *EndpointCache) {
 
 func newEmptyEndpointCache() *EndpointCache {
 	return &EndpointCache{
-		Endpoints:   make(map[string]string),
-		Quarantined: make(map[string]string),
-		Features:    make(map[string]bool),
-		OpFeatures:  make(map[string][]string),
+		Endpoints:      make(map[string]string),
+		Quarantined:    make(map[string]string),
+		QuarantinedIDs: make(map[string]string),
+		Features:       make(map[string]bool),
+		OpFeatures:     make(map[string][]string),
 	}
 }
 
@@ -133,6 +142,9 @@ func normalizeEndpointCache(cache *EndpointCache) {
 	}
 	if cache.Quarantined == nil {
 		cache.Quarantined = make(map[string]string)
+	}
+	if cache.QuarantinedIDs == nil {
+		cache.QuarantinedIDs = make(map[string]string)
 	}
 	if cache.Features == nil {
 		cache.Features = make(map[string]bool)
@@ -154,6 +166,10 @@ func cloneEndpointCache(cache *EndpointCache) *EndpointCache {
 	copy.Quarantined = make(map[string]string, len(cache.Quarantined))
 	for key, value := range cache.Quarantined {
 		copy.Quarantined[key] = value
+	}
+	copy.QuarantinedIDs = make(map[string]string, len(cache.QuarantinedIDs))
+	for key, value := range cache.QuarantinedIDs {
+		copy.QuarantinedIDs[key] = value
 	}
 	copy.Features = make(map[string]bool, len(cache.Features))
 	for key, value := range cache.Features {

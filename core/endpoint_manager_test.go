@@ -67,6 +67,33 @@ func TestResolveOperationUsesOneCacheSnapshot(t *testing.T) {
 	}
 }
 
+func TestGetOpFeaturesWithSourceDistinguishesDynamicAndDefaultValues(t *testing.T) {
+	repository := &countingEndpointRepository{cache: &EndpointCache{
+		Endpoints:   map[string]string{"SearchTimeline": "search/SearchTimeline", "Viewer": "viewer/Viewer"},
+		Quarantined: map[string]string{},
+		Features:    map[string]bool{"flag": false},
+		OpFeatures:  map[string][]string{"SearchTimeline": {"flag"}},
+		Timestamp:   time.Now(),
+	}}
+	manager := &EndpointManager{discovery: &EndpointDiscovery{}, repository: repository}
+	features, source := manager.GetOpFeaturesWithSource("SearchTimeline")
+	if source != "operation_discovery" || features["flag"] {
+		t.Fatalf("dynamic features/source = %#v/%q, want false flag and operation_discovery", features, source)
+	}
+	if repository.snapshots != 1 {
+		t.Fatalf("cache snapshots = %d, want one consistent snapshot", repository.snapshots)
+	}
+
+	repository.snapshots = 0
+	features, source = manager.GetOpFeaturesWithSource("Viewer")
+	if source != "built_in_defaults" || len(features) != len(DefaultFeatures) {
+		t.Fatalf("fallback features/source = %d/%q, want %d/defaults", len(features), source, len(DefaultFeatures))
+	}
+	if repository.snapshots != 1 {
+		t.Fatalf("fallback cache snapshots = %d, want one", repository.snapshots)
+	}
+}
+
 func TestPublishDiscoveredEndpointsUpdatesRepositorySnapshot(t *testing.T) {
 	repository := &countingEndpointRepository{cache: &EndpointCache{
 		Endpoints: map[string]string{"SearchTimeline": "old/SearchTimeline"},
@@ -236,6 +263,51 @@ func TestQuarantineEndpointRemovesDynamicEndpoint(t *testing.T) {
 	}
 	if _, ok := manager.ListEndpoints()["Followers"]; ok {
 		t.Fatal("quarantined endpoint should not be listed")
+	}
+}
+
+func TestRecordProbeResultQuarantinesConfirmedObsoleteStaticFallback(t *testing.T) {
+	repository := NewEndpointRepository(nil)
+	manager := &EndpointManager{discovery: &EndpointDiscovery{}, repository: repository}
+	if err := repository.Replace(&EndpointCache{Endpoints: map[string]string{}, Timestamp: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+
+	if manager.RecordProbeResult("AudioSpaceSearch", EndpointProbe{State: "healthy"}) {
+		t.Fatal("healthy probe unexpectedly changed endpoint state")
+	}
+	if manager.RecordProbeResult("AudioSpaceSearch", EndpointProbe{State: "obsolete", Message: "GraphQL operation returned HTTP 404"}) != true {
+		t.Fatal("obsolete probe was not recorded")
+	}
+	if !manager.IsQuarantined("AudioSpaceSearch") {
+		t.Fatal("confirmed obsolete static fallback was not quarantined")
+	}
+	if got := manager.GetEndpoint("AudioSpaceSearch"); got != "AudioSpaceSearch" {
+		t.Fatalf("quarantined endpoint resolution = %q, want no selected endpoint", got)
+	}
+}
+
+func TestRediscoveryKeepsQuarantineUntilOperationIDChanges(t *testing.T) {
+	repository := NewEndpointRepository(nil)
+	manager := &EndpointManager{discovery: &EndpointDiscovery{}, repository: repository}
+	if err := repository.Replace(&EndpointCache{Endpoints: map[string]string{"Followers": "old/Followers"}, Timestamp: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	manager.QuarantineEndpoint("Followers", "HTTP 404")
+	if !manager.IsRejectedEndpoint("Followers", "old/Followers") || manager.IsRejectedEndpoint("Followers", "new/Followers") {
+		t.Fatal("rejected operation ID was not identified for preview")
+	}
+	if err := manager.publishDiscoveredEndpoints(&EndpointCache{Endpoints: map[string]string{"Followers": "old/Followers"}, Timestamp: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if !manager.IsQuarantined("Followers") {
+		t.Fatal("same rejected operation ID was reactivated")
+	}
+	if err := manager.publishDiscoveredEndpoints(&EndpointCache{Endpoints: map[string]string{"Followers": "new/Followers"}, Timestamp: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if manager.IsQuarantined("Followers") || manager.GetEndpoint("Followers") != "new/Followers" {
+		t.Fatal("new operation ID did not clear quarantine")
 	}
 }
 

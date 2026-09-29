@@ -112,7 +112,12 @@ func (em *EndpointMonitor) performCheck() {
 	}
 
 	status.EndpointsCount = len(cache.Endpoints)
-	criticalCount := len(criticalEndpointsForCache(cache))
+	criticalCount := 0
+	for _, op := range criticalEndpointsForCache(cache) {
+		if _, _, supported := endpointProbeRequest(op); supported {
+			criticalCount++
+		}
+	}
 
 	// Check if cache is stale
 	if cache.IsStale() {
@@ -127,10 +132,16 @@ func (em *EndpointMonitor) performCheck() {
 	if len(failedEndpoints) > 0 {
 		status.IsHealthy = false
 		status.Message = fmt.Sprintf("%d endpoints failed", len(failedEndpoints))
-		status.NeedsUpdate = true
 
-		// Auto-update if more than 30% of critical endpoints fail
-		if criticalCount > 0 && float64(len(failedEndpoints))/float64(criticalCount) > 0.3 {
+		// Auth and transport failures do not imply that operation IDs changed.
+		obsoleteCount := 0
+		for _, failure := range failedEndpoints {
+			if strings.HasSuffix(failure, "(obsolete)") {
+				obsoleteCount++
+			}
+		}
+		status.NeedsUpdate = status.NeedsUpdate || obsoleteCount > 0
+		if criticalCount > 0 && float64(obsoleteCount)/float64(criticalCount) > 0.3 {
 			if em.verbose {
 				log.Printf("[EndpointMonitor] Auto-updating endpoints due to high failure rate")
 			}
@@ -151,57 +162,27 @@ func (em *EndpointMonitor) performCheck() {
 // testCriticalEndpoints tests a list of critical endpoints
 func (em *EndpointMonitor) testCriticalEndpoints(ctx context.Context, cache *EndpointCache) []string {
 	var failed []string
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	// Semaphore for concurrent tests
-	sem := make(chan struct{}, 3)
-
+	checked := 0
 	operations := criticalEndpointsForCache(cache)
 	for _, op := range operations {
-		wg.Add(1)
-		go func(operation string) {
-			defer wg.Done()
-
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			endpoint, ok := cache.GetEndpoint(operation)
-			if !ok {
-				mu.Lock()
-				failed = append(failed, fmt.Sprintf("%s: missing", operation))
-				mu.Unlock()
-				return
-			}
-
-			// Quick HEAD request to check if endpoint exists
-			if err := em.testEndpoint(ctx, endpoint); err != nil {
-				mu.Lock()
-				failed = append(failed, fmt.Sprintf("%s: %v", operation, err))
-				mu.Unlock()
-			}
-		}(op)
+		if _, _, supported := endpointProbeRequest(op); !supported {
+			continue
+		}
+		checked++
+		endpoint, ok := cache.GetEndpoint(op)
+		if !ok {
+			failed = append(failed, fmt.Sprintf("%s: missing", op))
+			continue
+		}
+		probe := ProbeGraphQLEndpoint(ctx, em.client, op, endpoint, operationFeatures(cache, op))
+		if probe.State != "healthy" {
+			failed = append(failed, fmt.Sprintf("%s: %s (%s)", op, probe.Message, probe.State))
+		}
 	}
-
-	wg.Wait()
+	if checked == 0 {
+		failed = append(failed, "No safe endpoint probe available")
+	}
 	return failed
-}
-
-// testEndpoint performs a lightweight test of an endpoint
-func (em *EndpointMonitor) testEndpoint(_ context.Context, endpoint string) error {
-	// We can't easily test without auth, but we can check if the URL format looks valid
-	// and make a request to see if we get 404 (obsolete) vs 401/403 (auth required)
-
-	_ = GraphQLBase + "/" + endpoint
-
-	// This is a placeholder - in practice, we'd need to make an actual request
-	// For now, we just validate the endpoint format
-	parts := strings.Split(endpoint, "/")
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid endpoint format")
-	}
-
-	return nil
 }
 
 // AutoUpdate fetches new endpoints and updates the cache
@@ -210,12 +191,12 @@ func (em *EndpointMonitor) AutoUpdate(ctx context.Context) error {
 		log.Println("[EndpointMonitor] Auto-updating endpoints...")
 	}
 
-	// Invalidate and refresh
-	em.discovery.InvalidateCache()
-
-	_, err := em.discovery.DiscoverEndpoints(ctx)
+	cache, err := em.discovery.DiscoverEndpoints(ctx)
 	if err != nil {
 		return fmt.Errorf("discovery failed: %w", err)
+	}
+	if err := GetEndpointManager().publishDiscoveredEndpoints(cache); err != nil {
+		return fmt.Errorf("failed to publish discovered endpoints: %w", err)
 	}
 
 	if em.verbose {
@@ -267,14 +248,7 @@ func StartupCheck() {
 		if Verbose {
 			log.Printf("[StartupCheck] Failed to get endpoints: %v", err)
 		}
-		// Try to discover fresh
-		cache, err = discovery.DiscoverEndpoints(ctx)
-		if err != nil {
-			if Verbose {
-				log.Printf("[StartupCheck] Fresh discovery failed: %v", err)
-			}
-			return
-		}
+		return
 	}
 
 	// Check if stale
@@ -282,7 +256,6 @@ func StartupCheck() {
 		if Verbose {
 			log.Println("[StartupCheck] Cache is stale, refreshing...")
 		}
-		discovery.InvalidateCache()
 		_, err = discovery.DiscoverEndpoints(ctx)
 		if err != nil && Verbose {
 			log.Printf("[StartupCheck] Refresh failed: %v", err)

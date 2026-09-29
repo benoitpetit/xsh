@@ -201,3 +201,41 @@ func TestGraphQLRequestReturnsErrorAfterRetryExhausted(t *testing.T) {
 		t.Fatalf("unexpected APIError message: %q", apiErr.Message)
 	}
 }
+
+func TestGraphQLRequestQuarantinesEndpointAfterRefreshReturnsSameBrokenID(t *testing.T) {
+	manager := GetEndpointManager()
+	manager.repositoryMu.Lock()
+	previousRepository := manager.repository
+	manager.repository = NewEndpointRepository(nil)
+	manager.repositoryMu.Unlock()
+	previousMemory := GetMemoryCache()
+	memoryCacheMu.Lock()
+	memoryCache = newEmptyEndpointCache()
+	memoryCacheMu.Unlock()
+	t.Cleanup(func() {
+		manager.repositoryMu.Lock()
+		manager.repository = previousRepository
+		manager.repositoryMu.Unlock()
+		memoryCacheMu.Lock()
+		memoryCache = previousMemory
+		memoryCacheMu.Unlock()
+	})
+	manager.UpdateEndpoint("Followers", "old/Followers")
+
+	requests := 0
+	client := &XClient{requestWithOperationHook: func(_, _ string, _, _ map[string]interface{}, _ int, _, _ string) (map[string]interface{}, error) {
+		requests++
+		return nil, &StaleEndpointError{APIError: APIError{StatusCode: 404}}
+	}}
+	client.refreshEndpointsContextHook = func(context.Context, string) error {
+		manager.UpdateEndpoint("Followers", "rediscovered/Followers")
+		return nil
+	}
+	_, err := client.GraphQLGet("Followers", map[string]interface{}{"userId": "123", "count": 1})
+	if err == nil || requests != 2 {
+		t.Fatalf("GraphQL request error=%v requests=%d, want two failures", err, requests)
+	}
+	if !manager.IsQuarantined("Followers") {
+		t.Fatal("endpoint remained active after both IDs returned 404")
+	}
+}

@@ -61,6 +61,22 @@ func TestApplyDiscoveryAuthAddsSessionHeadersWithoutLoggingValues(t *testing.T) 
 	}
 }
 
+func TestHomepageRequestUsesBrowserCookiesWithoutAPIHeaders(t *testing.T) {
+	ed := &EndpointDiscovery{credentials: &AuthCredentials{AuthToken: "auth-token-value", Ct0: "csrf-token-value"}}
+	req, err := ed.newHomepageRequestAt(context.Background(), true, HomepageURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(req.Header.Get("Cookie"), "auth_token=auth-token-value") {
+		t.Fatal("homepage request omitted the browser session cookie")
+	}
+	for _, header := range []string{"Authorization", "x-csrf-token", "x-twitter-auth-type", "x-twitter-active-user"} {
+		if req.Header.Get(header) != "" {
+			t.Fatalf("homepage request sent API header %s", header)
+		}
+	}
+}
+
 func TestExtractBundleURLsSupportsCurrentXWebScripts(t *testing.T) {
 	html := `<html><head>
 <script src="https://abs.twimg.com/x-web/x-web/entry-client-logged-out-abc123.js"></script>
@@ -126,6 +142,28 @@ func TestCriticalEndpointSelectionUsesCurrentTimelineOperation(t *testing.T) {
 	for _, operation := range got {
 		if operation == "HomeTimeline" || operation == "HomeLatestTimeline" {
 			t.Fatalf("selected obsolete home operation %q", operation)
+		}
+	}
+}
+
+func TestCriticalEndpointSelectionIncludesViewerProfileCheck(t *testing.T) {
+	got := criticalEndpointsForCache(&EndpointCache{
+		Endpoints: map[string]string{
+			"Viewer":           "viewer/Viewer",
+			"UserByScreenName": "profile/UserByScreenName",
+			"SearchTimeline":   "search/SearchTimeline",
+		},
+	})
+	for _, want := range []string{"Viewer", "UserByScreenName", "SearchTimeline"} {
+		found := false
+		for _, operation := range got {
+			if operation == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("critical endpoint list %v does not include %s", got, want)
 		}
 	}
 }
@@ -290,6 +328,89 @@ func TestDiscoverEndpointsDoesNotPublishPartialCacheAfterCancellation(t *testing
 	}
 	if cache := ed.GetMemoryCache(); cache != nil {
 		t.Fatalf("partial memory cache was published: %#v", cache)
+	}
+}
+
+func TestPreviewEndpointsDoesNotWriteCache(t *testing.T) {
+	cachePath := filepath.Join(t.TempDir(), "graphql_ops.json")
+	before := GetMemoryCache()
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body := `queryId:"query-id",operationName:"UserByScreenName"`
+		if req.URL.Path == "/home" {
+			body = `<script src="https://abs.twimg.com/entry.js"></script>`
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: req}, nil
+	})}
+	ed := &EndpointDiscovery{client: client, cachePath: cachePath, credentials: &AuthCredentials{AuthToken: "token", Ct0: "csrf"}}
+	cache, err := ed.PreviewEndpoints(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cache.Endpoints["UserByScreenName"] != "query-id/UserByScreenName" {
+		t.Fatalf("preview endpoints = %#v", cache.Endpoints)
+	}
+	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
+		t.Fatalf("preview wrote cache: %v", err)
+	}
+	if !reflect.DeepEqual(GetMemoryCache(), before) {
+		t.Fatal("preview changed the in-memory cache")
+	}
+}
+
+func TestGetCachedEndpointsKeepsUsableCacheWhenDiscoveryFails(t *testing.T) {
+	cachePath := filepath.Join(t.TempDir(), "graphql_ops.json")
+	previous := GetMemoryCache()
+	memoryCacheMu.Lock()
+	memoryCache = newEmptyEndpointCache()
+	memoryCacheMu.Unlock()
+	defer func() {
+		memoryCacheMu.Lock()
+		memoryCache = previous
+		memoryCacheMu.Unlock()
+	}()
+	ed := &EndpointDiscovery{
+		cachePath:   cachePath,
+		credentials: &AuthCredentials{AuthToken: "token", Ct0: "csrf"},
+		client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusUnauthorized, Body: io.NopCloser(strings.NewReader("denied")), Header: make(http.Header), Request: req}, nil
+		})},
+	}
+	stale := &EndpointCache{Endpoints: map[string]string{"SearchTimeline": "old/SearchTimeline"}, Timestamp: time.Now().Add(-25 * time.Hour)}
+	if err := ed.SaveCache(stale); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ed.GetCachedEndpoints(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Endpoints["SearchTimeline"] != "old/SearchTimeline" || !got.Timestamp.Equal(stale.Timestamp) {
+		t.Fatalf("stale cache was replaced after failed discovery: %#v", got)
+	}
+}
+
+func TestCheckEndpointHealthReportsKnownQuarantinedOperation(t *testing.T) {
+	t.Setenv("XSH_CONFIG_DIR", t.TempDir())
+	ed, err := NewEndpointDiscovery(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := &EndpointCache{
+		Endpoints: map[string]string{
+			"UserByScreenName": "user/UserByScreenName",
+			"SearchTimeline":   "search/SearchTimeline",
+		},
+		Quarantined: map[string]string{"Followers": "HTTP 404"},
+		Timestamp:   time.Now(),
+	}
+	if err := ed.SaveCache(cache); err != nil {
+		t.Fatal(err)
+	}
+	client := &XClient{requestWithOperationHook: func(_, _ string, _, _ map[string]interface{}, _ int, _, _ string) (map[string]interface{}, error) {
+		return map[string]interface{}{"data": map[string]interface{}{}}, nil
+	}}
+	healthy, issues := CheckEndpointHealth(context.Background(), client)
+	if healthy || !strings.Contains(strings.Join(issues, " "), "Followers") {
+		t.Fatalf("known quarantined operation omitted: healthy=%t issues=%v", healthy, issues)
 	}
 }
 

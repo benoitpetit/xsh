@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -72,21 +71,18 @@ func (sc *StartupChecker) QuickCheckEndpoints(ctx context.Context, errOut io.Wri
 	fmt.Fprintln(errOut, "🔍 Checking API endpoints...")
 
 	// Create a temporary client for checking
-	client, err := NewXClient(nil, "", "")
+	client, err := NewEndpointProbeClient("")
 	if err != nil {
 		return nil, err
 	}
-	client.authRefreshAttempted = true // Don't refresh credentials during startup check
 	defer client.Close()
 
 	obsolete := []string{}
 
 	// Check critical endpoints
-	endpointsToCheck := []string{
-		"HomeTimeline",
-		"UserByScreenName",
-		"SearchTimeline",
-	}
+	manager := GetEndpointManager()
+	endpointsToCheck := criticalEndpointsForCache(manager.getCache())
+	confirmed := 0
 
 	for _, operation := range endpointsToCheck {
 		if err := ctx.Err(); err != nil {
@@ -94,60 +90,22 @@ func (sc *StartupChecker) QuickCheckEndpoints(ctx context.Context, errOut io.Wri
 		}
 		fmt.Fprintf(errOut, "   Checking %s... ", operation)
 
-		// Try a minimal request
-		if err := sc.checkEndpoint(client, operation); err != nil {
+		probe := ProbeGraphQLEndpoint(ctx, client, operation, manager.GetEndpoint(operation), manager.GetOpFeatures(operation))
+		if probe.State == "obsolete" {
 			fmt.Fprintln(errOut, "❌")
 			obsolete = append(obsolete, operation)
-		} else {
+		} else if probe.State == "healthy" {
 			fmt.Fprintln(errOut, "✓")
+			confirmed++
+		} else {
+			fmt.Fprintf(errOut, "? (%s)\n", probe.State)
 		}
 	}
 
-	sc.MarkChecked()
+	if confirmed > 0 {
+		sc.MarkChecked()
+	}
 	return obsolete, nil
-}
-
-// checkEndpoint tries to make a minimal request to check if endpoint works
-func (sc *StartupChecker) checkEndpoint(client *XClient, operation string) error {
-	// Use GraphQLGet with minimal variables
-	variables := map[string]interface{}{
-		"count": 1,
-	}
-
-	_, err := client.GraphQLGet(operation, variables)
-
-	if err != nil {
-		// Check if it's a 404 "Query not found" error
-		if apiErr, ok := err.(*APIError); ok && apiErr.StatusCode == 404 {
-			// Check the response data for "Query not found"
-			if strings.Contains(apiErr.ResponseData, "Query not found") ||
-				strings.Contains(apiErr.ResponseData, "Not Found") ||
-				strings.Contains(apiErr.Message, "Query not found") {
-				return fmt.Errorf("endpoint obsolete: Query not found")
-			}
-		}
-		// For UserByScreenName, we need to check with actual username
-		if operation == "UserByScreenName" {
-			vars := map[string]interface{}{
-				"screen_name": "twitter",
-			}
-			_, err2 := client.GraphQLGet(operation, vars)
-			if err2 != nil {
-				if apiErr, ok := err2.(*APIError); ok && apiErr.StatusCode == 404 {
-					if strings.Contains(apiErr.ResponseData, "Query not found") ||
-						strings.Contains(apiErr.ResponseData, "Not Found") ||
-						strings.Contains(apiErr.Message, "Query not found") {
-						return fmt.Errorf("endpoint obsolete: Query not found")
-					}
-				}
-			}
-		}
-		// Other errors (401, 403, 400, etc.) mean the endpoint exists
-		// The endpoint is valid even if we get auth errors
-		return nil
-	}
-
-	return nil
 }
 
 // ShowUpdatePrompt shows a prompt to update endpoints if needed

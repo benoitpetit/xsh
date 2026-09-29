@@ -63,22 +63,31 @@ func (em *EndpointManager) getCache() *EndpointCache {
 	if repository == nil {
 		return nil
 	}
-	if cache := repository.Snapshot(); cache != nil && cache.IsValid() {
+	cache := repository.Snapshot()
+	if em == globalEndpointManager {
+		if latest := GetMemoryCache(); latest != nil && latest.IsUsable() && (cache == nil || latest.Timestamp.After(cache.Timestamp)) {
+			if err := repository.Replace(latest); err == nil {
+				cache = latest
+			}
+		}
+	}
+	if cache != nil && cache.IsUsable() {
 		return cache
 	}
 
 	cache, err := em.discovery.LoadCache()
-	if err == nil && cache.IsValid() {
+	if err == nil && cache.IsUsable() {
 		_ = repository.Replace(cache)
 		return cache
 	}
 
 	// Return empty cache that will trigger fallback
 	return &EndpointCache{
-		Endpoints:   make(map[string]string),
-		Quarantined: make(map[string]string),
-		Features:    make(map[string]bool),
-		OpFeatures:  make(map[string][]string),
+		Endpoints:      make(map[string]string),
+		Quarantined:    make(map[string]string),
+		QuarantinedIDs: make(map[string]string),
+		Features:       make(map[string]bool),
+		OpFeatures:     make(map[string][]string),
 	}
 }
 
@@ -239,13 +248,36 @@ func (em *EndpointManager) GetOpFeatures(operation string) map[string]bool {
 	return operationFeatures(em.getCache(), operation)
 }
 
+// GetOpFeaturesWithSource returns one consistent feature snapshot and identifies
+// whether it came from operation metadata or the built-in fallback.
+func (em *EndpointManager) GetOpFeaturesWithSource(operation string) (map[string]bool, string) {
+	cache := em.getCache()
+	if cache != nil && len(cache.OpFeatures[operation]) > 0 {
+		return operationFeatures(cache, operation), "operation_discovery"
+	}
+	return operationFeatures(cache, operation), "built_in_defaults"
+}
+
 // RefreshEndpoints fetches fresh endpoints from X.com
 func (em *EndpointManager) RefreshEndpoints(ctx context.Context) error {
+	return em.RefreshEndpointsForAccount(ctx, "")
+}
+
+// RefreshEndpointsForAccount discovers IDs with the explicitly selected session.
+func (em *EndpointManager) RefreshEndpointsForAccount(ctx context.Context, account string) error {
 	if em.discovery == nil {
 		return fmt.Errorf("discovery not available")
 	}
 
-	cache, err := em.discovery.DiscoverEndpoints(ctx)
+	discovery := em.discovery
+	if account != "" {
+		var err error
+		discovery, err = NewEndpointDiscoveryForAccount(em.verbose, account)
+		if err != nil {
+			return err
+		}
+	}
+	cache, err := discovery.DiscoverEndpoints(ctx)
 	if err != nil {
 		return fmt.Errorf("discovery failed: %w", err)
 	}
@@ -290,6 +322,7 @@ func (em *EndpointManager) UpdateEndpoint(operation, endpoint string) {
 	if err := em.getRepository().Mutate(func(cache *EndpointCache) error {
 		cache.Endpoints[operation] = endpoint
 		delete(cache.Quarantined, operation)
+		delete(cache.QuarantinedIDs, operation)
 		cache.Timestamp = time.Now()
 		return nil
 	}); err != nil {
@@ -310,6 +343,7 @@ func (em *EndpointManager) ResetEndpoint(operation string) {
 	if err := em.getRepository().Mutate(func(cache *EndpointCache) error {
 		delete(cache.Endpoints, operation)
 		delete(cache.Quarantined, operation)
+		delete(cache.QuarantinedIDs, operation)
 		cache.Timestamp = time.Now()
 		return nil
 	}); err != nil {
@@ -328,13 +362,33 @@ func (em *EndpointManager) QuarantineEndpoint(operation, reason string) {
 		reason = "endpoint returned not found"
 	}
 	if err := em.getRepository().Mutate(func(cache *EndpointCache) error {
+		rejectedID := cache.Endpoints[operation]
+		if rejectedID == "" {
+			rejectedID = cache.QuarantinedIDs[operation]
+		}
+		if rejectedID == "" {
+			rejectedID = GraphQLEndpoints[operation]
+		}
 		delete(cache.Endpoints, operation)
 		cache.Quarantined[operation] = reason
+		if rejectedID != "" {
+			cache.QuarantinedIDs[operation] = rejectedID
+		}
 		cache.Timestamp = time.Now()
 		return nil
 	}); err != nil {
 		log.Printf("[EndpointManager] Warning: failed to save quarantined endpoint: %v", err)
 	}
+}
+
+// RecordProbeResult persists a confirmed obsolete operation so later requests
+// do not keep selecting the same endpoint. Other probe outcomes are read-only.
+func (em *EndpointManager) RecordProbeResult(operation string, probe EndpointProbe) bool {
+	if probe.State != "obsolete" {
+		return false
+	}
+	em.QuarantineEndpoint(operation, probe.Message)
+	return em.IsQuarantined(operation)
 }
 
 // IsQuarantined reports whether an operation has been isolated after a 404.
@@ -345,6 +399,13 @@ func (em *EndpointManager) IsQuarantined(operation string) bool {
 	}
 	_, ok := cache.Quarantined[operation]
 	return ok
+}
+
+// IsRejectedEndpoint reports whether discovery found the same ID that was
+// previously confirmed obsolete. Previews use it to mirror actual publishing.
+func (em *EndpointManager) IsRejectedEndpoint(operation, endpoint string) bool {
+	cache := em.getCache()
+	return cache != nil && cache.QuarantinedIDs[operation] != "" && cache.QuarantinedIDs[operation] == endpoint
 }
 
 // ListEndpoints returns all current endpoints
@@ -496,7 +557,6 @@ func IsEndpointObsolete(err error) bool {
 	errStr := strings.ToLower(err.Error())
 	indicators := []string{
 		"query not found",
-		"not found",
 		"http 404",
 		"notfounderror",
 		"resource not found",

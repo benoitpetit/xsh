@@ -50,6 +50,15 @@ func TestIsGraphQLEndpointNotFoundResponse(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "missing user is not a missing operation",
+			input: map[string]interface{}{
+				"errors": []interface{}{
+					map[string]interface{}{"message": "User not found"},
+				},
+			},
+			want: false,
+		},
+		{
 			name:  "no errors",
 			input: map[string]interface{}{"data": map[string]interface{}{}},
 			want:  false,
