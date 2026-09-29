@@ -82,6 +82,11 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 	if profileImageURL == "" {
 		profileImageURL = GetString(result, "profile_image_url_https")
 	}
+	if profileImageURL == "" {
+		if avatar, ok := result["avatar"].(map[string]interface{}); ok {
+			profileImageURL = GetString(avatar, "image_url")
+		}
+	}
 	profileImageURL = replaceAll(profileImageURL, "_normal", "_400x400")
 
 	name := GetString(legacy, "name")
