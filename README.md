@@ -4,8 +4,8 @@
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green?style=flat-square)](https://modelcontextprotocol.io/)
 
-A fast, feature-complete command-line interface for Twitter/X, written in Go.  
-No API keys required — authenticates directly via browser cookies.
+A command-line interface for Twitter/X, written in Go. xsh uses cookies from
+your browser session, so you do not need an API key.
 
 ![xshwall](xsh_wall.png)
 
@@ -45,16 +45,16 @@ No API keys required — authenticates directly via browser cookies.
 
 ## Features
 
-- **Zero API keys** — cookie-based authentication extracted from your browser
-- **AI-ready** — built-in MCP server compatible with Claude, Cursor, and any MCP client
-- **Multi-account** — manage and switch between multiple Twitter/X accounts
-- **Structured output** — JSON, YAML, and compact modes for scripting and agents
-- **Resilient endpoint discovery** — authenticated recursive discovery of GraphQL operation IDs across modern X.com bundles
-- **Media support** — post up to 4 images per tweet, download media from any tweet
-- **Full coverage** — tweets, DMs, lists, bookmarks, jobs, trends, schedules, relationships, and more
-- **Community discovery** — browse communities and continue through cursor-based pages
-- **Long-form publishing** — publish Note Tweets from text or a file with explicit confirmation
-- **Endpoint-aware fallbacks** — stale X operations are detected; quote search falls back to `SearchTimeline`
+- Browser-cookie authentication; no API key is needed
+- An MCP server for Claude, Cursor, and other MCP clients
+- Multiple accounts, with commands to switch between them
+- JSON, YAML, and compact output for scripts and agents
+- GraphQL endpoint discovery from authenticated X.com bundles
+- Tweet publishing with up to four images, plus media downloads
+- Commands for tweets, DMs, lists, bookmarks, jobs, trends, scheduled posts, and relationships
+- Community browsing with cursor-based pagination
+- Note Tweet publishing from text or a file, with explicit confirmation
+- Fallbacks for stale X operations; quote search uses `SearchTimeline`
 
 ---
 
@@ -234,7 +234,7 @@ xsh tweet bookmark <id>
 xsh tweet unbookmark <id>
 ```
 
-**Shortcuts** available at root level:
+Shortcuts are also available at the root level:
 
 ```bash
 xsh unlike <id>
@@ -489,7 +489,7 @@ xsh compose --file thread.txt --dry-run
 
 ### Export
 
-Export tweets to file in multiple formats: `json`, `jsonl`, `csv`, `tsv`, `md`.
+Export tweets as `json`, `jsonl`, `csv`, `tsv`, or `md` files.
 
 ```bash
 # Export timeline
@@ -591,7 +591,7 @@ xsh feed --account work
 
 ## MCP Server
 
-xsh includes a full [Model Context Protocol](https://modelcontextprotocol.io/) server for use with Claude, Cursor, and other MCP-compatible AI clients.
+xsh can run as a [Model Context Protocol](https://modelcontextprotocol.io/) server for clients such as Claude Desktop and Cursor.
 
 ```bash
 xsh mcp
@@ -653,12 +653,12 @@ inspection.
 
 ### Endpoint cache and discovery
 
-Endpoint snapshots are bounded and versioned. Discovery fetches an
+Endpoint snapshots have size limits and a schema version. Discovery fetches an
 authenticated homepage (10 MiB limit) and JavaScript bundles (5 MiB limit),
 follows imports with a bounded worker pool, and merges duplicate operations in
-bundle priority order. A stale operation is retried only for safe reads; write
-operations are never replayed automatically. A quarantined operation is not
-retried until discovery supplies a replacement endpoint.
+bundle priority order. xsh retries stale endpoints only for safe reads. It does
+not replay write operations automatically. An operation in quarantine stays
+there until discovery finds a replacement endpoint.
 
 ### Output and cancellation
 
@@ -736,10 +736,9 @@ instead of silently using incomplete credentials.
 
 ## Endpoint Management
 
-xsh dynamically discovers GraphQL operation IDs from the authenticated X.com web
-client and caches them locally. Discovery reuses every stored session cookie,
-walks nested Vite/Rollup chunks, and understands persisted GraphQL URLs built at
-runtime.
+xsh discovers GraphQL operation IDs from the authenticated X.com web client and
+caches them locally. Discovery uses stored session cookies, follows nested
+Vite/Rollup chunks, and reads persisted GraphQL URLs built at runtime.
 
 ```bash
 # List all cached endpoints
@@ -767,11 +766,10 @@ xsh auto-update --force     # Force refresh (ignore cache)
 ```
 
 `endpoints status` reports whether the dynamic cache is available and how many
-operations were quarantined after a definitive 404. When discovery is
-unavailable, xsh keeps the last valid cache and uses static IDs only for
-operations that still have a verified fallback. A stale operation is refreshed
-once; a confirmed 404 is isolated so repeated calls do not trigger discovery
-storms.
+operations were quarantined after a confirmed 404. If discovery is unavailable,
+xsh keeps the last valid cache and uses static IDs only when a verified fallback
+exists. It refreshes a stale operation once and quarantines a confirmed 404 to
+avoid repeated discovery requests.
 
 Discovery refuses a logged-out `x-web` shell and never treats the public shell
 as an authenticated endpoint source. If refresh fails with an authentication
@@ -782,14 +780,12 @@ xsh auth status
 xsh endpoints refresh --verbose
 ```
 
-Some operation names can remain visible in the endpoint inventory after X
-removes them. `TweetQuotes` currently returns 404, so `xsh quotes` uses the
-stable `SearchTimeline` query instead. `CommunitiesMainPageTimeline` is also
-tracked as a candidate but is not exposed as a discovery command until X
-serves it again. `Followers` has no verified static fallback and is therefore
-not bundled; it becomes available only if the authenticated discovery finds a
-current operation. `Following` and `FollowersYouKnow` remain separate
-operations and are not interchangeable with `Followers`.
+An operation can remain in the inventory after X stops serving it. `TweetQuotes`
+returns 404, so `xsh quotes` uses `SearchTimeline`. `CommunitiesMainPageTimeline`
+is tracked as a candidate but is not exposed as a discovery command until X
+serves it again. In the latest live check, `Followers` was discovered but
+returned 404 and was quarantined. `Following` and `FollowersYouKnow` are separate
+operations; neither provides the `Followers` list.
 
 ---
 
@@ -861,7 +857,7 @@ core/
 
 ## About
 
-**xsh** is a complete rewrite in Go of the original [clix](https://github.com/spideystreet/clix) Python project. This is not a fork — it is a ground-up reimplementation with a focus on performance, reliability, and modern Go practices.
+**xsh** is a Go reimplementation of the original [clix](https://github.com/spideystreet/clix) Python project. It focuses on performance, reliability, and modern Go practices.
 
 ---
 
