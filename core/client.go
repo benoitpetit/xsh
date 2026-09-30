@@ -683,7 +683,10 @@ func (c *XClient) graphqlRequest(
 	// Try up to 2 times (like Python: for attempt in range(2))
 	for attempt := 0; attempt < 2; attempt++ {
 		// Resolve endpoint, flags, and quarantine from one cache snapshot.
-		endpoint, cachedFeatures, quarantined := manager.resolveOperation(operation)
+		endpoint, cachedFeatures, quarantined, refreshErr := manager.resolveOperationWithRefresh(c.requestContext(), operation)
+		if refreshErr != nil {
+			return nil, refreshErr
+		}
 		if quarantined {
 			return nil, &APIError{
 				Message:    fmt.Sprintf("GraphQL operation %q is quarantined after a confirmed 404; X may have removed or blocked it", operation),

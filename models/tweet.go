@@ -166,16 +166,11 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 	var authorID, authorName, authorHandle string
 	var authorVerified bool
 
-	// Path 1: Standard core -> user_results -> result -> legacy
+	// Path 1: Standard core -> user_results -> result
 	if core, ok := tweetData["core"].(map[string]interface{}); ok {
 		if userResults, ok := core["user_results"].(map[string]interface{}); ok {
 			if userResult, ok := userResults["result"].(map[string]interface{}); ok {
-				authorID, _ = userResult["rest_id"].(string)
-				authorVerified, _ = userResult["is_blue_verified"].(bool)
-				if legacyUser, ok := userResult["legacy"].(map[string]interface{}); ok {
-					authorName = GetString(legacyUser, "name")
-					authorHandle = GetString(legacyUser, "screen_name")
-				}
+				authorID, authorName, authorHandle, authorVerified = tweetAuthorFromResult(userResult)
 			}
 		}
 	}
@@ -184,20 +179,17 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 	if authorHandle == "" {
 		if userResults, ok := tweetData["user_results"].(map[string]interface{}); ok {
 			if userResult, ok := userResults["result"].(map[string]interface{}); ok {
-				if id, ok := userResult["rest_id"].(string); ok && authorID == "" {
+				id, name, handle, verified := tweetAuthorFromResult(userResult)
+				if authorID == "" {
 					authorID = id
 				}
-				if verified, ok := userResult["is_blue_verified"].(bool); ok {
-					authorVerified = verified
+				if authorName == "" {
+					authorName = name
 				}
-				if legacyUser, ok := userResult["legacy"].(map[string]interface{}); ok {
-					if name := GetString(legacyUser, "name"); name != "" {
-						authorName = name
-					}
-					if handle := GetString(legacyUser, "screen_name"); handle != "" {
-						authorHandle = handle
-					}
+				if authorHandle == "" {
+					authorHandle = handle
 				}
+				authorVerified = authorVerified || verified
 			}
 		}
 	}
@@ -232,7 +224,16 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 
 	// Path 6: Deep search for user_results anywhere in tweetData
 	if authorHandle == "" {
-		authorHandle, authorName, authorID = extractUserFromAnywhere(tweetData)
+		handle, name, id := extractUserFromAnywhere(tweetData)
+		if authorHandle == "" {
+			authorHandle = handle
+		}
+		if authorName == "" {
+			authorName = name
+		}
+		if authorID == "" {
+			authorID = id
+		}
 	}
 
 	// Check for retweet
@@ -390,6 +391,28 @@ func TweetFromAPIResult(result map[string]interface{}) *Tweet {
 		Source:         GetString(tweetData, "source"),
 		IsRetweet:      false,
 	}
+}
+
+func tweetAuthorFromResult(userResult map[string]interface{}) (id, name, handle string, verified bool) {
+	legacy, _ := userResult["legacy"].(map[string]interface{})
+	core, _ := userResult["core"].(map[string]interface{})
+	verification, _ := userResult["verification"].(map[string]interface{})
+
+	id = GetString(userResult, "rest_id")
+	if id == "" {
+		id = GetString(legacy, "id_str")
+	}
+	name = GetString(core, "name")
+	if name == "" {
+		name = GetString(legacy, "name")
+	}
+	handle = GetString(core, "screen_name")
+	if handle == "" {
+		handle = GetString(legacy, "screen_name")
+	}
+	verified = getBool(userResult, "is_blue_verified") || getBool(verification, "is_blue_verified") ||
+		getBool(verification, "verified") || getBool(legacy, "verified")
+	return
 }
 
 // parsePollFromCard extracts poll data from the tweet's card object.

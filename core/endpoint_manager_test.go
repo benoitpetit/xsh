@@ -320,3 +320,66 @@ func TestFollowersHasNoStaticFallback(t *testing.T) {
 		t.Fatalf("Followers status = %q, want no verified endpoint", status)
 	}
 }
+
+func TestResolveOperationWithRefreshRecoversQuarantinedOperation(t *testing.T) {
+	repository := NewEndpointRepository(nil)
+	if err := repository.Replace(&EndpointCache{
+		Endpoints:      map[string]string{},
+		Quarantined:    map[string]string{"Followers": "HTTP 404"},
+		QuarantinedIDs: map[string]string{"Followers": "old/Followers"},
+		Timestamp:      time.Now().Add(-CacheTTL),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := &EndpointManager{discovery: &EndpointDiscovery{}, repository: repository}
+	refreshes := 0
+	manager.refreshFunc = func(context.Context) error {
+		refreshes++
+		return manager.publishDiscoveredEndpoints(&EndpointCache{
+			Endpoints: map[string]string{"Followers": "new/Followers"},
+			Timestamp: time.Now(),
+		})
+	}
+
+	endpoint, _, quarantined, err := manager.resolveOperationWithRefresh(context.Background(), "Followers")
+	if err != nil {
+		t.Fatalf("resolveOperationWithRefresh() error = %v", err)
+	}
+	if endpoint != "new/Followers" || quarantined {
+		t.Fatalf("resolved operation = %q quarantined=%t, want new endpoint", endpoint, quarantined)
+	}
+	if refreshes != 1 {
+		t.Fatalf("refreshes = %d, want one refresh", refreshes)
+	}
+}
+
+func TestResolveOperationWithRefreshDoesNotRefreshRecentQuarantine(t *testing.T) {
+	repository := NewEndpointRepository(nil)
+	if err := repository.Replace(&EndpointCache{
+		Endpoints:      map[string]string{},
+		Quarantined:    map[string]string{"Followers": "HTTP 404"},
+		QuarantinedIDs: map[string]string{"Followers": "old/Followers"},
+		Timestamp:      time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	refreshes := 0
+	manager := &EndpointManager{
+		discovery:  &EndpointDiscovery{},
+		repository: repository,
+		refreshFunc: func(context.Context) error {
+			refreshes++
+			return nil
+		},
+	}
+
+	_, _, quarantined, err := manager.resolveOperationWithRefresh(context.Background(), "Followers")
+	if err != nil || !quarantined {
+		t.Fatalf("resolveOperationWithRefresh() quarantined=%t error=%v, want quarantined without error", quarantined, err)
+	}
+	if refreshes != 0 {
+		t.Fatalf("refreshes = %d, want no refresh for recent cache", refreshes)
+	}
+}

@@ -4,6 +4,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -114,6 +115,27 @@ func (em *EndpointManager) GetEndpoint(operation string) string {
 func (em *EndpointManager) resolveOperation(operation string) (string, map[string]bool, bool) {
 	cache := em.getCache()
 	return em.resolveEndpoint(cache, operation), operationFeatures(cache, operation), isOperationQuarantined(cache, operation)
+}
+
+// resolveOperationWithRefresh gives quarantined operations a chance to recover
+// when the endpoint cache is old. Recent quarantines remain blocked so every
+// command does not trigger a discovery request for the same confirmed 404.
+func (em *EndpointManager) resolveOperationWithRefresh(ctx context.Context, operation string) (string, map[string]bool, bool, error) {
+	endpoint, features, quarantined := em.resolveOperation(operation)
+	if !quarantined {
+		return endpoint, features, false, nil
+	}
+
+	cache := em.getCache()
+	if cache == nil || !cache.IsStale() {
+		return endpoint, features, true, nil
+	}
+
+	if err := em.RefreshForOperation(ctx, operation); err != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+		return endpoint, features, true, err
+	}
+	endpoint, features, quarantined = em.resolveOperation(operation)
+	return endpoint, features, quarantined, nil
 }
 
 func (em *EndpointManager) resolveEndpoint(cache *EndpointCache, operation string) string {

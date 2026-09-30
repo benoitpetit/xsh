@@ -40,6 +40,13 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 
 	legacy, _ := result["legacy"].(map[string]interface{})
 	coreProfile, _ := result["core"].(map[string]interface{})
+	profileBio, _ := result["profile_bio"].(map[string]interface{})
+	locationProfile, _ := result["location"].(map[string]interface{})
+	websiteProfile, _ := result["website"].(map[string]interface{})
+	relationshipCounts, _ := result["relationship_counts"].(map[string]interface{})
+	tweetCounts, _ := result["tweet_counts"].(map[string]interface{})
+	verification, _ := result["verification"].(map[string]interface{})
+	banner, _ := result["banner"].(map[string]interface{})
 	restID, _ := result["rest_id"].(string)
 
 	if restID == "" {
@@ -48,21 +55,43 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 
 	// Parse timestamp
 	var createdAt *time.Time
-	if rawDate, ok := legacy["created_at"].(string); ok && rawDate != "" {
+	rawDate := GetString(coreProfile, "created_at")
+	if rawDate == "" {
+		rawDate = GetString(legacy, "created_at")
+	}
+	if rawDate != "" {
 		if t, err := time.Parse("Mon Jan 02 15:04:05 -0700 2006", rawDate); err == nil {
 			createdAt = &t
 		}
 	}
 
-	// Extract website from entities
+	// Extract website from the current profile_bio entities or website object,
+	// while retaining the legacy entities path for older responses.
 	website := ""
-	if entities, ok := legacy["entities"].(map[string]interface{}); ok {
+	if entities, ok := profileBio["entities"].(map[string]interface{}); ok {
 		if urlEntity, ok := entities["url"].(map[string]interface{}); ok {
 			if urls, ok := urlEntity["urls"].([]interface{}); ok && len(urls) > 0 {
 				if urlObj, ok := urls[0].(map[string]interface{}); ok {
 					website, _ = urlObj["expanded_url"].(string)
 					if website == "" {
 						website, _ = urlObj["url"].(string)
+					}
+				}
+			}
+		}
+	}
+	if website == "" {
+		website = GetString(websiteProfile, "url")
+	}
+	if website == "" {
+		if entities, ok := legacy["entities"].(map[string]interface{}); ok {
+			if urlEntity, ok := entities["url"].(map[string]interface{}); ok {
+				if urls, ok := urlEntity["urls"].([]interface{}); ok && len(urls) > 0 {
+					if urlObj, ok := urls[0].(map[string]interface{}); ok {
+						website, _ = urlObj["expanded_url"].(string)
+						if website == "" {
+							website, _ = urlObj["url"].(string)
+						}
 					}
 				}
 			}
@@ -78,25 +107,29 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 	}
 
 	// Parse profile image URL (use larger size)
-	profileImageURL, _ := legacy["profile_image_url_https"].(string)
+	profileImageURL := ""
+	if avatar, ok := result["avatar"].(map[string]interface{}); ok {
+		profileImageURL = GetString(avatar, "image_url")
+	}
 	if profileImageURL == "" {
 		profileImageURL = GetString(result, "profile_image_url_https")
 	}
 	if profileImageURL == "" {
-		if avatar, ok := result["avatar"].(map[string]interface{}); ok {
-			profileImageURL = GetString(avatar, "image_url")
-		}
+		profileImageURL = GetString(legacy, "profile_image_url_https")
 	}
 	profileImageURL = replaceAll(profileImageURL, "_normal", "_400x400")
 
-	name := GetString(legacy, "name")
+	name := GetString(coreProfile, "name")
 	if name == "" {
 		name = GetString(result, "name")
 	}
 	if name == "" {
-		name = GetString(coreProfile, "name")
+		name = GetString(legacy, "name")
 	}
-	handle := GetString(legacy, "screen_name")
+	handle := GetString(coreProfile, "screen_name")
+	if handle == "" {
+		handle = GetString(coreProfile, "handle")
+	}
 	if handle == "" {
 		handle = GetString(result, "screen_name")
 	}
@@ -104,31 +137,43 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 		handle = GetString(result, "handle")
 	}
 	if handle == "" {
-		handle = GetString(coreProfile, "screen_name")
+		handle = GetString(legacy, "screen_name")
 	}
-	if handle == "" {
-		handle = GetString(coreProfile, "handle")
+	profileBannerURL := GetString(banner, "image_url")
+	if profileBannerURL == "" {
+		profileBannerURL = GetString(legacy, "profile_banner_url")
 	}
-	profileBannerURL := GetString(legacy, "profile_banner_url")
 	if profileBannerURL == "" {
 		profileBannerURL = GetString(result, "profile_banner_url")
 	}
 
 	// Get counts
-	followersCount := getInt(legacy, "followers_count")
-	followingCount := getInt(legacy, "friends_count")
-	tweetCount := getInt(legacy, "statuses_count")
+	followersCount := getIntOrFallback(relationshipCounts, "followers", legacy, "followers_count")
+	followingCount := getIntOrFallback(relationshipCounts, "following", legacy, "friends_count")
+	tweetCount := getIntOrFallback(tweetCounts, "tweets", legacy, "statuses_count")
 	listedCount := getInt(legacy, "listed_count")
 
 	// Get verification status
 	isBlueVerified, _ := result["is_blue_verified"].(bool)
+	isBlueVerified = isBlueVerified || getBool(verification, "is_blue_verified") || getBool(verification, "verified")
 
+	bio := GetString(profileBio, "description")
+	if bio == "" {
+		bio = GetString(legacy, "description")
+	}
+	location := GetString(locationProfile, "location")
+	if location == "" {
+		location = GetString(legacy, "location")
+	}
+	if website == "" {
+		website = GetString(legacy, "url")
+	}
 	return &User{
 		ID:               restID,
 		Name:             name,
 		Handle:           handle,
-		Bio:              GetString(legacy, "description"),
-		Location:         GetString(legacy, "location"),
+		Bio:              bio,
+		Location:         location,
 		Website:          website,
 		Verified:         isBlueVerified,
 		FollowersCount:   followersCount,
@@ -142,13 +187,42 @@ func UserFromAPIResult(result map[string]interface{}) *User {
 	}
 }
 
+func getIntOrFallback(primary map[string]interface{}, primaryKey string, fallback map[string]interface{}, fallbackKey string) int {
+	if value, ok := primary[primaryKey]; ok {
+		if count, valid := integerValue(value); valid {
+			return count
+		}
+	}
+	return getInt(fallback, fallbackKey)
+}
+
+func integerValue(value interface{}) (int, bool) {
+	switch value := value.(type) {
+	case float64:
+		return int(value), true
+	case float32:
+		return int(value), true
+	case int:
+		return value, true
+	case int64:
+		return int(value), true
+	default:
+		return 0, false
+	}
+}
+
+func getBool(m map[string]interface{}, key string) bool {
+	value, _ := m[key].(bool)
+	return value
+}
+
 func replaceAll(s, old, new string) string {
 	return strings.ReplaceAll(s, old, new)
 }
 
 func getInt(m map[string]interface{}, key string) int {
-	if v, ok := m[key].(float64); ok {
-		return int(v)
+	if value, ok := integerValue(m[key]); ok {
+		return value
 	}
 	return 0
 }

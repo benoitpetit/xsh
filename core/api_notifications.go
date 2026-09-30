@@ -220,11 +220,7 @@ func extractNestedID(item interface{}, key string) string {
 	if s, ok := nested["id"].(string); ok {
 		return s
 	}
-	// JSON numbers are float64 in Go
-	if f, ok := nested["id"].(float64); ok {
-		return fmt.Sprintf("%.0f", f)
-	}
-	return ""
+	return parseJSONID(nested["id"])
 }
 
 // extractV2Cursor extracts cursor value from a REST v2 timeline entry

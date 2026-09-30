@@ -89,9 +89,14 @@ func parseSpace(data map[string]interface{}) *Space {
 	space.ScheduledStart = getString(metadata, "scheduled_start")
 	space.StartedAt = getString(metadata, "started_at")
 	space.EndedAt = getString(metadata, "ended_at")
-	space.IsTicketed = false
-	if ticketed, ok := metadata["is_space_available_for_replay"].(bool); ok {
-		space.IsTicketed = ticketed
+	space.IsTicketed, _ = metadata["is_ticketed"].(bool)
+	switch narrowCastType := metadata["narrow_cast_space_type"].(type) {
+	case float64:
+		space.NarrowCastSpaceType = int(narrowCastType)
+	case int:
+		space.NarrowCastSpaceType = narrowCastType
+	case int64:
+		space.NarrowCastSpaceType = int(narrowCastType)
 	}
 
 	if count, ok := metadata["total_participating"].(float64); ok {
@@ -137,15 +142,25 @@ func parseSpaceUser(data interface{}) *SpaceUser {
 		return nil
 	}
 
-	legacy, ok := result["legacy"].(map[string]interface{})
-	if !ok {
-		return nil
+	core, _ := result["core"].(map[string]interface{})
+	legacy, _ := result["legacy"].(map[string]interface{})
+	id := getString(result, "rest_id")
+	if id == "" {
+		id = getString(legacy, "id_str")
+	}
+	name := getString(core, "name")
+	if name == "" {
+		name = getString(legacy, "name")
+	}
+	handle := getString(core, "screen_name")
+	if handle == "" {
+		handle = getString(legacy, "screen_name")
 	}
 
 	return &SpaceUser{
-		ID:     getString(result, "rest_id"),
-		Name:   getString(legacy, "name"),
-		Handle: getString(legacy, "screen_name"),
+		ID:     id,
+		Name:   name,
+		Handle: handle,
 	}
 }
 

@@ -1,10 +1,6 @@
 // Package core provides scheduled tweet operations for Twitter/X.
 package core
 
-import (
-	"fmt"
-)
-
 // ScheduledTweet represents a scheduled tweet
 type ScheduledTweet struct {
 	ID        string   `json:"id"`
@@ -86,9 +82,7 @@ func parseScheduledTweets(data map[string]interface{}) []ScheduledTweet {
 		// Extract ID
 		id, _ := entryMap["rest_id"].(string)
 		if id == "" {
-			if idFloat, ok := entryMap["id"].(float64); ok {
-				id = fmt.Sprintf("%.0f", idFloat)
-			}
+			id = parseJSONID(entryMap["id"])
 		}
 
 		// Extract execute_at
