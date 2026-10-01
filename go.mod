@@ -8,7 +8,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.0.0
 	github.com/charmbracelet/x/ansi v0.4.5
 	github.com/google/uuid v1.6.0
-	github.com/mark3labs/mcp-go v0.5.0
+	github.com/mark3labs/mcp-go v0.6.0
 	github.com/mattn/go-runewidth v0.0.21
 	github.com/muesli/termenv v0.15.2
 	github.com/refraction-networking/utls v1.6.7
