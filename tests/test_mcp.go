@@ -9,18 +9,30 @@ import (
 // TestMCPToolSchema tests MCP tool structure
 func TestMCPToolSchema(t *testing.T) {
 	// Test creating an MCP tool
-	tool := mcp.NewTool("test_tool", "Test tool description", map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"param1": map[string]interface{}{
-				"type":        "string",
-				"description": "First parameter",
+	tool := mcp.Tool{
+		Name:        "test_tool",
+		Description: "Test tool description",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"param1": map[string]interface{}{
+					"type":        "string",
+					"description": "First parameter",
+				},
 			},
 		},
-	})
+	}
 
 	if tool.Name != "test_tool" {
 		t.Errorf("Tool.Name = %v, want 'test_tool'", tool.Name)
+	}
+
+	if tool.InputSchema.Type != "object" {
+		t.Errorf("InputSchema.Type = %v, want 'object'", tool.InputSchema.Type)
+	}
+
+	if _, nested := tool.InputSchema.Properties["properties"]; nested {
+		t.Error("InputSchema.Properties must contain tool arguments directly, not a nested \"properties\" object")
 	}
 }
 

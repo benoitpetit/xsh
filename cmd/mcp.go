@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/benoitpetit/xsh/core"
 	"github.com/benoitpetit/xsh/display"
@@ -33,12 +34,9 @@ func init() {
 }
 
 func runMCPServer() error {
-	// Create MCP server
-	s := server.NewMCPServer(
-		"xsh",
-		"1.0.0",
-		server.WithToolCapabilities(true),
-	)
+	// Create MCP server. The tools capability is advertised automatically by
+	// mcp-go once at least one tool is registered.
+	s := server.NewMCPServer("xsh", "1.0.0")
 
 	// Register tools
 	registerReadTools(s)
@@ -50,28 +48,59 @@ func runMCPServer() error {
 	return server.ServeStdio(s)
 }
 
-// createTool creates a tool with the given name, description and parameters
+// createTool creates a tool with the given name, description and parameters.
+//
+// Each entry of params is the JSON Schema fragment of one tool argument. A
+// fragment may carry a "required": true marker, which is hoisted out of the
+// fragment and into the schema-level "required" list, as mandated by the MCP
+// input schema spec.
 func createTool(name, description string, params map[string]interface{}) mcp.Tool {
-	schema := map[string]interface{}{
-		"type":       "object",
-		"properties": params,
-	}
+	properties := make(map[string]interface{}, len(params))
+	required := make([]string, 0, len(params))
 
-	// Extract required params
-	var required []string
-	for k, v := range params {
-		if param, ok := v.(map[string]interface{}); ok {
-			if req, ok := param["required"].(bool); ok && req {
-				required = append(required, k)
-				delete(param, "required")
-			}
+	// Sort for a stable schema regardless of map iteration order.
+	names := make([]string, 0, len(params))
+	for k := range params {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		fragment, ok := params[name].(map[string]interface{})
+		if !ok {
+			properties[name] = params[name]
+			continue
 		}
-	}
-	if len(required) > 0 {
-		schema["required"] = required
+
+		// Copy so the caller's literal is left untouched, and drop the
+		// "required" marker: it is not a JSON Schema keyword and would
+		// otherwise be sent to clients as a property named "required".
+		cleaned := make(map[string]interface{}, len(fragment))
+		for key, value := range fragment {
+			if key == "required" {
+				if marker, ok := value.(bool); ok && marker {
+					required = append(required, name)
+				}
+				continue
+			}
+			cleaned[key] = value
+		}
+		properties[name] = cleaned
 	}
 
-	return mcp.NewTool(name, description, schema)
+	if len(required) == 0 {
+		required = nil
+	}
+
+	return mcp.Tool{
+		Name:        name,
+		Description: description,
+		InputSchema: mcp.ToolInputSchema{
+			Type:       "object",
+			Properties: properties,
+			Required:   required,
+		},
+	}
 }
 
 func registerReadTools(s *server.MCPServer) {
