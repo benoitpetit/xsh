@@ -101,6 +101,9 @@ func chromiumUserDataDirs(goos, home, configDir, localAppData, browserName strin
 			)
 		}
 	case "darwin":
+		if browserName == "chrome" {
+			dirs = append(dirs, filepath.Join(home, "Library/Application Support/Google/Chrome"))
+		}
 		for _, path := range relative {
 			dirs = append(dirs, filepath.Join(home, "Library/Application Support", path))
 		}

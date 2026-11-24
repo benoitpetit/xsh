@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -44,6 +45,35 @@ func TestExtractFromPathsReportsAllProfileFailures(t *testing.T) {
 		if !containsSubstring(err.Error(), path+" failed") {
 			t.Fatalf("extractFromPaths() error = %v, missing %q", err, path+" failed")
 		}
+	}
+}
+
+func TestExtractFromBrowserAtPathVerboseUsesProvidedCookieDatabase(t *testing.T) {
+	cookiePath := filepath.Join(t.TempDir(), "Cookies")
+	db, err := sql.Open("sqlite", cookiePath)
+	if err != nil {
+		t.Fatalf("open cookie database: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE cookies (host_key TEXT, name TEXT, value TEXT, encrypted_value BLOB, path TEXT)`); err != nil {
+		db.Close()
+		t.Fatalf("create cookies table: %v", err)
+	}
+	for _, cookie := range [][2]string{{"auth_token", "token"}, {"ct0", "csrf"}} {
+		if _, err := db.Exec(`INSERT INTO cookies (host_key, name, value, encrypted_value, path) VALUES (?, ?, ?, NULL, '/')`, "x.com", cookie[0], cookie[1]); err != nil {
+			db.Close()
+			t.Fatalf("insert %s cookie: %v", cookie[0], err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close cookie database: %v", err)
+	}
+
+	creds, err := ExtractFromBrowserAtPathVerbose("chrome", cookiePath, false)
+	if err != nil {
+		t.Fatalf("extract cookies from explicit path: %v", err)
+	}
+	if creds == nil || !creds.IsValid() {
+		t.Fatalf("credentials = %#v, want valid credentials", creds)
 	}
 }
 

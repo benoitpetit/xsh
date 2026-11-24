@@ -31,17 +31,23 @@ func ExtractFromBrowser(browserName string) (*core.AuthCredentials, error) {
 
 // ExtractFromBrowserVerbose extracts cookies with verbose output
 func ExtractFromBrowserVerbose(browserName string, verbose bool) (*core.AuthCredentials, error) {
+	return ExtractFromBrowserAtPathVerbose(browserName, "", verbose)
+}
+
+// ExtractFromBrowserAtPathVerbose extracts cookies from a browser, using the
+// supplied cookie database path when it is not empty.
+func ExtractFromBrowserAtPathVerbose(browserName, cookiePath string, verbose bool) (*core.AuthCredentials, error) {
 	switch strings.ToLower(browserName) {
 	case "chrome", "google-chrome", "google chrome":
-		return extractFromChromiumBrowserVerbose("chrome", "Chrome", verbose)
+		return extractFromChromiumBrowserAtPathVerbose("chrome", "Chrome", cookiePath, verbose)
 	case "brave", "brave browser":
-		return extractFromChromiumBrowserVerbose("brave", "Brave", verbose)
+		return extractFromChromiumBrowserAtPathVerbose("brave", "Brave", cookiePath, verbose)
 	case "firefox", "mozilla firefox":
-		return extractFromFirefoxVerbose(verbose)
+		return extractFromFirefoxAtPathVerbose(cookiePath, verbose)
 	case "edge", "microsoft edge":
-		return extractFromChromiumBrowserVerbose("edge", "Edge", verbose)
+		return extractFromChromiumBrowserAtPathVerbose("edge", "Edge", cookiePath, verbose)
 	case "chromium":
-		return extractFromChromiumBrowserVerbose("chromium", "Chromium", verbose)
+		return extractFromChromiumBrowserAtPathVerbose("chromium", "Chromium", cookiePath, verbose)
 	default:
 		return nil, fmt.Errorf("unsupported browser: %s", browserName)
 	}
@@ -105,7 +111,14 @@ func extractFromChromiumVerbose(verbose bool) (*core.AuthCredentials, error) {
 }
 
 func extractFromFirefoxVerbose(verbose bool) (*core.AuthCredentials, error) {
+	return extractFromFirefoxAtPathVerbose("", verbose)
+}
+
+func extractFromFirefoxAtPathVerbose(cookiePath string, verbose bool) (*core.AuthCredentials, error) {
 	paths := currentCookiePaths("firefox")
+	if cookiePath != "" {
+		paths = []string{cookiePath}
+	}
 	creds, err := extractFromPaths(paths, func(path string) (*core.AuthCredentials, error) {
 		return (&FirefoxCookieExtractor{Path: path}).ExtractCookies()
 	})
@@ -116,7 +129,14 @@ func extractFromFirefoxVerbose(verbose bool) (*core.AuthCredentials, error) {
 }
 
 func extractFromChromiumBrowserVerbose(browserName, displayName string, verbose bool) (*core.AuthCredentials, error) {
+	return extractFromChromiumBrowserAtPathVerbose(browserName, displayName, "", verbose)
+}
+
+func extractFromChromiumBrowserAtPathVerbose(browserName, displayName, cookiePath string, verbose bool) (*core.AuthCredentials, error) {
 	paths := currentCookiePaths(browserName)
+	if cookiePath != "" {
+		paths = []string{cookiePath}
+	}
 	creds, err := extractFromPaths(paths, func(path string) (*core.AuthCredentials, error) {
 		return (&ChromeCookieExtractor{Name: displayName, Path: path}).ExtractCookiesVerbose(verbose)
 	})

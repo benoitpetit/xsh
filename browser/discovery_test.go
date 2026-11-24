@@ -40,6 +40,18 @@ func TestDiscoverBrowserCandidatesFindsChromeProfilesWithoutExecutable(t *testin
 	}
 }
 
+func TestDiscoverBrowserCandidatesFindsChromeOnMacOS(t *testing.T) {
+	home := t.TempDir()
+	cookiePath := filepath.Join(home, "Library", "Application Support", "Google", "Chrome", "Default", "Network", "Cookies")
+	touchCookieDatabase(t, cookiePath)
+
+	candidates := discoverBrowserCandidates("darwin", home, "", "", "")
+	chrome := candidateByName(t, candidates, "chrome")
+	if len(chrome.CookiePaths) != 1 || chrome.CookiePaths[0] != cookiePath {
+		t.Fatalf("chrome candidate paths = %v, want [%s]", chrome.CookiePaths, cookiePath)
+	}
+}
+
 func TestDiscoverBrowserCandidatesKeepsChromiumProfilesIsolated(t *testing.T) {
 	home := t.TempDir()
 	configDir := filepath.Join(home, ".config")

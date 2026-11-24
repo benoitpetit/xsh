@@ -147,6 +147,9 @@ xsh auth login
 xsh auth login --browser firefox
 xsh auth login --browser brave
 
+# Pass the cookie database path when browser auto-detection misses it
+xsh auth login --browser chrome --cookie-path "$HOME/Library/Application Support/Google/Chrome/Default/Network/Cookies"
+
 # Save under a named account
 xsh auth login --account work
 ```

@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	authBrowser string
-	authAccount string
-	forceFlag   bool
+	authBrowser    string
+	authCookiePath string
+	authAccount    string
+	forceFlag      bool
 )
 
 func credentialHint(token string) string {
@@ -105,6 +106,9 @@ Examples:
   xsh auth login --browser firefox
   xsh auth login --browser brave
 
+  # Use a specific browser cookie database
+  xsh auth login --browser chrome --cookie-path "$HOME/Library/Application Support/Google/Chrome/Default/Network/Cookies"
+
   # Save to specific account
   xsh auth login --account work`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -112,10 +116,14 @@ Examples:
 		var browserName string
 		var err error
 
+		if authCookiePath != "" && authBrowser == "" {
+			return fmt.Errorf("--cookie-path requires --browser")
+		}
+
 		if authBrowser != "" {
 			// Extract from specific browser
 			fmt.Println(display.Action("Extracting cookies from", authBrowser))
-			creds, err = browser.ExtractFromBrowserVerbose(authBrowser, core.Verbose)
+			creds, err = browser.ExtractFromBrowserAtPathVerbose(authBrowser, authCookiePath, core.Verbose)
 			browserName = authBrowser
 		} else {
 			// Auto-detect from all browsers
@@ -417,6 +425,7 @@ func init() {
 
 	// Flags
 	authLoginCmd.Flags().StringVar(&authBrowser, "browser", "", "Browser to extract from (chrome, firefox, brave, edge, chromium)")
+	authLoginCmd.Flags().StringVar(&authCookiePath, "cookie-path", "", "Path to the browser cookie database file")
 	authLoginCmd.Flags().StringVar(&authAccount, "account", "default", "Account name")
 	authImportCmd.Flags().StringVar(&authAccount, "account", "default", "Account name")
 	authSetCmd.Flags().StringVar(&authAccount, "account", "default", "Account name")
