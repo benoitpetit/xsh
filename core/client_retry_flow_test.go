@@ -192,7 +192,7 @@ func TestGraphQLMutationUsesStaticFallbackWhenRefreshFails(t *testing.T) {
 	if refreshCalls != 1 || requestCalls != 1 {
 		t.Fatalf("refresh/request calls = %d/%d, want 1/1", refreshCalls, requestCalls)
 	}
-	if want := GraphQLBase + "/5CVj-J0FZWyGgJpcjeBJEA/CreateTweet"; requestURL != want {
+	if want := GraphQLBase + "/l4hk8uVGvR-a8kzQ4nOhPA/CreateTweet"; requestURL != want {
 		t.Fatalf("request URL = %q, want static fallback %q", requestURL, want)
 	}
 }

@@ -16,29 +16,29 @@ const BearerToken = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs
 // and cached in ~/.config/xsh/graphql_ops.json
 var GraphQLEndpoints = map[string]string{
 	// Read operations - Timeline
-	"HomeTimeline":       "gXtpuBkna6SRLFFKaT2OTg/HomeTimeline",
+	"HomeTimeline":       "KmJCeZ__ef1fNos7tKN_fg/HomeTimeline",
 	"HomeLatestTimeline": "JVzDMxTXbT9bRXSpUR16CQ/HomeLatestTimeline",
 
 	// Read operations - Search
-	"SearchTimeline": "OFvapAUD5xrCWn9xcD0A6A/SearchTimeline",
+	"SearchTimeline": "vLHjqbDv7TPFMBkIIO1nOA/SearchTimeline",
 
 	// Read operations - Tweets
-	"TweetDetail":           "1eAGnXrtvTBUePpQfTXZzA/TweetDetail",
+	"TweetDetail":           "dQDdKtt882nl-Km98FJGSQ/TweetDetail",
 	"TweetResultByRestId":   "tcA4FFMIjGSDv48Cu_FS5Q/TweetResultByRestId",
 	"TweetResultsByRestIds": "M441-7OPnT7o_TzVwteU3Q/TweetResultsByRestIds",
 
 	// Read operations - Users
-	"UserByScreenName":   "pLsOiyHJ1eFwPJlNmLp4Bg/UserByScreenName",
+	"UserByScreenName":   "AMIBMjtxEEATh4z8V9GtRg/UserByScreenName",
 	"UserByRestId":       "FJ17ptkJuQAZGWilcySi5w/UserByRestId",
 	"UsersByRestIds":     "8OKmcyotfczJb44QTTu5tQ/UsersByRestIds",
 	"UsersByScreenNames": "Ats5GnHiQxT-Nnzw09raMw/UsersByScreenNames",
 
 	// Read operations - User Timelines
-	"UserTweets":           "5M8UuGym7_VyIEggQIyjxQ/UserTweets",
-	"UserTweetsAndReplies": "C3YpYjTsQZznJIdyy2JKuQ/UserTweetsAndReplies",
-	"UserRepostsTimeline":  "o1Yp3gwGQgUne5ll61VWrg/UserRepostsTimeline",
-	"UserMedia":            "mWo2yKjZEaqK7_vKox_67Q/UserMedia",
-	"Likes":                "dv5-II7_Bup_PHish7p6fw/Likes",
+	"UserTweets":           "D6z-FJI2pKuwEeYYxVIGbg/UserTweets",
+	"UserTweetsAndReplies": "FmuxExUC21Xn_C2NwtX5sQ/UserTweetsAndReplies",
+	"UserRepostsTimeline":  "bWzOK-jDN4SYVcF6AQ22Qw/UserRepostsTimeline",
+	"UserMedia":            "iTSlWbsmD00dAE7Sk9xvIw/UserMedia",
+	"Likes":                "ZjyvI1V9gajq5eclHCObzA/Likes",
 
 	// Read operations - Following. Followers has no verified static fallback;
 	// it must be discovered from the authenticated web client when available.
@@ -68,7 +68,7 @@ var GraphQLEndpoints = map[string]string{
 	"Trends":      "Z6s1tFEq4BveGOj0N80z8g/ExplorePage",
 
 	// Write operations - Tweets (updated 2026-04-02 from dynamic cache)
-	"CreateTweet":     "5CVj-J0FZWyGgJpcjeBJEA/CreateTweet",
+	"CreateTweet":     "l4hk8uVGvR-a8kzQ4nOhPA/CreateTweet",
 	"CreateNoteTweet": "4e-YHiuiNDaITMxa29cerw/CreateNoteTweet",
 	"DeleteTweet":     "nxpZCY2K-I6QoFHAHeojFQ/DeleteTweet",
 
