@@ -8,7 +8,7 @@ import (
 )
 
 // Version is set at build time via ldflags
-var Version = "0.1.7"
+var Version = "0.1.8"
 
 // Commit and BuildDate are injected by Makefile/release builds.
 var Commit = "unknown"
