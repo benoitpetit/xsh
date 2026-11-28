@@ -24,14 +24,14 @@ var GraphQLEndpoints = map[string]string{
 
 	// Read operations - Tweets
 	"TweetDetail":           "dQDdKtt882nl-Km98FJGSQ/TweetDetail",
-	"TweetResultByRestId":   "tcA4FFMIjGSDv48Cu_FS5Q/TweetResultByRestId",
-	"TweetResultsByRestIds": "M441-7OPnT7o_TzVwteU3Q/TweetResultsByRestIds",
+	"TweetResultByRestId":   "U8lc5aomF5krJzZ9vJ9wxg/TweetResultByRestId",
+	"TweetResultsByRestIds": "yW_CmYWEKwaOpAEHpNSReg/TweetResultsByRestIds",
 
 	// Read operations - Users
 	"UserByScreenName":   "AMIBMjtxEEATh4z8V9GtRg/UserByScreenName",
-	"UserByRestId":       "FJ17ptkJuQAZGWilcySi5w/UserByRestId",
-	"UsersByRestIds":     "8OKmcyotfczJb44QTTu5tQ/UsersByRestIds",
-	"UsersByScreenNames": "Ats5GnHiQxT-Nnzw09raMw/UsersByScreenNames",
+	"UserByRestId":       "mxaYWwt52eAb6OAzYHMVzg/UserByRestId",
+	"UsersByRestIds":     "ubfbnAM4qTlMTOYleYhXSg/UsersByRestIds",
+	"UsersByScreenNames": "cACg_kWQkzNQ74lcK5rksQ/UsersByScreenNames",
 
 	// Read operations - User Timelines
 	"UserTweets":           "D6z-FJI2pKuwEeYYxVIGbg/UserTweets",
@@ -42,13 +42,13 @@ var GraphQLEndpoints = map[string]string{
 
 	// Read operations - Following. Followers has no verified static fallback;
 	// it must be discovered from the authenticated web client when available.
-	"Following":             "lEJDj0bTio9-s0hSukCD9Q/Following",
-	"FollowersYouKnow":      "fBi9FJP1haBdGoZuVfZVzQ/FollowersYouKnow",
-	"BlueVerifiedFollowers": "ZH16zF8R8YAJAAfIGbef9A/BlueVerifiedFollowers",
+	"Following":             "eDqlbOS46zda8jDT8dEQ_Q/Following",
+	"FollowersYouKnow":      "N-5YQGqcnNO164XwsevHCA/FollowersYouKnow",
+	"BlueVerifiedFollowers": "HP_mH6gi0qyrYpnRxVovew/BlueVerifiedFollowers",
 
 	// Read operations - Bookmarks
 	"Bookmarks":              "uKP9v_I31k0_VSBmlpq2Xg/Bookmarks",
-	"BookmarkSearchTimeline": "vBCEp1KR36nwY3u2K-2nEA/BookmarkSearchTimeline",
+	"BookmarkSearchTimeline": "pgYWLRBVcyTTpHZPbfstqA/BookmarkSearchTimeline",
 	"BookmarkFoldersSlice":   "i78YDd0Tza-dV4SYs58kRg/BookmarkFoldersSlice",
 	"BookmarkFolderTimeline": "hNY7X2xE2N7HVF6Qb_mu6w/BookmarkFolderTimeline",
 
@@ -64,12 +64,12 @@ var GraphQLEndpoints = map[string]string{
 	"JobScreenQuery":                "8uZH_OBKTFNIMzTJaV5lbQ/JobScreenQuery",
 
 	// Read operations - Explore/Trends
-	"ExplorePage": "Z6s1tFEq4BveGOj0N80z8g/ExplorePage",
-	"Trends":      "Z6s1tFEq4BveGOj0N80z8g/ExplorePage",
+	"ExplorePage": "CVExg1KY6Ec9BioRBbI8Jg/ExplorePage",
+	"Trends":      "CVExg1KY6Ec9BioRBbI8Jg/ExplorePage",
 
 	// Write operations - Tweets (updated 2026-04-02 from dynamic cache)
 	"CreateTweet":     "l4hk8uVGvR-a8kzQ4nOhPA/CreateTweet",
-	"CreateNoteTweet": "4e-YHiuiNDaITMxa29cerw/CreateNoteTweet",
+	"CreateNoteTweet": "seOZkIS8AysCGfPo6yYPVA/CreateNoteTweet",
 	"DeleteTweet":     "nxpZCY2K-I6QoFHAHeojFQ/DeleteTweet",
 
 	// Write operations - Likes
@@ -98,17 +98,17 @@ var GraphQLEndpoints = map[string]string{
 	"DeleteList":       "UnN9Th1BDbeLjpgjGSpL3Q/DeleteList",
 	"ListAddMember":    "nAi8BAjn1xQOyCH0hWZpPA/ListAddMember",
 	"ListRemoveMember": "pGMiwtWRMx08r4XCYxai4Q/ListRemoveMember",
-	"PinTimeline":      "t-vQkLuhUq-GvXLbRXXMFA/PinTimeline",
-	"UnpinTimeline":    "agrJf0pu-b_3p53wUjZEFA/UnpinTimeline",
+	"PinTimeline":      "qaz5JhPxqI3UqAgkTpsGyQ/PinTimeline",
+	"UnpinTimeline":    "u_Nxpj-y-PoTFHEM9saz2Q/UnpinTimeline",
 
 	// Write operations - Follow
 	"FollowUser":   "iNZ4xPly3JveJqEshzJdLA/FollowUser",
 	"UnfollowUser": "tTT1x7v4h9zLVzT1BA/UnfollowUser",
 
 	// Other operations
-	"Viewer":             "zWQLM9HIVahRSUvzUH4lDw/Viewer",
-	"BlockedAccountsAll": "tnGJ8xjxfnv032LSOpKYWQ/BlockedAccountsAll",
-	"MutedAccounts":      "CI5MBQ8KdnNx87ZXOfTsBg/MutedAccounts",
+	"Viewer":             "TpQxQtWMTMnIAMPlMGMqNw/Viewer",
+	"BlockedAccountsAll": "exDAeZuprdrqzXJu4UiNUQ/BlockedAccountsAll",
+	"MutedAccounts":      "1heSSJ80TWeDGtoR7-X-iA/MutedAccounts",
 
 	// Read operations - Communities
 	"CommunitiesMainPageTimeline": "ZYMHvNRSCYjfaxcK_XBIOQ/CommunitiesMainPageTimeline",
