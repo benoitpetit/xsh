@@ -59,5 +59,9 @@ temp/
 # Local CodeGraph index (never publish repository metadata)
 .codegraph/
 
+# Agent/skill scratch data (never publish repository metadata)
+.skillgraph/
+.gotmp/
+
 # Internal planning documents
 /docs/superpowers/

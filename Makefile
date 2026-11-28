@@ -2,6 +2,9 @@
 
 VERSION ?= dev
 CGO_ENABLED ?= 0
+# Keep Go's scratch files off small tmpfs mounts (they can exhaust the quota).
+GOTMPDIR ?= $(CURDIR)/.gotmp
+export GOTMPDIR
 COMMIT ?= $(shell commit=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown); if git diff --quiet --ignore-submodules HEAD -- 2>/dev/null && git diff --cached --quiet --ignore-submodules 2>/dev/null; then echo $$commit; else echo $$commit-dirty; fi)
 BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS = -ldflags="-s -w -X github.com/benoitpetit/xsh/cmd.Version=$(VERSION) -X github.com/benoitpetit/xsh/cmd.Commit=$(COMMIT) -X github.com/benoitpetit/xsh/cmd.BuildDate=$(BUILD_DATE)"
@@ -34,12 +37,15 @@ build-darwin:
 
 # Testing
 test:
+	@mkdir -p $(GOTMPDIR)
 	go test ./...
 
 test-race:
+	@mkdir -p $(GOTMPDIR)
 	go test -race ./...
 
 test-v:
+	@mkdir -p $(GOTMPDIR)
 	go test -v ./...
 
 # Clean build artifacts
