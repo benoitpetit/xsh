@@ -3,6 +3,7 @@ package core
 import "testing"
 
 func TestCreateNoteTweetBuildsExpectedVariables(t *testing.T) {
+	resetEndpointTestState()
 	client := &XClient{requestWithOperationHook: func(method, _ string, _ map[string]interface{}, jsonData map[string]interface{}, _ int, _, operation string) (map[string]interface{}, error) {
 		if method != "POST" || operation != "CreateNoteTweet" {
 			t.Fatalf("method=%q operation=%q", method, operation)

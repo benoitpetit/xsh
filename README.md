@@ -280,6 +280,10 @@ xsh user tweets <handle>
 xsh user tweets <handle> --replies   # Include replies
 xsh user tweets <handle> --count 50
 
+# User's reposts
+xsh user reposts <handle>
+xsh user reposts <handle> --count 50 --cursor <cursor>
+
 # Liked tweets
 xsh user likes <handle> --count 30
 

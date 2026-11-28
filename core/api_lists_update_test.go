@@ -3,6 +3,7 @@ package core
 import "testing"
 
 func TestUpdateListBuildsExpectedVariables(t *testing.T) {
+	resetEndpointTestState()
 	name := "Updated name"
 	private := false
 	client := &XClient{requestWithOperationHook: func(method, _ string, _ map[string]interface{}, jsonData map[string]interface{}, _ int, _, operation string) (map[string]interface{}, error) {

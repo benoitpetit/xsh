@@ -102,6 +102,7 @@ func resetEndpointTestState() {
 }
 
 func TestGraphQLRequestRetryFlowOn422(t *testing.T) {
+	resetEndpointTestState()
 	client := &XClient{}
 	script := testutil.NewRetryScript([]testutil.RequestStep{
 		{Err: &APIError{Message: "HTTP 422", StatusCode: 422}},
@@ -129,6 +130,112 @@ func TestGraphQLRequestRetryFlowOn422(t *testing.T) {
 	if script.WriteDelayCalls != 0 {
 		t.Fatalf("writeDelayCalls = %d, want 0", script.WriteDelayCalls)
 	}
+}
+
+func TestGraphQLMutationRefreshesMissingEndpointCache(t *testing.T) {
+	for _, tc := range []struct {
+		operation string
+		endpoint  string
+	}{
+		{operation: "CreateTweet", endpoint: "fresh-create/CreateTweet"},
+		{operation: "CreateRetweet", endpoint: "fresh-retweet/CreateRetweet"},
+	} {
+		t.Run(tc.operation, func(t *testing.T) {
+			manager := isolateEmptyEndpointCache(t)
+			var refreshCalls, requestCalls int
+			manager.refreshFunc = func(context.Context) error {
+				refreshCalls++
+				manager.UpdateEndpoint(tc.operation, tc.endpoint)
+				return nil
+			}
+
+			client := &XClient{requestWithOperationHook: func(method, url string, _, _ map[string]interface{}, _ int, _, operation string) (map[string]interface{}, error) {
+				requestCalls++
+				if method != "POST" || operation != tc.operation {
+					t.Fatalf("method=%q operation=%q, want POST %s", method, operation, tc.operation)
+				}
+				if !strings.HasSuffix(url, "/"+tc.endpoint) {
+					t.Fatalf("request URL = %q, want refreshed endpoint %q", url, tc.endpoint)
+				}
+				return map[string]interface{}{"data": map[string]interface{}{"ok": true}}, nil
+			}}
+			client.writeDelayHook = func() {}
+
+			if _, err := client.graphqlRequest("POST", tc.operation, map[string]interface{}{"tweet_id": "123"}, nil, ""); err != nil {
+				t.Fatalf("graphqlRequest() error = %v", err)
+			}
+			if refreshCalls != 1 || requestCalls != 1 {
+				t.Fatalf("refresh/request calls = %d/%d, want 1/1", refreshCalls, requestCalls)
+			}
+		})
+	}
+}
+
+func TestGraphQLMutationUsesStaticFallbackWhenRefreshFails(t *testing.T) {
+	manager := isolateEmptyEndpointCache(t)
+	var refreshCalls, requestCalls int
+	manager.refreshFunc = func(context.Context) error {
+		refreshCalls++
+		return errors.New("endpoint discovery unavailable")
+	}
+
+	var requestURL string
+	client := &XClient{requestWithOperationHook: func(_, url string, _, _ map[string]interface{}, _ int, _, _ string) (map[string]interface{}, error) {
+		requestCalls++
+		requestURL = url
+		return map[string]interface{}{"data": map[string]interface{}{"ok": true}}, nil
+	}}
+	client.writeDelayHook = func() {}
+	if _, err := client.graphqlRequest("POST", "CreateTweet", map[string]interface{}{"tweet_text": "hello"}, nil, ""); err != nil {
+		t.Fatalf("graphqlRequest() error = %v", err)
+	}
+	if refreshCalls != 1 || requestCalls != 1 {
+		t.Fatalf("refresh/request calls = %d/%d, want 1/1", refreshCalls, requestCalls)
+	}
+	if want := GraphQLBase + "/5CVj-J0FZWyGgJpcjeBJEA/CreateTweet"; requestURL != want {
+		t.Fatalf("request URL = %q, want static fallback %q", requestURL, want)
+	}
+}
+
+func isolateEmptyEndpointCache(t *testing.T) *EndpointManager {
+	t.Helper()
+	manager := GetEndpointManager()
+
+	manager.repositoryMu.Lock()
+	previousRepository := manager.repository
+	manager.repository = NewEndpointRepository(nil)
+	manager.repositoryMu.Unlock()
+
+	previousMemoryCache := GetMemoryCache()
+	memoryCacheMu.Lock()
+	memoryCache = newEmptyEndpointCache()
+	memoryCacheMu.Unlock()
+
+	manager.refreshMu.Lock()
+	previousRefreshFunc := manager.refreshFunc
+	previousFailedAt := manager.failedAt
+	previousRefreshState := manager.refreshState
+	manager.refreshFunc = nil
+	manager.failedAt = nil
+	manager.refreshState = nil
+	manager.refreshMu.Unlock()
+
+	t.Cleanup(func() {
+		manager.repositoryMu.Lock()
+		manager.repository = previousRepository
+		manager.repositoryMu.Unlock()
+
+		memoryCacheMu.Lock()
+		memoryCache = previousMemoryCache
+		memoryCacheMu.Unlock()
+
+		manager.refreshMu.Lock()
+		manager.refreshFunc = previousRefreshFunc
+		manager.failedAt = previousFailedAt
+		manager.refreshState = previousRefreshState
+		manager.refreshMu.Unlock()
+	})
+	return manager
 }
 
 func TestGraphQLRequestRetryFlowOnBodyStaleError(t *testing.T) {

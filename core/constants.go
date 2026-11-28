@@ -36,6 +36,7 @@ var GraphQLEndpoints = map[string]string{
 	// Read operations - User Timelines
 	"UserTweets":           "5M8UuGym7_VyIEggQIyjxQ/UserTweets",
 	"UserTweetsAndReplies": "C3YpYjTsQZznJIdyy2JKuQ/UserTweetsAndReplies",
+	"UserRepostsTimeline":  "o1Yp3gwGQgUne5ll61VWrg/UserRepostsTimeline",
 	"UserMedia":            "mWo2yKjZEaqK7_vKox_67Q/UserMedia",
 	"Likes":                "dv5-II7_Bup_PHish7p6fw/Likes",
 
@@ -67,7 +68,7 @@ var GraphQLEndpoints = map[string]string{
 	"Trends":      "Z6s1tFEq4BveGOj0N80z8g/ExplorePage",
 
 	// Write operations - Tweets (updated 2026-04-02 from dynamic cache)
-	"CreateTweet":     "BLx8gngFhHE5eBgLBCT_0Q/CreateTweet",
+	"CreateTweet":     "5CVj-J0FZWyGgJpcjeBJEA/CreateTweet",
 	"CreateNoteTweet": "4e-YHiuiNDaITMxa29cerw/CreateNoteTweet",
 	"DeleteTweet":     "nxpZCY2K-I6QoFHAHeojFQ/DeleteTweet",
 

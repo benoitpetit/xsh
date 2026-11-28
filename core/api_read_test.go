@@ -37,6 +37,36 @@ func TestGetUserMediaParsesTimeline(t *testing.T) {
 	}
 }
 
+func TestGetUserRepostsParsesTimeline(t *testing.T) {
+	var fixture map[string]interface{}
+	if err := json.Unmarshal([]byte(`{"data":{"user":{"result":{"timeline":{"timeline":{"instructions":[{"type":"TimelineAddEntries","entries":[{"entryId":"tweet-900","content":{"itemContent":{"itemType":"TimelineTweet","tweet_results":{"result":{"rest_id":"900","legacy":{"full_text":"reposted text"}}}}}},{"entryId":"cursor-bottom-0","content":{"cursorType":"Bottom","value":"reposts-after"}}]}]}}}}}}`), &fixture); err != nil {
+		t.Fatal(err)
+	}
+	var operation string
+	client := &XClient{requestWithOperationHook: func(_, _ string, params, _ map[string]interface{}, _ int, _, op string) (map[string]interface{}, error) {
+		operation = op
+		variables, ok := params["variables"].(map[string]interface{})
+		if !ok || variables["userId"] != "user-42" || variables["count"] != 25 || variables["cursor"] != "reposts-next" {
+			t.Fatalf("variables = %#v", variables)
+		}
+		return fixture, nil
+	}}
+
+	response, err := GetUserReposts(client, "user-42", 25, "reposts-next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if operation != "UserRepostsTimeline" {
+		t.Fatalf("operation = %q, want UserRepostsTimeline", operation)
+	}
+	if len(response.Tweets) != 1 || response.Tweets[0].ID != "900" || response.Tweets[0].Text != "reposted text" {
+		t.Fatalf("tweets = %#v", response.Tweets)
+	}
+	if response.CursorBottom != "reposts-after" || !response.HasMore {
+		t.Fatalf("cursor/hasMore = %q/%t", response.CursorBottom, response.HasMore)
+	}
+}
+
 func TestGetTweetResultByRestIDParsesTweet(t *testing.T) {
 	fixture := readFixture(t, "tweet_result.json")
 	client := &XClient{requestWithOperationHook: func(_, _ string, _, _ map[string]interface{}, _ int, _, operation string) (map[string]interface{}, error) {

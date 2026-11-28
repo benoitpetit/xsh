@@ -122,17 +122,15 @@ func (em *EndpointManager) resolveOperation(operation string) (string, map[strin
 // command does not trigger a discovery request for the same confirmed 404.
 func (em *EndpointManager) resolveOperationWithRefresh(ctx context.Context, operation string) (string, map[string]bool, bool, error) {
 	endpoint, features, quarantined := em.resolveOperation(operation)
-	if !quarantined {
-		return endpoint, features, false, nil
-	}
-
 	cache := em.getCache()
-	if cache == nil || !cache.IsStale() {
-		return endpoint, features, true, nil
+	writeCacheMissing := isWriteOperation(operation) && (cache == nil || !cache.IsValid())
+	quarantinedCacheStale := quarantined && (cache == nil || cache.IsStale())
+	if !writeCacheMissing && !quarantinedCacheStale {
+		return endpoint, features, quarantined, nil
 	}
 
 	if err := em.RefreshForOperation(ctx, operation); err != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
-		return endpoint, features, true, err
+		return endpoint, features, quarantined, err
 	}
 	endpoint, features, quarantined = em.resolveOperation(operation)
 	return endpoint, features, quarantined, nil

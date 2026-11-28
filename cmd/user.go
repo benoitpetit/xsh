@@ -23,6 +23,7 @@ var userCmd = &cobra.Command{
 		
 Use subcommands for specific actions:
   user tweets <handle>    View user's tweets
+  user reposts <handle>   View user's reposts
   user media <handle>     View user's media posts
   user likes <handle>     View user's liked tweets  
   user followers <handle> View user's followers
@@ -106,6 +107,53 @@ var userTweetsCmd = &cobra.Command{
 				return fmt.Errorf("failed to fetch tweets: %w", err)
 			}
 
+			outputPage(response.Tweets, response.CursorBottom, response.HasMore, func() {
+				fmt.Println(display.FormatTweetList(response.Tweets))
+			})
+			return nil
+		})
+
+		return nil
+	},
+}
+
+var userRepostsCmd = &cobra.Command{
+	Use:   "reposts [handle]",
+	Short: "View a user's reposts",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client, err := getClient("")
+		if err != nil {
+			fmt.Println(display.Error(err.Error()))
+			abortCommand(core.ExitAuthError)
+			return nil
+		}
+		defer client.Close()
+
+		handle, valid := utils.ValidateTwitterHandle(args[0])
+		if !valid {
+			fmt.Println(display.Error(fmt.Sprintf("Invalid Twitter handle: %s", args[0])))
+			abortCommand(core.ExitError)
+			return nil
+		}
+		user, err := core.GetUserByHandle(client, handle)
+		if err != nil {
+			fmt.Println(display.Error(fmt.Sprintf("Failed to fetch user: %v", err)))
+			abortCommand(core.ExitError)
+			return nil
+		}
+		if user == nil {
+			fmt.Println(display.Error(fmt.Sprintf("User @%s not found", handle)))
+			abortCommand(core.ExitError)
+			return nil
+		}
+
+		runWithWatch(func() error {
+			cursor, _ := cmd.Flags().GetString("cursor")
+			response, err := core.GetUserReposts(client, user.ID, userCount, cursor)
+			if err != nil {
+				return fmt.Errorf("failed to fetch reposts: %w", err)
+			}
 			outputPage(response.Tweets, response.CursorBottom, response.HasMore, func() {
 				fmt.Println(display.FormatTweetList(response.Tweets))
 			})
@@ -407,6 +455,7 @@ func init() {
 
 	// Add subcommands to user command only (not to root)
 	userCmd.AddCommand(userTweetsCmd)
+	userCmd.AddCommand(userRepostsCmd)
 	userCmd.AddCommand(userMediaCmd)
 	userCmd.AddCommand(userLikesCmd)
 	userCmd.AddCommand(userFollowersCmd)
@@ -418,6 +467,8 @@ func init() {
 	userTweetsCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
 	userTweetsCmd.Flags().BoolVar(&userReplies, "replies", false, "Include replies")
 	userTweetsCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
+	userRepostsCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of reposts")
+	userRepostsCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	userMediaCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")
 	userMediaCmd.Flags().String("cursor", "", "Pagination cursor from a previous response")
 	userLikesCmd.Flags().IntVarP(&userCount, "count", "n", 20, "Number of tweets")

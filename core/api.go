@@ -332,6 +332,26 @@ func GetUserTweets(client *XClient, userID string, count int, cursor string, inc
 	return extractTweetsFromTimeline(data), nil
 }
 
+// GetUserReposts fetches reposts from a user's profile timeline.
+func GetUserReposts(client *XClient, userID string, count int, cursor string) (*models.TimelineResponse, error) {
+	variables := map[string]interface{}{
+		"userId":                 userID,
+		"count":                  count,
+		"includePromotedContent": false,
+		"withVoice":              true,
+	}
+	if cursor != "" {
+		variables["cursor"] = cursor
+	}
+
+	data, err := client.GraphQLGet("UserRepostsTimeline", variables)
+	if err != nil {
+		return nil, err
+	}
+
+	return extractTweetsFromTimeline(data), nil
+}
+
 // GetUserMedia fetches media posts from a user.
 func GetUserMedia(client *XClient, userID string, count int, cursor string) (*models.TimelineResponse, error) {
 	variables := map[string]interface{}{

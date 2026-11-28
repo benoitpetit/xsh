@@ -17,6 +17,23 @@ func TestTopLevelCommandsAreGroupedForDiscoverability(t *testing.T) {
 	}
 }
 
+func TestUserRepostsCommandIsRegistered(t *testing.T) {
+	var found bool
+	for _, command := range userCmd.Commands() {
+		if command.Name() == "reposts" {
+			found = true
+			for _, flag := range []string{"count", "cursor"} {
+				if command.Flags().Lookup(flag) == nil {
+					t.Errorf("user reposts is missing --%s", flag)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("user reposts command is not registered")
+	}
+}
+
 func TestTopLevelCommandsUseIntentionalHelpGroups(t *testing.T) {
 	want := map[string]string{
 		"auth": groupStart, "accounts": groupStart, "switch": groupStart, "import": groupStart,

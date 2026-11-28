@@ -28,6 +28,7 @@ func TestRequestPolicyRetriesReadsButNotMutations(t *testing.T) {
 }
 
 func TestGraphQLMutation422IsNotReplayed(t *testing.T) {
+	resetEndpointTestState()
 	client := &XClient{}
 	calls := 0
 	client.requestWithOperationHook = func(method, urlStr string, params, jsonData map[string]interface{}, maxRetries int, referer, operation string) (map[string]interface{}, error) {
