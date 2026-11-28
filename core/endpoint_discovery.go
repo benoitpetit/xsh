@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -34,6 +35,9 @@ const (
 )
 
 var (
+	// Locale data bundles listed in X's chunk map are not served by the JS CDN.
+	localeBundleNamePattern = regexp.MustCompile(`^(?:[a-z]{2,3}|[a-z]{2}(?:-[A-Za-z]{1,8}){1,2})$`)
+
 	// Regex patterns for extracting data from HTML/JS
 	bundleHrefPattern             = regexp.MustCompile(`href="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
 	bundleSrcPattern              = regexp.MustCompile(`src="(https://abs\.twimg\.com/responsive-web/client-web/[^"]+\.js)"`)
@@ -427,6 +431,24 @@ func isLoggedOutShell(html string) bool {
 	return false
 }
 
+// isLocaleBundleURL reports whether a URL points at locale/emoji data rather
+// than an application bundle. Those files are listed in X's chunk map but are
+// not served by the JS CDN, so fetching them only produces 404 responses.
+func isLocaleBundleURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	name := path.Base(u.Path)
+	if !strings.HasSuffix(name, ".js") {
+		return false
+	}
+	if strings.HasPrefix(name, "emoji.") || name == "index.node.js" {
+		return true
+	}
+	return localeBundleNamePattern.MatchString(strings.TrimSuffix(name, ".js"))
+}
+
 // extractBundleURLs extracts JS bundle URLs from HTML
 func (ed *EndpointDiscovery) extractBundleURLs(html string) []string {
 	seen := make(map[string]bool)
@@ -436,7 +458,7 @@ func (ed *EndpointDiscovery) extractBundleURLs(html string) []string {
 		if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
 			return
 		}
-		if !strings.HasSuffix(strings.SplitN(raw, "?", 2)[0], ".js") || seen[raw] {
+		if !strings.HasSuffix(strings.SplitN(raw, "?", 2)[0], ".js") || seen[raw] || isLocaleBundleURL(raw) {
 			return
 		}
 		seen[raw] = true
@@ -499,7 +521,7 @@ func extractReferencedBundleURLs(js, baseURL string) []string {
 			continue
 		}
 		resolved := base.ResolveReference(ref).String()
-		if !strings.HasSuffix(strings.SplitN(resolved, "?", 2)[0], ".js") || seen[resolved] {
+		if !strings.HasSuffix(strings.SplitN(resolved, "?", 2)[0], ".js") || seen[resolved] || isLocaleBundleURL(resolved) {
 			continue
 		}
 		seen[resolved] = true
